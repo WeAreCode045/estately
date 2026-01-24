@@ -1,0 +1,8 @@
+{
+  "name": "EstateFlow Pro",
+  "description": "A high-end real estate project management platform for agencies, sellers, and buyers featuring automated contract generation, milestone tracking, and secure document vaults.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
