@@ -20,7 +20,6 @@ import {
   Calendar,
   Download,
   ExternalLink,
-  // Fix: Added missing User as UserIcon import
   User as UserIcon
 } from 'lucide-react';
 
@@ -30,13 +29,13 @@ interface DashboardProps {
   allUsers: User[];
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ projects, user, allUsers }) => {
+const Dashboard: React.FC<DashboardProps> = ({ projects = [], user, allUsers = [] }) => {
   const isAdmin = user.role === UserRole.ADMIN;
   
   // Filter projects based on role
   const visibleProjects = isAdmin 
-    ? projects 
-    : projects.filter(p => p.sellerId === user.id || p.buyerId === user.id);
+    ? (projects || []) 
+    : (projects || []).filter(p => p.sellerId === user.id || p.buyerId === user.id);
 
   // If not admin, we assume they have exactly one project based on requirements
   const userProject = !isAdmin ? visibleProjects[0] : null;
@@ -46,7 +45,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, user, allUsers }) => {
       { label: 'Active Projects', value: visibleProjects.filter(p => p.status === ProjectStatus.ACTIVE).length, icon: <Building2 className="text-blue-600" />, color: 'bg-blue-50' },
       { label: 'Pending Contracts', value: visibleProjects.filter(p => p.status === ProjectStatus.UNDER_CONTRACT).length, icon: <Clock className="text-amber-600" />, color: 'bg-amber-50' },
       { label: 'Completed Sales', value: visibleProjects.filter(p => p.status === ProjectStatus.SOLD).length, icon: <CheckCircle2 className="text-emerald-600" />, color: 'bg-emerald-50' },
-      { label: 'Portfolio Value', value: `$${(visibleProjects.reduce((acc, p) => acc + p.property.price, 0) / 1000000).toFixed(1)}M`, icon: <TrendingUp className="text-indigo-600" />, color: 'bg-indigo-50' },
+      { label: 'Portfolio Value', value: `$${((visibleProjects.reduce((acc, p) => acc + (p.property?.price || 0), 0)) / 1000000).toFixed(1)}M`, icon: <TrendingUp className="text-indigo-600" />, color: 'bg-indigo-50' },
     ];
 
     return (
@@ -87,6 +86,9 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, user, allUsers }) => {
               {visibleProjects.map((project) => (
                 <ProjectSummaryCard key={project.id} project={project} />
               ))}
+              {visibleProjects.length === 0 && (
+                 <div className="col-span-full py-12 text-center bg-white rounded-2xl border border-dashed border-slate-200 text-slate-400 italic">No projects found.</div>
+              )}
             </div>
           </div>
 
@@ -94,7 +96,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, user, allUsers }) => {
             <h2 className="text-lg font-bold text-slate-900">Upcoming Agenda</h2>
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
               <div className="space-y-6">
-                {visibleProjects.flatMap(p => p.agenda).map((event, idx) => (
+                {visibleProjects.flatMap(p => p.agenda || []).map((event, idx) => (
                   <div key={idx} className="flex gap-4 group cursor-pointer">
                     <div className="flex flex-col items-center">
                       <div className="w-10 h-10 rounded-full bg-slate-100 flex flex-col items-center justify-center text-[10px] font-bold text-slate-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
@@ -107,16 +109,12 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, user, allUsers }) => {
                       <p className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors">{event.title}</p>
                       <p className="text-xs text-slate-500 mt-1">10:00 AM - 11:30 AM</p>
                       <div className="flex items-center gap-2 mt-2">
-                        <div className="flex -space-x-2">
-                          <img src="https://picsum.photos/seed/p1/32" className="w-6 h-6 rounded-full border-2 border-white" alt="" />
-                          <img src="https://picsum.photos/seed/p2/32" className="w-6 h-6 rounded-full border-2 border-white" alt="" />
-                        </div>
                         <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{event.type}</span>
                       </div>
                     </div>
                   </div>
                 ))}
-                {visibleProjects.flatMap(p => p.agenda).length === 0 && (
+                {visibleProjects.flatMap(p => p.agenda || []).length === 0 && (
                   <p className="text-center py-8 text-slate-400 italic text-sm">No upcoming appointments.</p>
                 )}
               </div>
@@ -196,11 +194,11 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, user, allUsers }) => {
                 <CheckCircle2 size={20} className="text-emerald-500" /> Pending Tasks
               </h2>
               <span className="text-xs font-bold text-slate-400 uppercase bg-slate-50 px-2 py-1 rounded">
-                {userProject.tasks.filter(t => !t.completed).length} Remaining
+                {(userProject.tasks || []).filter(t => !t.completed).length} Remaining
               </span>
             </div>
             <div className="p-6 space-y-3">
-              {userProject.tasks.map(task => (
+              {(userProject.tasks || []).map(task => (
                 <div key={task.id} className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${task.completed ? 'bg-slate-50/50 border-slate-100 opacity-60' : 'bg-white border-slate-100 hover:border-blue-200 shadow-sm'}`}>
                   <div className="flex items-center gap-4">
                     <div className={task.completed ? 'text-emerald-500' : 'text-slate-300'}>
@@ -261,7 +259,7 @@ const Dashboard: React.FC<DashboardProps> = ({ projects, user, allUsers }) => {
               <button className="text-xs font-bold text-blue-600 hover:underline">View All</button>
             </div>
             <div className="space-y-4">
-              {user.documents?.slice(0, 3).map(doc => (
+              {(user.documents || []).slice(0, 3).map(doc => (
                 <div key={doc.id} className="flex items-center gap-3 group">
                   <div className="p-2.5 bg-slate-50 text-slate-400 rounded-xl group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
                     <FileText size={18} />
@@ -305,7 +303,7 @@ const ProjectSummaryCard: React.FC<{ project: Project }> = ({ project }) => {
           <img src={project.property.images[0]} alt={project.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
           <div className="absolute top-4 left-4">
             <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border shadow-sm ${statusColors[project.status]}`}>
-              {project.status.replace('_', ' ')}
+              {(project.status || 'ACTIVE').replace('_', ' ')}
             </span>
           </div>
           <div className="absolute bottom-4 left-4 right-4">
@@ -315,10 +313,10 @@ const ProjectSummaryCard: React.FC<{ project: Project }> = ({ project }) => {
         <div className="p-4">
           <div className="flex items-center gap-1 text-slate-400 text-xs mb-3">
             <Building2 size={14} />
-            <span className="truncate">{project.property.address}</span>
+            <span className="truncate">{project.property?.address}</span>
           </div>
           <div className="flex items-center justify-between pt-3 border-t border-slate-50">
-            <p className="font-bold text-slate-900">${project.property.price.toLocaleString()}</p>
+            <p className="font-bold text-slate-900">${(project.property?.price || 0).toLocaleString()}</p>
             <div className="flex items-center gap-1 text-xs font-semibold text-blue-600">
               Manage Project <ChevronRight size={14} />
             </div>
