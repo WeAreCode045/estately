@@ -17,6 +17,7 @@ export class GeminiService {
     return new GoogleGenAI({ apiKey: process.env.API_KEY });
   }
 
+  // Fix: Upgraded model to 'gemini-3-pro-preview' for advanced reasoning task of legal contract generation
   async generateContractDraft(
     project: Project, 
     seller: User, 
@@ -50,7 +51,7 @@ export class GeminiService {
 
     try {
       const response = await this.ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3-pro-preview',
         contents: prompt,
         config: {
             temperature: 0.3, // Lower temperature for legal accuracy
@@ -65,6 +66,7 @@ export class GeminiService {
     }
   }
 
+  // Fix: Upgraded model to 'gemini-3-pro-preview' for complex project risk analysis
   async getProjectInsights(project: Project) {
     const prompt = `
       Analyze the current status of this real estate project and provide 3 key action items or risks.
@@ -79,7 +81,7 @@ export class GeminiService {
 
     try {
       const response = await this.ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3-pro-preview',
         contents: prompt
       });
       return response.text || "No insights available.";
@@ -88,6 +90,7 @@ export class GeminiService {
     }
   }
 
+  // Fix: Maintaining gemini-2.5-flash as it is mandatory for Maps Grounding tasks
   async getPropertyLocationInsights(address: string, userLatLng?: { latitude: number, longitude: number }): Promise<LocationInsightsResponse> {
     const prompt = `Provide detailed neighborhood insights for the property at "${address}". 
     Include information about nearby amenities like schools, parks, transportation, and popular local spots. 
