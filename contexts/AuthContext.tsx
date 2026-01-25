@@ -10,6 +10,10 @@ interface AuthContextType {
     register: (email: string, pass: string, name: string) => Promise<void>;
     logout: () => Promise<void>;
     refreshProfile: () => Promise<void>;
+    impersonate: (userId: string) => Promise<void>;
+    stopImpersonation: () => Promise<void>;
+    isImpersonating: boolean;
+    impersonatedProfile: any | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -17,6 +21,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<Models.User<Models.Preferences> | null>(null);
     const [profile, setProfile] = useState<any | null>(null);
+    const [impersonation, setImpersonation] = useState<{ originalProfile: any | null; impersonatedProfile: any | null } | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -27,7 +32,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             const session = await account.get();
             setUser(session);
+            // Load the real profile first
             await refreshProfile(session.$id);
+
+            // If sessionStorage contains an active impersonation, apply it
+            try {
+                const raw = sessionStorage.getItem('impersonation');
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed?.impersonatedUserId) {
+                        const origProfile = await profileService.getByUserId(session.$id);
+                        const impProfile = await profileService.getByUserId(parsed.impersonatedUserId);
+                        if (impProfile) {
+                            setImpersonation({ originalProfile: origProfile || null, impersonatedProfile: impProfile });
+                            setProfile(impProfile);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to restore impersonation from sessionStorage', e);
+            }
         } catch (error) {
             setUser(null);
             setProfile(null);
@@ -87,10 +111,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
             
             if (userProfile) {
-                setProfile(userProfile);
+                // If we're currently impersonating, keep the impersonation active
+                if (impersonation && impersonation.impersonatedProfile) {
+                    // do not overwrite the impersonated profile
+                } else {
+                    setProfile(userProfile);
+                }
             }
         } catch (error) {
             console.error('Error refreshing profile:', error);
+        }
+    };
+
+    const impersonate = async (userId: string) => {
+        if (!user) throw new Error('Only logged-in admins can impersonate');
+        try {
+            const origProfile = profile || (await profileService.getByUserId(user.$id));
+            const impProfile = await profileService.getByUserId(userId);
+            if (!impProfile) throw new Error('Target user profile not found');
+            setImpersonation({ originalProfile: origProfile || null, impersonatedProfile: impProfile });
+            setProfile(impProfile);
+            // persist minimal info to restore across reloads
+            sessionStorage.setItem('impersonation', JSON.stringify({ impersonatedUserId: userId }));
+        } catch (error) {
+            console.error('Impersonation failed:', error);
+            throw error;
+        }
+    };
+
+    const stopImpersonation = async () => {
+        try {
+            if (!impersonation) return;
+            setProfile(impersonation.originalProfile || null);
+            setImpersonation(null);
+            sessionStorage.removeItem('impersonation');
+        } catch (error) {
+            console.error('Failed to stop impersonation:', error);
         }
     };
 
@@ -124,7 +180,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     return (
-        <AuthContext.Provider value={{ user, profile, loading, login, register, logout, refreshProfile }}>
+        <AuthContext.Provider value={{
+            user,
+            profile,
+            loading,
+            login,
+            register,
+            logout,
+            refreshProfile,
+            impersonate,
+            stopImpersonation,
+            isImpersonating: !!impersonation,
+            impersonatedProfile: impersonation?.impersonatedProfile || null
+        }}>
             {children}
         </AuthContext.Provider>
     );

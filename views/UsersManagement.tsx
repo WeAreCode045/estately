@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { User, UserRole, Project } from '../types';
 import { profileService, inviteService, projectService } from '../services/appwrite';
 import { 
@@ -27,6 +29,8 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
   const [searchTerm, setSearchTerm] = useState('');
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const auth = useAuth();
+  const navigate = useNavigate();
   const [newUserInfo, setNewUserInfo] = useState({ 
     name: '', 
     email: '', 
@@ -245,6 +249,28 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
                   </td>
                   <td className="px-6 py-5 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      {/* Admin impersonation: Login as this user */}
+                      {user.role === UserRole.ADMIN && u.status !== 'PENDING_INVITE' && (
+                        <button
+                          onClick={async () => {
+                            if (!window.confirm(`Sign in as ${u.name}? You will remain able to return to your admin account via the avatar menu.`)) return;
+                            try {
+                              setLoading(true);
+                              await auth.impersonate(u.id);
+                              navigate('/');
+                            } catch (err) {
+                              console.error('Error impersonating user', err);
+                              alert('Failed to sign in as user');
+                            } finally {
+                              setLoading(false);
+                            }
+                          }}
+                          className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
+                          title={`Login as ${u.name}`}
+                        >
+                          <UsersIcon size={18} />
+                        </button>
+                      )}
                       {u.status === 'PENDING_INVITE' && (
                         <button 
                           onClick={() => handleResendInvite(u)}
