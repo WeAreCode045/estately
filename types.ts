@@ -20,24 +20,86 @@ export enum ContractStatus {
   CANCELLED = 'CANCELLED'
 }
 
+export interface AssignedTask {
+  taskId: string;
+  assignedAt: string;
+  completedAt?: string;
+  status: 'PENDING' | 'COMPLETED';
+  projectId: string;
+  title?: string;
+  description?: string;
+  dueDate?: string;
+}
+
+export interface UploadedDocument {
+  fileId: string;
+  name: string; // Filename
+  documentRequirementId: string; // Linking to RequiredDocument's ID
+  documentType: string; // e.g., "Passport", "Contract", or "Personal"
+  projectId: string; // "global" or specific projectId
+  url: string;
+  uploadedAt: string;
+}
+
 export interface User {
   id: string;
+  userId?: string;
   name: string;
   email: string;
   role: UserRole;
   phone?: string;
   address?: string;
   avatar?: string;
-  documents?: Document[];
+  bio?: string;
+  notificationPreference?: 'EMAIL' | 'APP' | 'BOTH';
+  assignedTasks?: AssignedTask[]; // JSON Array in Profile
+  userDocuments?: UploadedDocument[]; // JSON Array in Profile (renamed from assignedDocuments for consistency)
   status?: 'ACTIVE' | 'PENDING_INVITE';
+  projectId?: string;
 }
 
-export interface Document {
+export interface TaskTemplate {
+  id: string; // TaskID
+  title: string;
+  description?: string;
+  category: 'Legal' | 'Financial' | 'Inspection' | 'General';
+  assigneeRoles: UserRole[]; 
+  showTaskToUser: boolean;
+  sendReminders: boolean;
+  notifyAssignee: boolean;
+  notifyAgentOnComplete: boolean;
+  deadlineType: 'RELATIVE' | 'SPECIFIC';
+  deadlineDays?: number;
+  deadlineDate?: string;
+  reminderIntervalDays: number;
+  visibilityType?: 'ALWAYS' | 'DATE' | 'DAYS_AFTER_START' | 'AFTER_TASK';
+  visibilityDate?: string;
+  visibilityDays?: number;
+  visibilityTaskId?: string;
+}
+
+export interface RequiredDocument {
   id: string;
   name: string;
-  type: string;
-  url: string;
-  uploadedAt: string;
+  taskId: string; 
+  allowedFileTypes?: string[];
+  isGlobal?: boolean;
+  status: 'ACTIVE' | 'ARCHIVED';
+}
+
+export interface ProjectDocument {
+  id: string;
+  projectId: string;
+  requiredDocumentId?: string;
+  name: string;
+  description: string;
+  providedBy: UserRole;
+  status: 'PENDING' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+  fileId?: string;
+  fileUrl?: string;
+  uploadedAt?: string;
+  deadline?: string;
+  remindersSent?: number;
 }
 
 export interface PropertyDetails {
@@ -53,9 +115,12 @@ export interface PropertyDetails {
 export interface ProjectTask {
   id: string;
   title: string;
+  description?: string;
   completed: boolean;
   dueDate: string;
   category: 'Legal' | 'Financial' | 'Inspection' | 'General';
+  notifyAssignee?: boolean;
+  notifyAgentOnComplete?: boolean;
 }
 
 export interface ProjectMilestone {
@@ -112,4 +177,5 @@ export interface Project {
   agenda: AgendaEvent[];
   contractIds: string[];
   messages: Message[];
+  coverImageId?: string;
 }

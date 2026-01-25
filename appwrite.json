@@ -1,0 +1,34 @@
+{
+    "projectId": "69759f0f0003f89f3998",
+    "projectName": "Estately",
+    "functions": [
+        {
+            "$id": "send-invitation",
+            "name": "Send Invitation",
+            "runtime": "node-16.0",
+            "path": "functions/send-invitation",
+            "entrypoint": "src/main.js",
+            "execute": [],
+            "events": [
+                "databases.estately-main.collections.invites.documents.*.create"
+            ],
+            "schedule": "",
+            "timeout": 15,
+            "enabled": true,
+            "logging": true
+        },
+        {
+            "$id": "document-reminders",
+            "name": "Document Reminders",
+            "runtime": "node-16.0",
+            "path": "functions/document-reminders",
+            "entrypoint": "src/main.js",
+            "execute": [],
+            "events": [],
+            "schedule": "0 9 * * *",
+            "timeout": 60,
+            "enabled": true,
+            "logging": true
+        }
+    ]
+}

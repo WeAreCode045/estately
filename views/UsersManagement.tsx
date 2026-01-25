@@ -1,6 +1,7 @@
-
 import React, { useState } from 'react';
-import { User, UserRole } from '../types';
+import { Link } from 'react-router-dom';
+import { User, UserRole, Project } from '../types';
+import { profileService, inviteService, projectService } from '../services/appwrite';
 import { 
   Users as UsersIcon, 
   Search, 
@@ -11,32 +12,140 @@ import {
   Filter,
   CheckCircle2,
   Clock,
-  Trash2
+  Trash2,
+  Building2
 } from 'lucide-react';
 
 interface UsersManagementProps {
   user: User;
   allUsers: User[];
   setAllUsers: React.Dispatch<React.SetStateAction<User[]>>;
+  projects: Project[];
 }
 
-const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAllUsers }) => {
+const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAllUsers, projects }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-  const [newUserInfo, setNewUserInfo] = useState({ name: '', email: '', role: UserRole.BUYER });
+  const [loading, setLoading] = useState(false);
+  const [newUserInfo, setNewUserInfo] = useState({ 
+    name: '', 
+    email: '', 
+    role: UserRole.BUYER,
+    projectId: '' 
+  });
 
-  const handleInvite = (e: React.FormEvent) => {
+  const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newUser: User = {
-      id: `u-${Date.now()}`,
-      ...newUserInfo,
-      status: 'PENDING_INVITE',
-      avatar: `https://picsum.photos/seed/${newUserInfo.name}/100`
-    };
-    setAllUsers(prev => [...prev, newUser]);
-    setIsInviteModalOpen(false);
-    setNewUserInfo({ name: '', email: '', role: UserRole.BUYER });
-    alert(`Invitation sent to ${newUserInfo.email}`);
+    setLoading(true);
+    try {
+      // Check if user already exists in allUsers
+      const existingUser = allUsers.find(u => u.email.toLowerCase() === newUserInfo.email.toLowerCase());
+      
+      if (existingUser && existingUser.status !== 'PENDING_INVITE') {
+        // Just link to project directly
+        if (newUserInfo.projectId) {
+          const field = newUserInfo.role === UserRole.SELLER ? 'sellerId' : 'buyerId';
+          await projectService.update(newUserInfo.projectId, { [field]: existingUser.id });
+          alert(`Successfully linked ${existingUser.name} to project.`);
+        } else {
+          // Just update role
+          await handleRoleChange(existingUser.id, newUserInfo.role);
+        }
+      } else {
+        // Create a document in our 'invites' collection
+        const inviteData = {
+          email: newUserInfo.email.toLowerCase(),
+          name: newUserInfo.name,
+          role: newUserInfo.role,
+          projectId: newUserInfo.projectId || undefined,
+          invitedBy: user.id
+        };
+        
+        const response = await inviteService.create(inviteData);
+        
+        setAllUsers(prev => {
+          // Remove existing pending if any (to avoid duplicates)
+          const filtered = prev.filter(u => u.email.toLowerCase() !== newUserInfo.email.toLowerCase());
+          return [...filtered, {
+            id: response.$id,
+            name: newUserInfo.name || newUserInfo.email.split('@')[0],
+            email: newUserInfo.email,
+            role: newUserInfo.role as UserRole,
+            status: 'PENDING_INVITE',
+            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${newUserInfo.email}`
+          }];
+        });
+        alert(`Invitation sent to ${newUserInfo.email}`);
+      }
+      
+      setIsInviteModalOpen(false);
+      setNewUserInfo({ name: '', email: '', role: UserRole.BUYER, projectId: '' });
+    } catch (error) {
+      console.error('Error in handleInvite:', error);
+      alert('Failed to process invitation/assignment');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendInvite = async (userToInvite: User) => {
+    try {
+      setLoading(true);
+      await inviteService.create({
+        email: userToInvite.email.toLowerCase(),
+        name: userToInvite.name,
+        role: userToInvite.role,
+        projectId: (userToInvite as any).projectId || undefined,
+        invitedBy: user.id
+      });
+      alert(`Invitation resent to ${userToInvite.email}`);
+    } catch (error) {
+      console.error('Error resending invite:', error);
+      alert('Failed to resend invitation');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteUser = async (userToDelete: User) => {
+    if (!window.confirm(`Are you sure you want to remove ${userToDelete.name}?`)) return;
+    
+    try {
+      if (userToDelete.status === 'PENDING_INVITE') {
+        // For pending invites, the 'id' is the document ID in the invites collection
+        await inviteService.delete(userToDelete.id);
+      } else {
+        // For active users, we need to delete the profile document
+        const docId = (userToDelete as any).$id;
+        if (docId) {
+          await profileService.delete(docId);
+        } else {
+          // Fallback: find profile by userId
+          const profiles = await profileService.listAll();
+          const doc = profiles.documents.find((d: any) => d.userId === userToDelete.id);
+          if (doc) await profileService.delete(doc.$id);
+        }
+      }
+      setAllUsers(prev => prev.filter(u => u.id !== userToDelete.id));
+      alert('User removed successfully.');
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      alert('Failed to remove user');
+    }
+  };
+
+  const handleRoleChange = async (userId: string, newRole: UserRole) => {
+    try {
+      const response = await profileService.listAll();
+      const doc = response.documents.find((d: any) => d.userId === userId);
+      
+      if (doc) {
+        await profileService.update(doc.$id, { role: newRole });
+        setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+      }
+    } catch (error) {
+      console.error('Error updating role:', error);
+    }
   };
 
   const filteredUsers = allUsers.filter(u => 
@@ -92,18 +201,29 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
                     <div className="flex items-center gap-3">
                       <img src={u.avatar} className="w-10 h-10 rounded-full border border-slate-200" alt="" />
                       <div>
-                        <p className="font-bold text-slate-900">{u.name}</p>
+                        <Link 
+                          to={`/profile/${u.id}`} 
+                          className="font-bold text-slate-900 hover:text-blue-600 transition-colors"
+                        >
+                          {u.name}
+                        </Link>
                         <p className="text-xs text-slate-400">{u.id}</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-5">
-                    <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md ${
-                      u.role === UserRole.ADMIN ? 'bg-blue-100 text-blue-600' :
-                      u.role === UserRole.SELLER ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'
-                    }`}>
-                      {u.role}
-                    </span>
+                    <select 
+                      value={u.role}
+                      onChange={(e) => handleRoleChange(u.id, e.target.value as UserRole)}
+                      className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md border-none bg-transparent cursor-pointer ${
+                        u.role === UserRole.ADMIN ? 'bg-blue-100 text-blue-600' :
+                        u.role === UserRole.SELLER ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'
+                      }`}
+                    >
+                      {Object.values(UserRole).map(role => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </select>
                   </td>
                   <td className="px-6 py-5">
                     {u.status === 'PENDING_INVITE' ? (
@@ -124,14 +244,42 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
                     </div>
                   </td>
                   <td className="px-6 py-5 text-right">
-                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-blue-600 border border-transparent hover:border-slate-100"><MoreHorizontal size={18}/></button>
+                    <div className="flex items-center justify-end gap-2">
+                      {u.status === 'PENDING_INVITE' && (
+                        <button 
+                          onClick={() => handleResendInvite(u)}
+                          className="p-2 hover:bg-amber-50 rounded-lg text-slate-400 hover:text-amber-600 transition-colors"
+                          title="Resend Invitation"
+                        >
+                          <Mail size={18} />
+                        </button>
+                      )}
+                      
                       <button 
-                        onClick={() => setAllUsers(prev => prev.filter(x => x.id !== u.id))}
-                        className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-red-600 border border-transparent hover:border-slate-100"
+                        onClick={() => handleDeleteUser(u)}
+                        className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-600 transition-colors"
+                        title="Delete User"
                       >
-                        <Trash2 size={18}/>
+                        <Trash2 size={18} />
                       </button>
+
+                      {(u.role === UserRole.BUYER || u.role === UserRole.SELLER) && (
+                        <button 
+                          onClick={() => {
+                            setNewUserInfo({
+                              name: u.name,
+                              email: u.email,
+                              role: u.role,
+                              projectId: ''
+                            });
+                            setIsInviteModalOpen(true);
+                          }}
+                          className="p-2 hover:bg-blue-50 rounded-lg text-slate-400 hover:text-blue-600 transition-colors"
+                          title="Assign to Project"
+                        >
+                          <Building2 size={18} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -183,9 +331,33 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
                   <option value={UserRole.ADMIN}>Agent (Admin)</option>
                 </select>
               </div>
+
+              {(newUserInfo.role === UserRole.BUYER || newUserInfo.role === UserRole.SELLER) && (
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-400 uppercase">Link to Property</label>
+                  <select 
+                    required={newUserInfo.role !== UserRole.ADMIN}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm"
+                    value={newUserInfo.projectId}
+                    onChange={e => setNewUserInfo({...newUserInfo, projectId: e.target.value})}
+                  >
+                    <option value="">Select a property...</option>
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id}>{p.property.address} ({p.title})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="pt-4 flex gap-3">
                 <button type="button" onClick={() => setIsInviteModalOpen(false)} className="flex-1 px-4 py-2.5 font-bold text-slate-500">Cancel</button>
-                <button type="submit" className="flex-1 bg-blue-600 text-white px-4 py-2.5 rounded-xl font-bold shadow-md hover:bg-blue-700">Send Invite</button>
+                <button 
+                  type="submit" 
+                  disabled={loading}
+                  className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 disabled:opacity-50"
+                >
+                  {loading ? 'Processing...' : 'Send Invitation'}
+                </button>
               </div>
             </form>
           </div>

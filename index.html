@@ -12,6 +12,39 @@
         /* Hide scrollbars but keep functionality */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Ensure Google Maps Autocomplete is visible above modals */
+        .pac-container {
+            z-index: 10000 !important;
+            border-radius: 12px;
+            margin-top: 4px;
+            border: 1px solid #e2e8f0 !important;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+            font-family: inherit;
+            background-color: white !important;
+            pointer-events: auto !important;
+        }
+        .pac-item {
+            padding: 10px 14px;
+            cursor: pointer;
+            border-top: 1px solid #f1f5f9;
+            display: flex;
+            align-items: center;
+        }
+        .pac-item:hover {
+            background-color: #f8fafc !important;
+        }
+        .pac-item-query {
+            font-size: 14px;
+            color: #0f172a;
+            padding-right: 5px;
+        }
+        .pac-matched {
+            font-weight: 700;
+        }
+        .pac-icon {
+            margin-top: -2px;
+        }
     </style>
 <script type="importmap">
 {

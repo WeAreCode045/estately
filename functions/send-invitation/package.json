@@ -1,0 +1,10 @@
+{
+  "name": "send-invitation",
+  "version": "1.0.0",
+  "description": "Sends invitation emails when a new invite is created",
+  "main": "src/main.js",
+  "type": "module",
+  "dependencies": {
+    "node-appwrite": "^14.1.0"
+  }
+}

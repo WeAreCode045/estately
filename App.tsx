@@ -1,6 +1,5 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { HashRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { 
   Home, 
   FileText, 
@@ -10,14 +9,16 @@ import {
   Search, 
   Bell, 
   Users as UsersIcon,
-  Settings,
+  Settings as SettingsIcon,
   Plus,
   ChevronDown,
   Building2,
   Calendar,
   CheckSquare,
   Mail,
-  BookOpen
+  BookOpen,
+  Library,
+  ShieldCheck
 } from 'lucide-react';
 import { UserRole, Project, User as AppUser, Contract, ContractTemplate } from './types';
 import { MOCK_USERS, MOCK_PROJECTS, MOCK_CONTRACTS, MOCK_TEMPLATES } from './constants';
@@ -25,7 +26,17 @@ import Dashboard from './views/Dashboard';
 import ProjectDetail from './views/ProjectDetail';
 import Profile from './views/Profile';
 import Contracts from './views/Contracts';
+import Documents from './views/Documents';
+import DocumentManagement from './views/DocumentManagement';
+import TaskLibrary from './views/TaskLibrary';
+import Tasks from './views/Tasks';
 import UsersManagement from './views/UsersManagement';
+import Settings from './views/Settings';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import Login from './views/Login';
+import Register from './views/Register';
+import AcceptInvite from './views/AcceptInvite';
+import { projectService, COLLECTIONS, DATABASE_ID, client, databases, Query } from './services/appwrite';
 
 // Simple placeholder for new routes
 const PlaceholderView: React.FC<{ title: string }> = ({ title }) => (
@@ -39,11 +50,17 @@ const PlaceholderView: React.FC<{ title: string }> = ({ title }) => (
 );
 
 const App: React.FC = () => {
-  const [currentUser, setCurrentUser] = useState<AppUser>(MOCK_USERS[0]); 
-  const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
-  const [contracts, setContracts] = useState<Contract[]>(MOCK_CONTRACTS);
-  const [templates, setTemplates] = useState<ContractTemplate[]>(MOCK_TEMPLATES);
-  const [allUsers, setAllUsers] = useState<AppUser[]>(MOCK_USERS);
+  const [currentUser, setCurrentUser] = useState<AppUser>({
+    id: 'guest',
+    name: 'Guest User',
+    email: '',
+    role: UserRole.BUYER,
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=guest'
+  }); 
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [contracts, setContracts] = useState<Contract[]>([]);
+  const [templates, setTemplates] = useState<ContractTemplate[]>([]);
+  const [allUsers, setAllUsers] = useState<AppUser[]>([]);
 
   const switchUser = (role: UserRole) => {
     const found = allUsers.find(u => u.role === role);
@@ -51,33 +68,236 @@ const App: React.FC = () => {
   };
 
   return (
-    <HashRouter>
-      <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
-        <Sidebar user={currentUser} onSwitchRole={switchUser} />
+    <AuthProvider>
+      <HashRouter>
+        <AppContent 
+          currentUser={currentUser} 
+          projects={projects} 
+          setProjects={setProjects}
+          contracts={contracts}
+          setContracts={setContracts}
+          templates={templates}
+          setTemplates={setTemplates}
+          allUsers={allUsers}
+          setAllUsers={setAllUsers}
+          switchUser={switchUser}
+        />
+      </HashRouter>
+    </AuthProvider>
+  );
+};
 
-        <div className="flex-1 flex flex-col min-w-0">
-          <Header user={currentUser} />
-          
-          <main className="flex-1 overflow-y-auto p-4 md:p-8 no-scrollbar">
-            <Routes>
-              <Route path="/" element={<Dashboard projects={projects} user={currentUser} allUsers={allUsers} />} />
-              <Route path="/projects" element={<Dashboard projects={projects} user={currentUser} allUsers={allUsers} />} />
-              <Route path="/projects/:id" element={<ProjectDetail projects={projects} setProjects={setProjects} contracts={contracts} setContracts={setContracts} templates={templates} user={currentUser} allUsers={allUsers} />} />
-              <Route path="/contracts" element={<Contracts user={currentUser} projects={projects} contracts={contracts} setContracts={setContracts} templates={templates} setTemplates={setTemplates} />} />
-              <Route path="/documents" element={<Contracts user={currentUser} projects={projects} contracts={contracts} setContracts={setContracts} templates={templates} setTemplates={setTemplates} />} />
-              <Route path="/users" element={<UsersManagement user={currentUser} allUsers={allUsers} setAllUsers={setAllUsers} />} />
-              <Route path="/profile" element={<Profile user={currentUser} />} />
-              
-              <Route path="/agenda" element={<PlaceholderView title="Agenda & Calendar" />} />
-              <Route path="/tasks" element={<PlaceholderView title="Tasks Overview" />} />
-              <Route path="/inbox" element={<PlaceholderView title="Inbox" />} />
-              <Route path="/kb" element={<PlaceholderView title="Knowledge Base" />} />
-              <Route path="/settings" element={<PlaceholderView title="Settings" />} />
-            </Routes>
-          </main>
-        </div>
-      </div>
-    </HashRouter>
+const AppContent: React.FC<{
+  currentUser: AppUser,
+  projects: Project[],
+  setProjects: React.Dispatch<React.SetStateAction<Project[]>>,
+  contracts: Contract[],
+  setContracts: React.Dispatch<React.SetStateAction<Contract[]>>,
+  templates: ContractTemplate[],
+  setTemplates: React.Dispatch<React.SetStateAction<ContractTemplate[]>>,
+  allUsers: AppUser[],
+  setAllUsers: React.Dispatch<React.SetStateAction<AppUser[]>>,
+  switchUser: (role: UserRole) => void
+}> = ({ 
+  currentUser, 
+  projects, 
+  setProjects, 
+  contracts, 
+  setContracts, 
+  templates, 
+  setTemplates, 
+  allUsers, 
+  setAllUsers, 
+  switchUser 
+}) => {
+  const { user, profile, loading } = useAuth();
+  const [authView, setAuthView] = useState<'login' | 'register'>('login');
+  const [taskTemplates, setTaskTemplates] = useState<any[]>([]);
+  const [docDefinitions, setDocDefinitions] = useState<any[]>([]);
+
+  // Deriving the effective user: Prioritize profile from DB, then account from Auth, then fallback (initial state/last mock switch)
+  const effectiveUser = React.useMemo(() => {
+    if (profile) {
+      return {
+        ...profile,
+        id: profile.userId,
+        avatar: profile.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.email}`,
+        assignedTasks: profile.assignedTasks ? (typeof profile.assignedTasks === 'string' ? JSON.parse(profile.assignedTasks) : profile.assignedTasks) : [],
+        userDocuments: profile.userDocuments ? (typeof profile.userDocuments === 'string' ? JSON.parse(profile.userDocuments) : profile.userDocuments) : []
+      };
+    }
+    if (user) {
+      return {
+        id: user.$id,
+        name: user.name,
+        email: user.email,
+        role: currentUser.role || UserRole.BUYER,
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.email}`
+      };
+    }
+    return currentUser;
+  }, [profile, user, currentUser.role]);
+
+  useEffect(() => {
+    if (user) {
+      fetchData();
+    }
+  }, [user, profile]);
+
+  const fetchData = async () => {
+    try {
+      // Fetch users/profiles and pending invites
+      const [profilesData, invitesData] = await Promise.all([
+        databases.listDocuments(DATABASE_ID, COLLECTIONS.PROFILES),
+        databases.listDocuments(DATABASE_ID, COLLECTIONS.INVITES, [Query.equal('status', 'PENDING')])
+      ]);
+      
+      // Map to User objects and deduplicate by userId
+      const userMap = new Map();
+      profilesData.documents.forEach((doc: any) => {
+        if (!userMap.has(doc.userId)) {
+          userMap.set(doc.userId, {
+            id: doc.userId,
+            $id: doc.$id,
+            name: doc.name,
+            email: doc.email,
+            role: doc.role as UserRole,
+            phone: doc.phone,
+            address: doc.address,
+            bio: doc.bio,
+            avatar: doc.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${doc.email}`,
+            status: doc.status || 'ACTIVE',
+            assignedTasks: doc.assignedTasks ? (typeof doc.assignedTasks === 'string' ? JSON.parse(doc.assignedTasks) : doc.assignedTasks) : [],
+            userDocuments: doc.userDocuments ? (typeof doc.userDocuments === 'string' ? JSON.parse(doc.userDocuments) : doc.userDocuments) : []
+          });
+        }
+      });
+
+      // Add pending invites to the list
+      invitesData.documents.forEach((doc: any) => {
+        if (!userMap.has(doc.email)) {
+          userMap.set(doc.email, {
+            id: doc.$id, // Keep document ID as the primary ID for invites to support deletion/lookup
+            userId: doc.userId, // Store the actual Appwrite User ID if the function has already run
+            name: doc.name || doc.email.split('@')[0], 
+            email: doc.email,
+            role: doc.role as UserRole,
+            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${doc.email}`,
+            status: 'PENDING_INVITE',
+            projectId: doc.projectId
+          });
+        }
+      });
+      
+      setAllUsers(Array.from(userMap.values()));
+
+      // Fetch projects
+      const projectsData = await projectService.list();
+      // Fetch definitions and templates
+      const [templatesResponse, docsResponse] = await Promise.all([
+        databases.listDocuments(DATABASE_ID, COLLECTIONS.TASK_TEMPLATES),
+        databases.listDocuments(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS)
+      ]);
+
+      setTaskTemplates(templatesResponse.documents.map(d => ({ 
+        id: d.$id, 
+        title: d.title, 
+        description: d.description,
+        category: d.category 
+      })));
+      
+      setDocDefinitions(docsResponse.documents.map(d => ({ 
+        id: d.$id, 
+        title: d.title, 
+        description: d.description,
+        role: d.role
+      })));
+
+      setProjects(projectsData.documents.map((doc: any) => ({
+        id: doc.$id,
+        title: doc.title,
+        property: {
+          address: doc.address,
+          price: doc.price,
+          description: doc.description,
+          bedrooms: doc.bedrooms,
+          bathrooms: doc.bathrooms,
+          sqft: doc.sqft,
+          images: [], // Handled by storage later
+        },
+        sellerId: doc.sellerId,
+        buyerId: doc.buyerId,
+        managerId: doc.managerId,
+        status: doc.status,
+        coverImageId: doc.coverImageId,
+        tasks: [], // Sub-collections or JSON later
+        milestones: [],
+        agenda: [],
+        contractIds: [],
+        messages: [],
+      })));
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    }
+  };
+
+  if (loading) {
+    return <div className="h-screen w-screen flex items-center justify-center bg-slate-50">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900"></div>
+    </div>;
+  }
+
+  return (
+    <Routes>
+      <Route path="/accept-invite" element={<AcceptInvite />} />
+      <Route 
+        path="/login" 
+        element={!user ? <Login onSwitchToRegister={() => setAuthView('register')} /> : <Navigate to="/" />} 
+      />
+      <Route 
+        path="/register" 
+        element={!user ? <Register onSwitchToLogin={() => setAuthView('login')} /> : <Navigate to="/" />} 
+      />
+      <Route 
+        path="*" 
+        element={
+          !user ? (
+            authView === 'login' 
+              ? <Login onSwitchToRegister={() => setAuthView('register')} /> 
+              : <Register onSwitchToLogin={() => setAuthView('login')} />
+          ) : (
+            <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
+              <Sidebar user={effectiveUser as AppUser} onSwitchRole={switchUser} />
+
+              <div className="flex-1 flex flex-col min-w-0">
+                <Header user={effectiveUser as AppUser} />
+                
+                <main className="flex-1 overflow-y-auto p-4 md:p-8 no-scrollbar">
+                  <Routes>
+                    <Route path="/" element={<Dashboard projects={projects} user={effectiveUser as AppUser} allUsers={allUsers} taskTemplates={taskTemplates} />} />
+                    <Route path="/projects" element={<Dashboard projects={projects} user={effectiveUser as AppUser} allUsers={allUsers} />} />
+                    <Route path="/projects/:id" element={<ProjectDetail projects={projects} setProjects={setProjects} contracts={contracts} setContracts={setContracts} templates={templates} user={effectiveUser as AppUser} allUsers={allUsers} onRefresh={fetchData} />} />
+                    <Route path="/contracts" element={<Contracts user={effectiveUser as AppUser} projects={projects} contracts={contracts} setContracts={setContracts} templates={templates} setTemplates={setTemplates} />} />
+                    <Route path="/documents" element={<Documents user={effectiveUser as AppUser} projects={projects} />} />
+                    <Route path="/admin/documents" element={<DocumentManagement user={effectiveUser as AppUser} />} />
+                    <Route path="/admin/tasks" element={<TaskLibrary user={effectiveUser as AppUser} onRefresh={fetchData} />} />
+                    <Route path="/users" element={<UsersManagement user={effectiveUser as AppUser} allUsers={allUsers} setAllUsers={setAllUsers} projects={projects} />} />
+                    <Route path="/profile" element={<Profile user={effectiveUser as AppUser} projects={projects} taskTemplates={taskTemplates} docDefinitions={docDefinitions} allUsers={allUsers} />} />
+                    <Route path="/profile/:userId" element={<Profile user={effectiveUser as AppUser} projects={projects} taskTemplates={taskTemplates} docDefinitions={docDefinitions} allUsers={allUsers} />} />
+                    
+                    <Route path="/agenda" element={<PlaceholderView title="Agenda & Calendar" />} />
+                    <Route path="/tasks" element={<Tasks user={effectiveUser as AppUser} projects={projects} onRefresh={fetchData} />} />
+                    <Route path="/inbox" element={<PlaceholderView title="Inbox" />} />
+                    <Route path="/kb" element={<PlaceholderView title="Knowledge Base" />} />
+                    <Route path="/settings" element={<Settings user={effectiveUser as AppUser} />} />
+                  </Routes>
+                </main>
+              </div>
+            </div>
+          )
+        } 
+      />
+    </Routes>
   );
 };
 
@@ -90,30 +310,24 @@ interface MenuNavItem {
 const Sidebar: React.FC<{ user: AppUser, onSwitchRole: (role: UserRole) => void }> = ({ user, onSwitchRole }) => {
   const location = useLocation();
   const isAdmin = user.role === UserRole.ADMIN;
+  const { logout } = useAuth();
 
-  const agentMenu: MenuNavItem[] = [
+  const primaryMenu: MenuNavItem[] = [
     { to: '/', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
     { to: '/projects', icon: <Building2 size={20} />, label: 'Projects' },
-    { to: '/documents', icon: <FileText size={20} />, label: 'Documents' },
-    { to: '/agenda', icon: <Calendar size={20} />, label: 'Agenda' },
+    { to: '/documents', icon: <FileText size={20} />, label: 'Vault' },
     { to: '/tasks', icon: <CheckSquare size={20} />, label: 'Tasks' },
-    { to: '/users', icon: <UsersIcon size={20} />, label: 'Users' },
-    { to: '/inbox', icon: <Mail size={20} />, label: 'Inbox' },
-    { to: '/kb', icon: <BookOpen size={20} />, label: 'Knowledge Base' },
-    { to: '/settings', icon: <Settings size={20} />, label: 'Settings' },
-  ];
-
-  const clientMenu: MenuNavItem[] = [
-    { to: '/', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
-    { to: '/projects', icon: <Building2 size={20} />, label: 'Projects' },
-    { to: '/documents', icon: <FileText size={20} />, label: 'Documents' },
     { to: '/agenda', icon: <Calendar size={20} />, label: 'Agenda' },
-    { to: '/tasks', icon: <CheckSquare size={20} />, label: 'Tasks' },
     { to: '/inbox', icon: <Mail size={20} />, label: 'Inbox' },
     { to: '/kb', icon: <BookOpen size={20} />, label: 'Knowledge Base' },
   ];
 
-  const currentMenu = isAdmin ? agentMenu : clientMenu;
+  const adminMenu: MenuNavItem[] = [
+    { to: '/admin/tasks', icon: <Library size={20} />, label: 'Task Library' },
+    { to: '/admin/documents', icon: <ShieldCheck size={20} />, label: 'Doc Requirements' },
+    { to: '/users', icon: <UsersIcon size={20} />, label: 'User Directory' },
+    { to: '/settings', icon: <SettingsIcon size={20} />, label: 'System Settings' },
+  ];
 
   return (
     <div className="w-20 md:w-64 bg-slate-900 text-slate-400 flex flex-col shrink-0">
@@ -124,16 +338,35 @@ const Sidebar: React.FC<{ user: AppUser, onSwitchRole: (role: UserRole) => void 
         <span className="hidden md:block font-bold text-white text-xl tracking-tight">EstateFlow</span>
       </div>
 
-      <nav className="flex-1 px-4 space-y-1 mt-4 overflow-y-auto no-scrollbar">
-        {currentMenu.map((item) => (
-          <SidebarLink 
-            key={item.label}
-            to={item.to} 
-            icon={item.icon} 
-            label={item.label} 
-            active={location.pathname === item.to} 
-          />
-        ))}
+      <nav className="flex-1 px-4 mt-4 overflow-y-auto no-scrollbar space-y-6">
+        <div className="space-y-1">
+          {primaryMenu.map((item) => (
+            <SidebarLink 
+              key={item.label}
+              to={item.to} 
+              icon={item.icon} 
+              label={item.label} 
+              active={location.pathname === item.to} 
+            />
+          ))}
+        </div>
+
+        {isAdmin && (
+          <div className="space-y-2 pt-4 border-t border-slate-800">
+            <p className="px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">Administration</p>
+            <div className="space-y-1">
+              {adminMenu.map((item) => (
+                <SidebarLink 
+                  key={item.label}
+                  to={item.to} 
+                  icon={item.icon} 
+                  label={item.label} 
+                  active={location.pathname === item.to} 
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* Demo Switcher - Helpful for testing role-specific layouts */}
@@ -147,7 +380,10 @@ const Sidebar: React.FC<{ user: AppUser, onSwitchRole: (role: UserRole) => void 
       </div>
 
       <div className="p-4 border-t border-slate-800">
-        <button className="flex items-center gap-3 px-3 py-2 w-full hover:bg-slate-800 rounded-lg transition-colors text-sm">
+        <button 
+          onClick={() => logout()}
+          className="flex items-center gap-3 px-3 py-2 w-full hover:bg-slate-800 rounded-lg transition-colors text-sm"
+        >
           <LogOut size={18} />
           <span className="hidden md:block">Sign Out</span>
         </button>
@@ -228,7 +464,7 @@ const Header: React.FC<{ user: AppUser }> = ({ user }) => {
                 onClick={() => setIsDropdownOpen(false)}
                 className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors text-left"
               >
-                <Settings size={16} className="text-slate-400" /> Account Settings
+                <SettingsIcon size={16} className="text-slate-400" /> Account Settings
               </button>
               <div className="border-t border-slate-50 mt-1 pt-1">
                 <button 
