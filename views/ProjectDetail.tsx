@@ -1214,7 +1214,20 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
             <h3 className="font-bold text-slate-900 border-b border-slate-50 pb-4">Key Participants</h3>
             <ParticipantRow user={seller} role="Seller" isAdmin={isAdmin} />
             <ParticipantRow user={buyer} role="Buyer" isAdmin={isAdmin} />
-            <ParticipantRow user={allUsers.find(u => u.id === project.managerId)} role="Manager" isAdmin={isAdmin} />
+            <ParticipantRow 
+              user={(() => {
+                 const managerId = project.managerId;
+                 const fromAll = allUsers.find(u => u.id === managerId || u.$id === managerId);
+                 if (fromAll) return fromAll;
+                 
+                 // Fallback to current user if IDs match
+                 if (user?.id === managerId || (user as any).$id === managerId) return user;
+                 
+                 return undefined;
+              })()}
+              role="Agent" 
+              isAdmin={isAdmin} 
+            />
           </div>
         </div>
       </div>
@@ -1414,7 +1427,11 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
 
 const ParticipantRow: React.FC<{ user?: User, role: string, isAdmin?: boolean }> = ({ user, role, isAdmin }) => (
   <div className="flex items-center gap-3">
-    <img src={user?.avatar} className="w-10 h-10 rounded-full border border-slate-100" alt="" />
+    <img 
+      src={user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(role)}&background=f1f5f9&color=64748b`} 
+      className="w-10 h-10 rounded-full border border-slate-100 object-cover" 
+      alt={role} 
+    />
     <div className="min-w-0">
       {isAdmin && user ? (
         <Link to={`/profile/${user.id}`} className="text-sm font-bold text-slate-900 truncate hover:text-blue-600 transition-colors">
