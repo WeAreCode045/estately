@@ -115,7 +115,7 @@ export const projectService = {
             quality: 100,
             output: ImageFormat.Jpg
         });
-        return url.href || url.toString();
+        return url.toString();
     }
 };
 

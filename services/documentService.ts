@@ -30,21 +30,30 @@ export const documentService = {
   },
 
   getFileView(fileId: string) {
-    const endpoint = import.meta.env.VITE_APPWRITE_ENDPOINT;
-    const project = import.meta.env.VITE_APPWRITE_PROJECT_ID;
-    return `${endpoint}/storage/buckets/${BUCKETS.DOCUMENTS}/files/${fileId}/view?project=${project}&mode=admin`;
+    const url = storage.getFileView({
+      bucketId: BUCKETS.DOCUMENTS,
+      fileId: fileId
+    });
+    const finalUrl = url.toString();
+    return finalUrl.includes('mode=admin') ? finalUrl : (finalUrl.includes('?') ? `${finalUrl}&mode=admin` : `${finalUrl}?mode=admin`);
   },
 
   getFilePreview(fileId: string) {
-    const endpoint = import.meta.env.VITE_APPWRITE_ENDPOINT;
-    const project = import.meta.env.VITE_APPWRITE_PROJECT_ID;
-    return `${endpoint}/storage/buckets/${BUCKETS.DOCUMENTS}/files/${fileId}/preview?project=${project}`;
+    const url = storage.getFilePreview({
+      bucketId: BUCKETS.DOCUMENTS,
+      fileId: fileId
+    });
+    const finalUrl = url.toString();
+    return finalUrl.includes('mode=admin') ? finalUrl : (finalUrl.includes('?') ? `${finalUrl}&mode=admin` : `${finalUrl}?mode=admin`);
   },
 
   getFileDownload(fileId: string) {
-    const endpoint = import.meta.env.VITE_APPWRITE_ENDPOINT;
-    const project = import.meta.env.VITE_APPWRITE_PROJECT_ID;
-    return `${endpoint}/storage/buckets/${BUCKETS.DOCUMENTS}/files/${fileId}/download?project=${project}&mode=admin`;
+    const url = storage.getFileDownload({
+      bucketId: BUCKETS.DOCUMENTS,
+      fileId: fileId
+    });
+    const finalUrl = url.toString();
+    return finalUrl.includes('mode=admin') ? finalUrl : (finalUrl.includes('?') ? `${finalUrl}&mode=admin` : `${finalUrl}?mode=admin`);
   },
 
   async getFileUrl(fileId: string) {
