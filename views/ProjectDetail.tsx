@@ -239,7 +239,12 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
             (role === UserRole.SELLER && user.id === project.sellerId) || 
             (role === UserRole.BUYER && user.id === project.buyerId)
           );
-          const log = docsFound.find(df => df.documentRequirementId === rd.id && df.user.id === u?.id);
+          // Fix: Use $id, and check for project scope or global scope
+          const log = docsFound.find(df => 
+            df.documentRequirementId === (rd as any).$id && 
+            df.user.id === u?.id &&
+            (rd.isGlobal || df.projectId === id)
+          );
           return { role, user: u, isProvided: !!log, url: log?.url, providedAt: log?.uploadedAt };
         });
         return { ...rd, participants: participantsData };
@@ -829,211 +834,225 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="text-lg font-bold">Participant Tasks</h3>
-                      <p className="text-xs text-slate-500">View tasks currently assigned to Buyer and Seller in their profiles.</p>
+                      <p className="text-xs text-slate-500">Manage and track progress for Buyer and Seller.</p>
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Tasks Columns */}
-                    <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {/* Column for Seller tasks */}
-                      <div className="space-y-3">
-                        <h4 className="text-sm font-bold text-slate-700">Seller — <span className="text-sm font-medium text-slate-600">{(allUsers.find(u => u.id === project?.sellerId)?.name) || 'Unassigned'}</span></h4>
-                        {projectStatusData.tasks.filter((t: any) => t.role === 'SELLER').length === 0 ? (
-                          <div className="py-6 text-center text-slate-400 italic bg-slate-50 rounded-2xl border border-dashed border-slate-200">No tasks for seller.</div>
-                        ) : (
-                          projectStatusData.tasks.filter((t: any) => t.role === 'SELLER').map((t: any, idx: number) => (
-                            <div key={`seller-${idx}`} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${t.status === 'COMPLETED' ? 'bg-emerald-50 border-emerald-100 opacity-70' : 'bg-white border-slate-200 shadow-sm'}`}>
-                              <div className="flex items-center gap-4">
-                                <div className={`p-2 rounded-lg ${t.status === 'COMPLETED' ? 'text-emerald-500 bg-emerald-100' : 'text-slate-300 bg-slate-100'}`}>
-                                  {t.status === 'COMPLETED' ? <CheckCircle2 size={24} /> : <Circle size={24} />}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <p className={`font-semibold truncate ${t.status === 'COMPLETED' ? 'line-through text-slate-400' : 'text-slate-900'}`}>{t.title}</p>
-                                  </div>
-                                  <p className="text-[10px] text-slate-500 mt-0.5">Assigned: {new Date(t.assignedAt).toLocaleDateString()}</p>
-                                </div>
-                              </div>
-                              <div className="flex gap-2">
-                                {(() => {
-                                  try {
-                                    const rd = requiredDocs.find((r: any) => r.taskId === t.taskId);
-                                    const userDocs = t.user?.userDocuments ? (typeof t.user.userDocuments === 'string' ? JSON.parse(t.user.userDocuments) : t.user.userDocuments) : [];
-                                    const reqId = rd? (rd.$id || rd.id) : null;
-                                    const provided = reqId ? userDocs.find((d: any) => d.documentRequirementId === reqId && (rd?.isGlobal || d.projectId === id)) : null;
-                                    if (provided) {
-                                      return (
-                                        <button 
-                                          onClick={() => handleOpenViewer(provided, t.title)} 
-                                          className="text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
-                                        >
-                                          View Document
-                                        </button>
-                                      );
-                                    }
-                                  } catch (e) {
-                                    // ignore parse errors
-                                  }
-                                  return null;
-                                })()}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                     {['SELLER', 'BUYER'].map(roleType => {
+                        const roleTasks = projectStatusData.tasks.filter((t: any) => t.role === roleType);
+                        const completedCount = roleTasks.filter((t: any) => t.status === 'COMPLETED').length;
+                        const totalCount = roleTasks.length;
+                        const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+                        const roleUser = roleType === 'SELLER' ? seller : buyer;
 
-                                {t.status === 'PENDING' ? (
-                                  <button onClick={() => handleApproveDoc(t.user.id, t.taskId)} className="text-[10px] font-bold uppercase tracking-wider bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors">Mark Complete</button>
-                                ) : (
-                                  <button onClick={() => handleRejectDoc(t.user.id, t.taskId)} className="text-[10px] font-bold uppercase tracking-wider bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg hover:bg-slate-300 transition-colors">Revert</button>
-                                )}
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
+                        const pendingTasks = roleTasks.filter((t: any) => t.status !== 'COMPLETED');
+                        const completedTasks = roleTasks.filter((t: any) => t.status === 'COMPLETED');
 
-                      {/* Column for Buyer tasks */}
-                      <div className="space-y-3">
-                        <h4 className="text-sm font-bold text-slate-700">Buyer — <span className="text-sm font-medium text-slate-600">{(allUsers.find(u => u.id === project?.buyerId)?.name) || 'Unassigned'}</span></h4>
-                        {projectStatusData.tasks.filter((t: any) => t.role === 'BUYER').length === 0 ? (
-                          <div className="py-6 text-center text-slate-400 italic bg-slate-50 rounded-2xl border border-dashed border-slate-200">No tasks for buyer.</div>
-                        ) : (
-                          projectStatusData.tasks.filter((t: any) => t.role === 'BUYER').map((t: any, idx: number) => (
-                            <div key={`buyer-${idx}`} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${t.status === 'COMPLETED' ? 'bg-emerald-50 border-emerald-100 opacity-70' : 'bg-white border-slate-200 shadow-sm'}`}>
-                              <div className="flex items-center gap-4">
-                                <div className={`p-2 rounded-lg ${t.status === 'COMPLETED' ? 'text-emerald-500 bg-emerald-100' : 'text-slate-300 bg-slate-100'}`}>
-                                  {t.status === 'COMPLETED' ? <CheckCircle2 size={24} /> : <Circle size={24} />}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <p className={`font-semibold truncate ${t.status === 'COMPLETED' ? 'line-through text-slate-400' : 'text-slate-900'}`}>{t.title}</p>
-                                  </div>
-                                  <p className="text-[10px] text-slate-500 mt-0.5">Assigned: {new Date(t.assignedAt).toLocaleDateString()}</p>
-                                </div>
+                        return (
+                           <div key={roleType} className="space-y-6">
+                              <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100 shadow-sm">
+                                 <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-3">
+                                       <div className={`p-2.5 rounded-xl ${roleType === 'SELLER' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                                          <UserIcon size={20} />
+                                       </div>
+                                       <div>
+                                          <h4 className="font-bold text-slate-900">{roleType === 'SELLER' ? 'Seller' : 'Buyer'}</h4>
+                                          <p className="text-xs text-slate-500 font-medium">{roleUser?.name || 'Unassigned'}</p>
+                                       </div>
+                                    </div>
+                                    <div className="text-right">
+                                       <p className="text-2xl font-bold text-slate-900">{percent}%</p>
+                                    </div>
+                                 </div>
+                                 <div className="w-full bg-white rounded-full h-2.5 overflow-hidden shadow-inner">
+                                     <div className={`h-full transition-all duration-700 ease-out ${roleType === 'SELLER' ? 'bg-indigo-500' : 'bg-emerald-500'}`} style={{ width: `${percent}%` }}></div>
+                                 </div>
+                                 <div className="flex justify-between mt-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                    <span>{completedCount} Completed</span>
+                                    <span>{totalCount - completedCount} Remaining</span>
+                                 </div>
                               </div>
-                              <div className="flex gap-2">
-                                {(() => {
-                                  try {
-                                    const rd = requiredDocs.find((r: any) => r.taskId === t.taskId);
-                                    const userDocs = t.user?.userDocuments ? (typeof t.user.userDocuments === 'string' ? JSON.parse(t.user.userDocuments) : t.user.userDocuments) : [];
-                                    const reqId = rd? (rd.$id || rd.id) : null;
-                                    const provided = reqId ? userDocs.find((d: any) => d.documentRequirementId === reqId && (rd?.isGlobal || d.projectId === id)) : null;
-                                    if (provided) {
-                                      return (
-                                        <button 
-                                          onClick={() => handleOpenViewer(provided, t.title)} 
-                                          className="text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
-                                        >
-                                          View Document
-                                        </button>
-                                      );
-                                    }
-                                  } catch (e) {
-                                    // ignore parse errors
-                                  }
-                                  return null;
-                                })()}
 
-                                {t.status === 'PENDING' ? (
-                                  <button onClick={() => handleApproveDoc(t.user.id, t.taskId)} className="text-[10px] font-bold uppercase tracking-wider bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors">Mark Complete</button>
-                                ) : (
-                                  <button onClick={() => handleRejectDoc(t.user.id, t.taskId)} className="text-[10px] font-bold uppercase tracking-wider bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg hover:bg-slate-300 transition-colors">Revert</button>
-                                )}
+                              <div className="space-y-3">
+                                 <h5 className="text-xs font-bold uppercase text-slate-400 tracking-widest pl-1 flex items-center gap-2">
+                                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> Active Tasks
+                                 </h5>
+                                 {pendingTasks.length === 0 ? (
+                                    <div className="p-8 border border-dashed border-slate-200 rounded-2xl text-center">
+                                      <CheckCircle2 size={32} className="text-slate-200 mx-auto mb-2" />
+                                      <p className="text-sm font-medium text-slate-400">All caught up!</p>
+                                    </div>
+                                 ) : pendingTasks.map((t: any) => (
+                                    <div key={t.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:border-blue-300 transition-all group">
+                                      <div className="flex items-start gap-4">
+                                        <div className={`mt-0.5 p-2 rounded-lg bg-slate-100 text-slate-300 group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors`}>
+                                          <Circle size={20} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center justify-between gap-2 mb-1">
+                                            <p className="font-bold text-slate-900 truncate">{t.title}</p>
+                                            {t.dueDate && <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full whitespace-nowrap">{new Date(t.dueDate).toLocaleDateString()}</span>}
+                                          </div>
+                                          <p className="text-xs text-slate-500 line-clamp-2 mb-3">{t.description}</p>
+                                          
+                                          <div className="flex flex-wrap gap-2">
+                                            {(() => {
+                                                const rd = requiredDocs.find((r: any) => r.taskId === t.taskId);
+                                                const userDocs = t.user?.userDocuments ? (typeof t.user.userDocuments === 'string' ? JSON.parse(t.user.userDocuments) : t.user.userDocuments) : [];
+                                                const reqId = rd? (rd.$id || rd.id) : null;
+                                                const provided = reqId ? userDocs.find((d: any) => d.documentRequirementId === reqId && (rd?.isGlobal || d.projectId === id)) : null;
+                                                
+                                                if (provided) {
+                                                  return (
+                                                    <button 
+                                                      onClick={() => handleOpenViewer({ fileId: provided.fileId, url: provided.url, documentType: provided.documentType }, t.title)}
+                                                      className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 transition-colors"
+                                                    >
+                                                      <Eye size={12} /> View Doc
+                                                    </button>
+                                                  );
+                                                }
+                                                return null;
+                                            })()}
+                                            
+                                            <button 
+                                              onClick={() => handleApproveDoc(t.user.id, t.taskId)} 
+                                              className="flex-1 flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-wider bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors shadow-sm shadow-blue-200"
+                                            >
+                                              Mark Complete
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                 ))}
                               </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
+
+                              {completedTasks.length > 0 && (
+                                <div className="space-y-3 pt-4 border-t border-slate-100">
+                                   <h5 className="text-xs font-bold uppercase text-slate-400 tracking-widest pl-1 flex items-center gap-2">
+                                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> Completed
+                                   </h5>
+                                   <div className="opacity-60 hover:opacity-100 transition-opacity space-y-2">
+                                     {completedTasks.map((t: any) => (
+                                         <div key={t.id} className="bg-slate-50 p-3 rounded-lg border border-slate-100 flex items-center justify-between gap-3">
+                                            <div className="flex items-center gap-3 overflow-hidden">
+                                              <div className="text-emerald-500 min-w-[20px]"><CheckCircle2 size={20} /></div>
+                                              <span className="text-sm font-medium text-slate-600 truncate line-through decoration-slate-300">{t.title}</span>
+                                            </div>
+                                            <button 
+                                              onClick={() => handleRejectDoc(t.user.id, t.taskId)} 
+                                              className="text-slate-400 hover:text-amber-600 p-1.5 rounded-md hover:bg-amber-50 transition-colors"
+                                              title="Revert Status"
+                                            >
+                                              <History size={16} />
+                                            </button>
+                                         </div>
+                                     ))}
+                                   </div>
+                                </div>
+                              )}
+                           </div>
+                        );
+                     })}
                   </div>
                 </div>
               )}
 
               {activeTab === 'documents' && (
-                <div className="space-y-6 animate-in fade-in duration-300">
-                  <div className="flex items-center justify-between mb-2">
+                <div className="space-y-8 animate-in fade-in duration-300">
+                  <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-xl font-bold text-slate-900">Closing Documents Audit</h3>
-                      <p className="text-sm text-slate-500">Global requirements matched against participant profiles.</p>
+                      <h3 className="text-lg font-bold text-slate-900">Document Compliance</h3>
+                      <p className="text-xs text-slate-500">Track required documents for closing.</p>
                     </div>
                     {isAdmin && (
                       <button 
                         onClick={handleSyncDocs}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-md flex items-center gap-2"
+                        className="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-800 transition-all flex items-center gap-2"
                         disabled={isSyncing}
                       >
                         {isSyncing ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                        Sync Missing Tasks
+                        Sync Requirements
                       </button>
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="w-full">
-                      <div className="grid grid-cols-1 gap-4">
-                        {projectStatusData.docs.length === 0 ? (
-                          <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center">
-                            <FileText size={40} className="text-slate-300 mx-auto mb-3" />
-                            <p className="text-slate-500 font-medium">No document requirements found.</p>
-                          </div>
-                        ) : (
-                          projectStatusData.docs.map(rd => (
-                            <div key={rd.$id} className="bg-white border border-slate-100 rounded-2xl p-5 hover:border-blue-200 transition-all space-y-4">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-4">
-                                  <div className="p-3 rounded-xl bg-blue-50 text-blue-600">
-                                    <FileText size={20} />
-                                  </div>
-                                  <div>
-                                    <p className="font-bold text-slate-900">{rd.name}</p>
-                                    <p className="text-xs text-slate-500 line-clamp-1">{rd.description}</p>
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-50">
-                                {(rd as any).participants.map((p: any) => (
-                                  <div key={p.role} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                                    <div className="flex items-center gap-3">
-                                      <div className={`p-1.5 rounded-lg ${p.isProvided ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-400'}`}>
-                                        {p.isProvided ? <CheckCircle2 size={16} /> : <Clock size={16} />}
-                                      </div>
-                                      <div>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{p.role}</p>
-                                        <p className="text-xs font-bold text-slate-700 truncate max-w-[60px]">{p.user?.name || 'Pending'}</p>
-                                      </div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                      {p.isProvided ? (
-                                        <button 
-                                          onClick={() => handleOpenViewer({ fileId: p.fileId, url: p.url, documentType: p.documentType }, rd.name)}
-                                          className="p-1.5 rounded-lg transition-colors hover:bg-blue-100 text-blue-600"
-                                          title="View Document"
-                                        >
-                                          <Eye size={16} />
-                                        </button>
-                                      ) : (
-                                        isAdmin && p.user && (
-                                          <button 
-                                            onClick={() => {
-                                              setUploadingDocId((rd as any).$id);
-                                              setUploadingForUserId(p.user.id);
-                                              docFileInputRef.current?.click();
-                                            }}
-                                            className="p-1.5 hover:bg-blue-50 text-blue-600 rounded-lg transition-colors"
-                                            title="Upload for user"
-                                          >
-                                            <Plus size={16} />
-                                          </button>
-                                        )
-                                      )}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ))
-                        )}
+                  {projectStatusData.docs.length === 0 ? (
+                      <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-12 text-center">
+                        <FileText size={48} className="text-slate-300 mx-auto mb-4" />
+                        <h4 className="text-slate-900 font-bold mb-1">No Requirements Found</h4>
+                        <p className="text-slate-500 text-sm">There are no document requirements configured for this project type.</p>
                       </div>
-                    </div>
-                  </div>
+                  ) : (
+                      <div className="grid grid-cols-1 gap-4">
+                        {projectStatusData.docs.map(rd => (
+                          <div key={rd.$id} className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm hover:border-blue-200 transition-all group">
+                             <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+                                <div className="flex items-start gap-4">
+                                   <div className="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover:scale-110 transition-transform">
+                                      <FileText size={24} />
+                                   </div>
+                                   <div>
+                                      <h4 className="font-bold text-slate-900 text-lg">{rd.name}</h4>
+                                      <p className="text-sm text-slate-500 max-w-2xl">{rd.description}</p>
+                                   </div>
+                                </div>
+                             </div>
+                             
+                             <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {(rd as any).participants.map((p: any) => (
+                                   <div key={p.role} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${p.isProvided ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-slate-100'}`}>
+                                      <div className="flex items-center gap-3">
+                                         <div className={`p-2 rounded-lg ${p.role === 'SELLER' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                                            <UserIcon size={16} />
+                                         </div>
+                                         <div>
+                                            <div className="flex items-center gap-2">
+                                               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{p.role === 'SELLER' ? 'Seller' : 'Buyer'}</span>
+                                               {p.isProvided ? (
+                                                  <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full"><CheckCircle2 size={10} /> RECEIVED</span>
+                                               ) : (
+                                                  <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full"><Clock size={10} /> PENDING</span>
+                                               )}
+                                            </div>
+                                            <p className="text-xs font-bold text-slate-700 mt-0.5">{p.user?.name || 'Unassigned'}</p>
+                                         </div>
+                                      </div>
+                                      
+                                      <div className="flex items-center gap-2">
+                                         {p.isProvided ? (
+                                            <button 
+                                               onClick={() => handleOpenViewer({ fileId: p.fileId, url: p.url, documentType: p.documentType }, rd.name)} 
+                                               className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors tooltip"
+                                               title="View Document"
+                                            >
+                                               <Eye size={18} />
+                                            </button>
+                                         ) : (
+                                            isAdmin && p.user && (
+                                               <button 
+                                                  onClick={() => {
+                                                     setUploadingDocId((rd as any).$id);
+                                                     setUploadingForUserId(p.user.id);
+                                                     docFileInputRef.current?.click();
+                                                  }}
+                                                  className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-lg hover:border-blue-300 hover:text-blue-600 transition-colors shadow-sm"
+                                               >
+                                                  <Plus size={14} /> Upload
+                                               </button>
+                                            )
+                                         )}
+                                      </div>
+                                   </div>
+                                ))}
+                             </div>
+                          </div>
+                        ))}
+                      </div>
+                  )}
                 </div>
               )}
 
