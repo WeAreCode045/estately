@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
-import { Settings as SettingsIcon, Shield, Bell, Globe, Key, Save, Loader2 } from 'lucide-react';
-import { configService } from '../services/appwrite';
+import { Settings as SettingsIcon, Shield, Bell, Globe, Key, Save, Loader2, User as UserIcon } from 'lucide-react';
+import { configService, profileService } from '../services/appwrite';
 
 interface SettingsProps {
   user: User;
@@ -11,10 +11,12 @@ const Settings: React.FC<SettingsProps> = ({ user }) => {
   const [googleApiKey, setGoogleApiKey] = useState('');
   const [messagingProviderId, setMessagingProviderId] = useState('');
   const [appUrl, setAppUrl] = useState('');
+  const [defaultAgentId, setDefaultAgentId] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [agents, setAgents] = useState<any[]>([]);
 
   useEffect(() => {
     fetchSettings();
@@ -23,10 +25,12 @@ const Settings: React.FC<SettingsProps> = ({ user }) => {
   const fetchSettings = async () => {
     setLoading(true);
     try {
-      const [googleConfig, messagingConfig, appUrlConfig] = await Promise.all([
+      const [googleConfig, messagingConfig, appUrlConfig, defaultAgentConfig, profiles] = await Promise.all([
         configService.get('google_maps_api_key'),
         configService.get('messaging_provider_id'),
-        configService.get('app_url')
+        configService.get('app_url'),
+        configService.get('default_agent_id'),
+        profileService.listAll()
       ]);
 
       if (googleConfig) {
@@ -38,6 +42,12 @@ const Settings: React.FC<SettingsProps> = ({ user }) => {
       if (appUrlConfig) {
         setAppUrl((appUrlConfig as any).value || '');
       }
+      if (defaultAgentConfig) {
+        setDefaultAgentId((defaultAgentConfig as any).value || '');
+      }
+
+      setAgents(profiles.documents.filter((p: any) => p.role === UserRole.ADMIN));
+
     } catch (err) {
       console.error('Error fetching settings:', err);
       setError('Failed to load settings');
@@ -55,7 +65,8 @@ const Settings: React.FC<SettingsProps> = ({ user }) => {
       await Promise.all([
         configService.set('google_maps_api_key', googleApiKey),
         configService.set('messaging_provider_id', messagingProviderId),
-        configService.set('app_url', appUrl)
+        configService.set('app_url', appUrl),
+        configService.set('default_agent_id', defaultAgentId)
       ]);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
@@ -164,6 +175,38 @@ const Settings: React.FC<SettingsProps> = ({ user }) => {
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
                   />
                   <p className="text-[10px] text-slate-400 italic">This URL will be used in invitation emails to direct users to the registration page.</p>
+                </div>
+
+                <div className="space-y-3 mt-6 pt-6 border-t border-slate-100">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-2">
+                    <UserIcon size={14} /> Default Agent
+                  </label>
+                  <p className="text-sm text-slate-500 mb-2">Select the agent that will be automatically assigned to new projects if no manager is specified.</p>
+                  
+                  <div className="space-y-2">
+                    {agents.length === 0 ? (
+                       <p className="text-sm text-slate-400 italic bg-slate-50 p-2 rounded-lg">No admin profiles found.</p>
+                    ) : (
+                      agents.map(agent => (
+                        <label key={agent.$id} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${defaultAgentId === agent.userId ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
+                          <input 
+                            type="radio" 
+                            name="defaultAgent"
+                            value={agent.userId}
+                            checked={defaultAgentId === agent.userId}
+                            onChange={() => setDefaultAgentId(agent.userId)}
+                            className="w-4 h-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                          />
+                          <img src={agent.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(agent.name)}`} className="w-8 h-8 rounded-full border border-slate-100" />
+                          <div>
+                            <p className="text-sm font-bold text-slate-900">{agent.name}</p>
+                            <p className="text-xs text-slate-500">{agent.email}</p>
+                          </div>
+                          {defaultAgentId === agent.userId && <span className="ml-auto text-[10px] bg-blue-100 text-blue-600 font-bold px-2 py-0.5 rounded-full">DEFAULT</span>}
+                        </label>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
 

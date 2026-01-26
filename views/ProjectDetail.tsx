@@ -80,7 +80,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteName, setInviteName] = useState('');
   
-  const { googleApiKey } = useSettings();
+  const { googleApiKey, defaultAgentId } = useSettings();
   const [isEditing, setIsEditing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [projectAddress, setProjectAddress] = useState(project?.property?.address || '');
@@ -1216,7 +1216,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
             <ParticipantRow user={buyer} role="Buyer" isAdmin={isAdmin} />
             <ParticipantRow 
               user={(() => {
-                 const managerId = project.managerId;
+                 const managerId = project.managerId || defaultAgentId; // Fallback to default
                  const fromAll = allUsers.find(u => u.id === managerId || u.$id === managerId);
                  if (fromAll) return fromAll;
                  
