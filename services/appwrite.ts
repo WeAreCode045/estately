@@ -1,4 +1,4 @@
-import { Client, Account, Databases, Storage, Teams, ID, Query } from 'appwrite';
+import { Client, Account, Databases, Storage, Teams, ID, Query, ImageGravity, ImageFormat } from 'appwrite';
 
 const client = new Client();
 
@@ -109,13 +109,13 @@ export const projectService = {
     },
     getImagePreview(fileId: string) {
         if (!fileId) return '';
-        const url = storage.getFilePreview(BUCKETS.PROPERTY_IMAGES, fileId);
-        // Explicitly ensuring it's a string and logged for debugging
-        const urlString = url.toString();
-        if (urlString.includes('undefined')) {
-            console.warn('Appwrite URL contains undefined:', urlString);
-        }
-        return urlString;
+        const url = storage.getFilePreview({
+            bucketId: BUCKETS.PROPERTY_IMAGES,
+            fileId: fileId,
+            quality: 100,
+            output: ImageFormat.Jpg
+        });
+        return url.href || url.toString();
     }
 };
 

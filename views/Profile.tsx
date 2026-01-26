@@ -65,17 +65,10 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
         url = await documentService.getFileUrl(provided.fileId);
       }
       if (!url) throw new Error('No URL available');
-      try {
-        const resp = await fetch(url, { method: 'GET' });
-        if (resp.status === 404) {
-          setViewerError('Document not found in storage (file missing).');
-          setViewerUrl(null);
-          setViewerTitle(title || provided?.name || 'Document');
-          if (provided?.fileId) setViewerDownloadUrl(documentService.getFileDownload(provided.fileId));
-          return;
-        }
-      } catch (e) {
-        console.debug('Could not probe file URL before viewing:', e);
+
+      // Ensure mode=admin is present
+      if (!url.includes('mode=admin')) {
+        url = url.includes('?') ? `${url}&mode=admin` : `${url}?mode=admin`;
       }
 
       setViewerError(null);
@@ -440,7 +433,13 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
       </div>
     </div>
     {(viewerUrl || viewerError) && (
-      <DocumentViewer url={viewerUrl} error={viewerError || undefined} title={viewerTitle || undefined} onClose={handleCloseViewer} />
+      <DocumentViewer 
+        url={viewerUrl} 
+        downloadUrl={viewerDownloadUrl}
+        error={viewerError || undefined} 
+        title={viewerTitle || undefined} 
+        onClose={handleCloseViewer} 
+      />
     )}
     </>
   );

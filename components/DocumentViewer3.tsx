@@ -4,12 +4,13 @@ import { X, AlertCircle, Download } from 'lucide-react';
 type Props = {
   url?: string | null;
   downloadUrl?: string | null;
+  documentType?: string | null;
   error?: string | null;
   title?: string;
   onClose: () => void;
 };
 
-const DocumentViewer: React.FC<Props> = ({ url, downloadUrl, error, title, onClose }) => {
+const DocumentViewer: React.FC<Props> = ({ url, downloadUrl, documentType, error, title, onClose }) => {
   return (
     <div className="fixed inset-0 z-60 bg-black/60 flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-4xl h-[80vh] rounded-2xl shadow-2xl overflow-hidden relative">
@@ -42,7 +43,37 @@ const DocumentViewer: React.FC<Props> = ({ url, downloadUrl, error, title, onClo
               )}
             </div>
           ) : (
-            <iframe src={url || ''} title={title || 'Document'} className="w-full h-full" />
+            <div className="w-full h-full flex items-center justify-center bg-slate-100">
+              {(() => {
+                const lowerUrl = url?.toLowerCase() || '';
+                const lowerName = title?.toLowerCase() || '';
+                const lowerType = documentType?.toLowerCase() || '';
+
+                const isPdf = lowerUrl.includes('.pdf') || lowerName.endsWith('.pdf') || lowerType.includes('pdf');
+                const isImg = !isPdf && (lowerUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)/i) || lowerName.match(/\.(jpg|jpeg|png|gif|webp|svg)/i) || lowerType.includes('image'));
+                
+                if (isImg) {
+                  return <img src={url || ''} alt={title} className="max-w-full max-h-full object-contain" />;
+                } else if (isPdf) {
+                  return <embed src={url || ''} type="application/pdf" className="w-full h-full" />;
+                } else {
+                  return (
+                    <div className="text-center p-8">
+                      <AlertCircle size={48} className="text-slate-300 mx-auto mb-4" />
+                      <p className="text-slate-600 font-medium mb-4">This file type cannot be previewed natively.</p>
+                      <a 
+                        href={url || '#'} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all"
+                      >
+                        Open in new tab
+                      </a>
+                    </div>
+                  );
+                }
+              })()}
+            </div>
           )}
         </div>
       </div>

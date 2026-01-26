@@ -30,31 +30,42 @@ export const documentService = {
   },
 
   getFileView(fileId: string) {
-    return storage.getFileView(BUCKETS.DOCUMENTS, fileId).toString();
+    const endpoint = import.meta.env.VITE_APPWRITE_ENDPOINT;
+    const project = import.meta.env.VITE_APPWRITE_PROJECT_ID;
+    return `${endpoint}/storage/buckets/${BUCKETS.DOCUMENTS}/files/${fileId}/view?project=${project}&mode=admin`;
+  },
+
+  getFilePreview(fileId: string) {
+    const endpoint = import.meta.env.VITE_APPWRITE_ENDPOINT;
+    const project = import.meta.env.VITE_APPWRITE_PROJECT_ID;
+    return `${endpoint}/storage/buckets/${BUCKETS.DOCUMENTS}/files/${fileId}/preview?project=${project}`;
   },
 
   getFileDownload(fileId: string) {
-    return storage.getFileDownload(BUCKETS.DOCUMENTS, fileId).toString();
+    const endpoint = import.meta.env.VITE_APPWRITE_ENDPOINT;
+    const project = import.meta.env.VITE_APPWRITE_PROJECT_ID;
+    return `${endpoint}/storage/buckets/${BUCKETS.DOCUMENTS}/files/${fileId}/download?project=${project}&mode=admin`;
   },
 
   async getFileUrl(fileId: string) {
-    // Try view first, then download as fallback. Return the first usable URL string.
     try {
-      const view = storage.getFileView(BUCKETS.DOCUMENTS, fileId);
-      if (view) return view.toString();
+      // 1. Get file metadata to determine type
+      const file = await this.getFile(fileId);
+      const isImage = file.mimeType.startsWith('image/');
+      
+      // 2. Return preview for images, view for others
+      if (isImage) {
+        return this.getFilePreview(fileId);
+      }
+      return this.getFileView(fileId);
     } catch (e) {
-      // ignore
+      // Fallback
+      return this.getFileView(fileId);
     }
+  },
 
-    try {
-      const dl = storage.getFileDownload(BUCKETS.DOCUMENTS, fileId);
-      if (dl) return dl.toString();
-    } catch (e) {
-      // ignore
-    }
-
-    // No URL available
-    throw new Error('File URL not available');
+  async getFile(fileId: string) {
+    return await storage.getFile(BUCKETS.DOCUMENTS, fileId);
   },
 
   async deleteDocument(fileId: string) {
@@ -141,7 +152,7 @@ export const documentService = {
     if (requiredDocId !== 'general') {
       try {
         const reqDoc = await databases.getDocument(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS, requiredDocId);
-        documentType = reqDoc.documentType;
+        documentType = reqDoc.documentType || 'Personal';
         taskId = reqDoc.taskId;
         isGlobal = reqDoc.isGlobal;
       } catch (e) {
@@ -152,8 +163,8 @@ export const documentService = {
     // 1. Upload to storage
     const uploadedFile = await storage.createFile(BUCKETS.DOCUMENTS, ID.unique(), file);
     
-    // 2. Get the file URL
-    const fileUrl = storage.getFileView(BUCKETS.DOCUMENTS, uploadedFile.$id).toString();
+    // 2. Get the file URL (with mode=admin suffix)
+    const fileUrl = this.getFileView(uploadedFile.$id);
 
     // 3. Update User Profile
     try {

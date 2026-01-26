@@ -21,6 +21,8 @@ import {
   CheckCircle2,
   Clock,
   X,
+  AlertCircle,
+  Eye,
   ExternalLink,
   Map as MapIcon,
   Loader2,
@@ -94,28 +96,74 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const [viewerTitle, setViewerTitle] = useState<string | null>(null);
   const [viewerError, setViewerError] = useState<string | null>(null);
+  const [viewerDownloadUrl, setViewerDownloadUrl] = useState<string | null>(null);
+  const [viewerType, setViewerType] = useState<string | null>(null);
+  const [inlinePreviewDoc, setInlinePreviewDoc] = useState<any | null>(null);
+
+  const handleInlinePreview = async (provided: any) => {
+    try {
+      let fileId = provided?.fileId;
+      let documentType = provided?.documentType;
+      let url = null;
+      
+      if (fileId) {
+        // Always regenerate URL to ensure correct structure (preview vs view)
+        url = await documentService.getFileUrl(fileId);
+        
+        // Also try to get metadata if documentType is missing
+        if (!documentType) {
+          try {
+            const fileInfo = await documentService.getFile(fileId);
+            documentType = fileInfo.mimeType;
+          } catch (me) {
+            console.warn('Could not fetch file metadata:', me);
+          }
+        }
+      } else {
+        url = provided?.url;
+      }
+      
+      if (!url) return;
+
+      setInlinePreviewDoc({ ...provided, url, documentType });
+    } catch (e) {
+      console.error('Error opening inline preview:', e);
+    }
+  };
 
   const handleOpenViewer = async (provided: any, title?: string) => {
     try {
-      let url = provided?.url;
-      if (!url && provided?.fileId) {
-        url = await documentService.getFileUrl(provided.fileId);
-      }
-      if (!url) throw new Error('No URL available');
-      try {
-        const resp = await fetch(url, { method: 'GET' });
-        if (resp.status === 404) {
-          setViewerError('Document not found in storage (file missing).');
-          setViewerUrl(null);
-          setViewerTitle(title || provided?.name || 'Document');
-          return;
+      let fileId = provided?.fileId;
+      let documentType = provided?.documentType;
+      let url = null;
+      
+      if (fileId) {
+        url = await documentService.getFileUrl(fileId);
+        if (!documentType) {
+          try {
+            const fileInfo = await documentService.getFile(fileId);
+            documentType = fileInfo.mimeType;
+          } catch (me) {
+            console.warn('Could not fetch file metadata:', me);
+          }
         }
-      } catch (e) {
-        console.debug('Could not probe file URL before viewing:', e);
+      } else {
+        url = provided?.url;
+      }
+      
+      if (!url) throw new Error('No URL available');
+
+      // Generate normalized download URL if we have a fileId
+      if (fileId) {
+        let dl = documentService.getFileDownload(fileId);
+        setViewerDownloadUrl(dl);
+      } else {
+        setViewerDownloadUrl(null);
       }
 
       setViewerError(null);
       setViewerUrl(url);
+      setViewerType(documentType);
       setViewerTitle(title || provided?.name || 'Document');
     } catch (e) {
       console.error('Error opening viewer:', e);
@@ -127,6 +175,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
     setViewerUrl(null);
     setViewerTitle(null);
     setViewerError(null);
+    setViewerDownloadUrl(null);
+    setViewerType(null);
   };
 
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
@@ -814,103 +864,178 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                       <p className="text-xs text-slate-500">View tasks currently assigned to Buyer and Seller in their profiles.</p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Column for Seller tasks */}
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-bold text-slate-700">Seller — <span className="text-sm font-medium text-slate-600">{(allUsers.find(u => u.id === project?.sellerId)?.name) || 'Unassigned'}</span></h4>
-                      {projectStatusData.tasks.filter((t: any) => t.role === 'SELLER').length === 0 ? (
-                        <div className="py-6 text-center text-slate-400 italic bg-slate-50 rounded-2xl border border-dashed border-slate-200">No tasks for seller.</div>
-                      ) : (
-                        projectStatusData.tasks.filter((t: any) => t.role === 'SELLER').map((t: any, idx: number) => (
-                          <div key={`seller-${idx}`} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${t.status === 'COMPLETED' ? 'bg-emerald-50 border-emerald-100 opacity-70' : 'bg-white border-slate-200 shadow-sm'}`}>
-                            <div className="flex items-center gap-4">
-                              <div className={`p-2 rounded-lg ${t.status === 'COMPLETED' ? 'text-emerald-500 bg-emerald-100' : 'text-slate-300 bg-slate-100'}`}>
-                                {t.status === 'COMPLETED' ? <CheckCircle2 size={24} /> : <Circle size={24} />}
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <p className={`font-semibold ${t.status === 'COMPLETED' ? 'line-through text-slate-400' : 'text-slate-900'}`}>{t.title}</p>
+                  
+                  <div className={`grid gap-6 ${inlinePreviewDoc ? 'grid-cols-1 xl:grid-cols-3' : 'grid-cols-1 md:grid-cols-2'}`}>
+                    {/* Tasks Columns */}
+                    <div className={`${inlinePreviewDoc ? 'xl:col-span-1' : 'md:col-span-2'} grid grid-cols-1 gap-6 ${!inlinePreviewDoc && 'md:grid-cols-2'}`}>
+                      {/* Column for Seller tasks */}
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-bold text-slate-700">Seller — <span className="text-sm font-medium text-slate-600">{(allUsers.find(u => u.id === project?.sellerId)?.name) || 'Unassigned'}</span></h4>
+                        {projectStatusData.tasks.filter((t: any) => t.role === 'SELLER').length === 0 ? (
+                          <div className="py-6 text-center text-slate-400 italic bg-slate-50 rounded-2xl border border-dashed border-slate-200">No tasks for seller.</div>
+                        ) : (
+                          projectStatusData.tasks.filter((t: any) => t.role === 'SELLER').map((t: any, idx: number) => (
+                            <div key={`seller-${idx}`} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${t.status === 'COMPLETED' ? 'bg-emerald-50 border-emerald-100 opacity-70' : 'bg-white border-slate-200 shadow-sm'}`}>
+                              <div className="flex items-center gap-4">
+                                <div className={`p-2 rounded-lg ${t.status === 'COMPLETED' ? 'text-emerald-500 bg-emerald-100' : 'text-slate-300 bg-slate-100'}`}>
+                                  {t.status === 'COMPLETED' ? <CheckCircle2 size={24} /> : <Circle size={24} />}
                                 </div>
-                                <p className="text-xs text-slate-500 mt-0.5">Assigned: {new Date(t.assignedAt).toLocaleDateString()}</p>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <p className={`font-semibold truncate ${t.status === 'COMPLETED' ? 'line-through text-slate-400' : 'text-slate-900'}`}>{t.title}</p>
+                                  </div>
+                                  <p className="text-[10px] text-slate-500 mt-0.5">Assigned: {new Date(t.assignedAt).toLocaleDateString()}</p>
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                {(() => {
+                                  try {
+                                    const rd = requiredDocs.find((r: any) => r.taskId === t.taskId);
+                                    const userDocs = t.user?.userDocuments ? (typeof t.user.userDocuments === 'string' ? JSON.parse(t.user.userDocuments) : t.user.userDocuments) : [];
+                                    const reqId = rd? (rd.$id || rd.id) : null;
+                                    const provided = reqId ? userDocs.find((d: any) => d.documentRequirementId === reqId && (rd?.isGlobal || d.projectId === id)) : null;
+                                    if (provided) {
+                                      return (
+                                        <button 
+                                          onClick={() => handleInlinePreview(provided)} 
+                                          className={`text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors ${inlinePreviewDoc?.fileId === provided.fileId ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+                                        >
+                                          {inlinePreviewDoc?.fileId === provided.fileId ? 'Previewing' : 'View Document'}
+                                        </button>
+                                      );
+                                    }
+                                  } catch (e) {
+                                    // ignore parse errors
+                                  }
+                                  return null;
+                                })()}
+
+                                {t.status === 'PENDING' ? (
+                                  <button onClick={() => handleApproveDoc(t.user.id, t.taskId)} className="text-[10px] font-bold uppercase tracking-wider bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors">Mark Complete</button>
+                                ) : (
+                                  <button onClick={() => handleRejectDoc(t.user.id, t.taskId)} className="text-[10px] font-bold uppercase tracking-wider bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg hover:bg-slate-300 transition-colors">Revert</button>
+                                )}
                               </div>
                             </div>
-                            <div className="flex gap-2">
-                              {/** Check if user has provided a document for this task's requirement */}
-                              {(() => {
-                                try {
-                                  const rd = requiredDocs.find((r: any) => r.taskId === t.taskId);
-                                  const userDocs = t.user?.userDocuments ? (typeof t.user.userDocuments === 'string' ? JSON.parse(t.user.userDocuments) : t.user.userDocuments) : [];
-                                  const reqId = rd? (rd.$id || rd.id) : null;
-                                  const provided = reqId ? userDocs.find((d: any) => d.documentRequirementId === reqId && (rd?.isGlobal || d.projectId === id)) : null;
-                                  if (provided) {
-                                    return (
-                                      <button onClick={() => handleOpenViewer(provided)} className="text-[10px] font-bold uppercase tracking-wider bg-white border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors">View Document</button>
-                                    );
-                                  }
-                                } catch (e) {
-                                  // ignore parse errors
-                                }
-                                return null;
-                              })()}
+                          ))
+                        )}
+                      </div>
 
-                              {t.status === 'PENDING' ? (
-                                <button onClick={() => handleApproveDoc(t.user.id, t.taskId)} className="text-[10px] font-bold uppercase tracking-wider bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors">Mark Complete</button>
-                              ) : (
-                                <button onClick={() => handleRejectDoc(t.user.id, t.taskId)} className="text-[10px] font-bold uppercase tracking-wider bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg hover:bg-slate-300 transition-colors">Revert</button>
-                              )}
+                      {/* Column for Buyer tasks */}
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-bold text-slate-700">Buyer — <span className="text-sm font-medium text-slate-600">{(allUsers.find(u => u.id === project?.buyerId)?.name) || 'Unassigned'}</span></h4>
+                        {projectStatusData.tasks.filter((t: any) => t.role === 'BUYER').length === 0 ? (
+                          <div className="py-6 text-center text-slate-400 italic bg-slate-50 rounded-2xl border border-dashed border-slate-200">No tasks for buyer.</div>
+                        ) : (
+                          projectStatusData.tasks.filter((t: any) => t.role === 'BUYER').map((t: any, idx: number) => (
+                            <div key={`buyer-${idx}`} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${t.status === 'COMPLETED' ? 'bg-emerald-50 border-emerald-100 opacity-70' : 'bg-white border-slate-200 shadow-sm'}`}>
+                              <div className="flex items-center gap-4">
+                                <div className={`p-2 rounded-lg ${t.status === 'COMPLETED' ? 'text-emerald-500 bg-emerald-100' : 'text-slate-300 bg-slate-100'}`}>
+                                  {t.status === 'COMPLETED' ? <CheckCircle2 size={24} /> : <Circle size={24} />}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <p className={`font-semibold truncate ${t.status === 'COMPLETED' ? 'line-through text-slate-400' : 'text-slate-900'}`}>{t.title}</p>
+                                  </div>
+                                  <p className="text-[10px] text-slate-500 mt-0.5">Assigned: {new Date(t.assignedAt).toLocaleDateString()}</p>
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                {(() => {
+                                  try {
+                                    const rd = requiredDocs.find((r: any) => r.taskId === t.taskId);
+                                    const userDocs = t.user?.userDocuments ? (typeof t.user.userDocuments === 'string' ? JSON.parse(t.user.userDocuments) : t.user.userDocuments) : [];
+                                    const reqId = rd? (rd.$id || rd.id) : null;
+                                    const provided = reqId ? userDocs.find((d: any) => d.documentRequirementId === reqId && (rd?.isGlobal || d.projectId === id)) : null;
+                                    if (provided) {
+                                      return (
+                                        <button 
+                                          onClick={() => handleInlinePreview(provided)} 
+                                          className={`text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors ${inlinePreviewDoc?.fileId === provided.fileId ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+                                        >
+                                          {inlinePreviewDoc?.fileId === provided.fileId ? 'Previewing' : 'View Document'}
+                                        </button>
+                                      );
+                                    }
+                                  } catch (e) {
+                                    // ignore parse errors
+                                  }
+                                  return null;
+                                })()}
+
+                                {t.status === 'PENDING' ? (
+                                  <button onClick={() => handleApproveDoc(t.user.id, t.taskId)} className="text-[10px] font-bold uppercase tracking-wider bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors">Mark Complete</button>
+                                ) : (
+                                  <button onClick={() => handleRejectDoc(t.user.id, t.taskId)} className="text-[10px] font-bold uppercase tracking-wider bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg hover:bg-slate-300 transition-colors">Revert</button>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        ))
-                      )}
+                          ))
+                        )}
+                      </div>
                     </div>
 
-                    {/* Column for Buyer tasks */}
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-bold text-slate-700">Buyer — <span className="text-sm font-medium text-slate-600">{(allUsers.find(u => u.id === project?.buyerId)?.name) || 'Unassigned'}</span></h4>
-                      {projectStatusData.tasks.filter((t: any) => t.role === 'BUYER').length === 0 ? (
-                        <div className="py-6 text-center text-slate-400 italic bg-slate-50 rounded-2xl border border-dashed border-slate-200">No tasks for buyer.</div>
-                      ) : (
-                        projectStatusData.tasks.filter((t: any) => t.role === 'BUYER').map((t: any, idx: number) => (
-                          <div key={`buyer-${idx}`} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${t.status === 'COMPLETED' ? 'bg-emerald-50 border-emerald-100 opacity-70' : 'bg-white border-slate-200 shadow-sm'}`}>
-                            <div className="flex items-center gap-4">
-                              <div className={`p-2 rounded-lg ${t.status === 'COMPLETED' ? 'text-emerald-500 bg-emerald-100' : 'text-slate-300 bg-slate-100'}`}>
-                                {t.status === 'COMPLETED' ? <CheckCircle2 size={24} /> : <Circle size={24} />}
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <p className={`font-semibold ${t.status === 'COMPLETED' ? 'line-through text-slate-400' : 'text-slate-900'}`}>{t.title}</p>
-                                </div>
-                                <p className="text-xs text-slate-500 mt-0.5">Assigned: {new Date(t.assignedAt).toLocaleDateString()}</p>
-                              </div>
-                            </div>
-                            <div className="flex gap-2">
-                              {(() => {
-                                try {
-                                  const rd = requiredDocs.find((r: any) => r.taskId === t.taskId);
-                                  const userDocs = t.user?.userDocuments ? (typeof t.user.userDocuments === 'string' ? JSON.parse(t.user.userDocuments) : t.user.userDocuments) : [];
-                                  const reqId = rd? (rd.$id || rd.id) : null;
-                                  const provided = reqId ? userDocs.find((d: any) => d.documentRequirementId === reqId && (rd?.isGlobal || d.projectId === id)) : null;
-                                  if (provided) {
-                                    return (
-                                      <button onClick={() => handleOpenViewer(provided)} className="text-[10px] font-bold uppercase tracking-wider bg-white border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors">View Document</button>
-                                    );
-                                  }
-                                } catch (e) {
-                                  // ignore parse errors
-                                }
-                                return null;
-                              })()}
-
-                              {t.status === 'PENDING' ? (
-                                <button onClick={() => handleApproveDoc(t.user.id, t.taskId)} className="text-[10px] font-bold uppercase tracking-wider bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors">Mark Complete</button>
-                              ) : (
-                                <button onClick={() => handleRejectDoc(t.user.id, t.taskId)} className="text-[10px] font-bold uppercase tracking-wider bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg hover:bg-slate-300 transition-colors">Revert</button>
-                              )}
-                            </div>
+                    {/* Inline Preview Container */}
+                    {inlinePreviewDoc && (
+                      <div className="xl:col-span-2 bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col min-h-[600px] overflow-hidden sticky top-8 animate-in slide-in-from-right-4 duration-300">
+                        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Document Preview</p>
+                            <h4 className="font-bold text-slate-900 truncate max-w-[200px] md:max-w-md">{inlinePreviewDoc.name || 'Document'}</h4>
                           </div>
-                        ))
-                      )}
-                    </div>
+                          <div className="flex items-center gap-2">
+                             <a 
+                               href={documentService.getFileDownload(inlinePreviewDoc.fileId)} 
+                               className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
+                               title="Download"
+                               target="_blank" 
+                               rel="noreferrer"
+                             >
+                                <Download size={20} />
+                             </a>
+                             <button 
+                               onClick={() => setInlinePreviewDoc(null)}
+                               className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                             >
+                               <X size={20} />
+                             </button>
+                          </div>
+                        </div>
+                        <div className="flex-1 bg-slate-100 flex items-center justify-center p-4">
+                          {(() => {
+                            const url = inlinePreviewDoc.url;
+                            const lowerUrl = url?.toLowerCase() || '';
+                            const lowerName = inlinePreviewDoc.name?.toLowerCase() || '';
+                            const lowerType = inlinePreviewDoc.documentType?.toLowerCase() || '';
+
+                            const isPdf = lowerUrl.includes('.pdf') || lowerName.endsWith('.pdf') || lowerType.includes('pdf');
+                            const isImg = !isPdf && (lowerUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)/i) || lowerName.match(/\.(jpg|jpeg|png|gif|webp|svg)/i) || lowerType.includes('image'));
+                            
+                            if (isImg) {
+                              return <img src={url} alt={inlinePreviewDoc.name} className="max-w-full max-h-full object-contain shadow-lg rounded-lg" />;
+                            } else if (isPdf) {
+                              // Use <embed> or <object> instead of <iframe>
+                              return <embed src={url} type="application/pdf" className="w-full h-full rounded-lg shadow-inner" />;
+                            } else {
+                              return (
+                                <div className="text-center p-8">
+                                  <AlertCircle size={48} className="text-slate-300 mx-auto mb-4" />
+                                  <p className="text-slate-600 font-medium mb-4">This file type cannot be previewed natively.</p>
+                                  <a 
+                                    href={url} 
+                                    target="_blank" 
+                                    rel="noreferrer" 
+                                    className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all"
+                                  >
+                                    Open in new tab
+                                  </a>
+                                </div>
+                              );
+                            }
+                          })()}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -934,68 +1059,134 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 gap-4">
-                    {projectStatusData.docs.length === 0 ? (
-                      <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center">
-                        <FileText size={40} className="text-slate-300 mx-auto mb-3" />
-                        <p className="text-slate-500 font-medium">No document requirements found.</p>
-                      </div>
-                    ) : (
-                      projectStatusData.docs.map(rd => (
-                        <div key={rd.$id} className="bg-white border border-slate-100 rounded-2xl p-5 hover:border-blue-200 transition-all space-y-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                              <div className="p-3 rounded-xl bg-blue-50 text-blue-600">
-                                <FileText size={20} />
-                              </div>
-                              <div>
-                                <p className="font-bold text-slate-900">{rd.name}</p>
-                                <p className="text-xs text-slate-500 line-clamp-1">{rd.description}</p>
-                              </div>
-                            </div>
+                  <div className={`grid gap-6 ${inlinePreviewDoc ? 'grid-cols-1 xl:grid-cols-3' : 'grid-cols-1'}`}>
+                    <div className={inlinePreviewDoc ? 'xl:col-span-1' : 'w-full'}>
+                      <div className="grid grid-cols-1 gap-4">
+                        {projectStatusData.docs.length === 0 ? (
+                          <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center">
+                            <FileText size={40} className="text-slate-300 mx-auto mb-3" />
+                            <p className="text-slate-500 font-medium">No document requirements found.</p>
                           </div>
-                          
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-50">
-                            {(rd as any).participants.map((p: any) => (
-                              <div key={p.role} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                                <div className="flex items-center gap-3">
-                                  <div className={`p-1.5 rounded-lg ${p.isProvided ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-400'}`}>
-                                    {p.isProvided ? <CheckCircle2 size={16} /> : <Clock size={16} />}
+                        ) : (
+                          projectStatusData.docs.map(rd => (
+                            <div key={rd.$id} className="bg-white border border-slate-100 rounded-2xl p-5 hover:border-blue-200 transition-all space-y-4">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                  <div className="p-3 rounded-xl bg-blue-50 text-blue-600">
+                                    <FileText size={20} />
                                   </div>
                                   <div>
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{p.role}</p>
-                                    <p className="text-xs font-bold text-slate-700">{p.user?.name || 'Pending Invite'}</p>
+                                    <p className="font-bold text-slate-900">{rd.name}</p>
+                                    <p className="text-xs text-slate-500 line-clamp-1">{rd.description}</p>
                                   </div>
                                 </div>
-                                <div className="flex gap-2">
-                                  {p.isProvided ? (
-                                    <button 
-                                      onClick={() => handleOpenViewer({ url: p.url, name: rd.name })}
-                                      className="p-1.5 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors"
-                                    >
-                                      <Download size={16} />
-                                    </button>
-                                  ) : (
-                                    isAdmin && p.user && (
-                                      <button 
-                                        onClick={() => {
-                                          setUploadingDocId((rd as any).$id);
-                                          setUploadingForUserId(p.user.id);
-                                          docFileInputRef.current?.click();
-                                        }}
-                                        className="p-1.5 hover:bg-blue-50 text-blue-600 rounded-lg transition-colors"
-                                        title="Upload for user"
-                                      >
-                                        <Plus size={16} />
-                                      </button>
-                                    )
-                                  )}
-                                </div>
                               </div>
-                            ))}
+                              
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-50">
+                                {(rd as any).participants.map((p: any) => (
+                                  <div key={p.role} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                                    <div className="flex items-center gap-3">
+                                      <div className={`p-1.5 rounded-lg ${p.isProvided ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-400'}`}>
+                                        {p.isProvided ? <CheckCircle2 size={16} /> : <Clock size={16} />}
+                                      </div>
+                                      <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{p.role}</p>
+                                        <p className="text-xs font-bold text-slate-700 truncate max-w-[60px]">{p.user?.name || 'Pending'}</p>
+                                      </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      {p.isProvided ? (
+                                        <button 
+                                          onClick={() => handleInlinePreview({ url: p.url, name: rd.name, fileId: p.fileId })}
+                                          className={`p-1.5 rounded-lg transition-colors ${inlinePreviewDoc?.url === p.url ? 'bg-blue-600 text-white' : 'hover:bg-blue-100 text-blue-600'}`}
+                                          title="Preview"
+                                        >
+                                          <Eye size={16} />
+                                        </button>
+                                      ) : (
+                                        isAdmin && p.user && (
+                                          <button 
+                                            onClick={() => {
+                                              setUploadingDocId((rd as any).$id);
+                                              setUploadingForUserId(p.user.id);
+                                              docFileInputRef.current?.click();
+                                            }}
+                                            className="p-1.5 hover:bg-blue-50 text-blue-600 rounded-lg transition-colors"
+                                            title="Upload for user"
+                                          >
+                                            <Plus size={16} />
+                                          </button>
+                                        )
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Inline Preview Container (Same logic as Tasks tab) */}
+                    {inlinePreviewDoc && (
+                      <div className="xl:col-span-2 bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col min-h-[600px] overflow-hidden sticky top-8 animate-in slide-in-from-right-4 duration-300">
+                        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Document Preview</p>
+                            <h4 className="font-bold text-slate-900 truncate max-w-[200px] md:max-w-md">{inlinePreviewDoc.name || 'Document'}</h4>
+                          </div>
+                          <div className="flex items-center gap-2">
+                             <a 
+                               href={documentService.getFileDownload(inlinePreviewDoc.fileId)} 
+                               className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
+                               title="Download"
+                               target="_blank" 
+                               rel="noreferrer"
+                             >
+                                <Download size={20} />
+                             </a>
+                             <button 
+                               onClick={() => setInlinePreviewDoc(null)}
+                               className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                             >
+                               <X size={20} />
+                             </button>
                           </div>
                         </div>
-                      ))
+                        <div className="flex-1 bg-slate-100 flex items-center justify-center p-4">
+                          {(() => {
+                            const url = inlinePreviewDoc.url;
+                            const lowerUrl = url?.toLowerCase() || '';
+                            const lowerName = inlinePreviewDoc.name?.toLowerCase() || '';
+                            const lowerType = inlinePreviewDoc.documentType?.toLowerCase() || '';
+
+                            const isPdf = lowerUrl.includes('.pdf') || lowerName.endsWith('.pdf') || lowerType.includes('pdf');
+                            const isImg = !isPdf && (lowerUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)/i) || lowerName.match(/\.(jpg|jpeg|png|gif|webp|svg)/i) || lowerType.includes('image'));
+                            
+                            if (isImg) {
+                              return <img src={url} alt={inlinePreviewDoc.name} className="max-w-full max-h-full object-contain shadow-lg rounded-lg" />;
+                            } else if (isPdf) {
+                              return <embed src={url} type="application/pdf" className="w-full h-full rounded-lg shadow-inner" />;
+                            } else {
+                              return (
+                                <div className="text-center p-8">
+                                  <AlertCircle size={48} className="text-slate-300 mx-auto mb-4" />
+                                  <p className="text-slate-600 font-medium mb-4">This file type cannot be previewed natively.</p>
+                                  <a 
+                                    href={url} 
+                                    target="_blank" 
+                                    rel="noreferrer" 
+                                    className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all"
+                                  >
+                                    Open in new tab
+                                  </a>
+                                </div>
+                              );
+                            }
+                          })()}
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1166,7 +1357,14 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
 
         {/* Task Library Modal */}
       {(viewerUrl || viewerError) && (
-        <DocumentViewer url={viewerUrl} error={viewerError || undefined} title={viewerTitle || undefined} onClose={handleCloseViewer} />
+        <DocumentViewer 
+          url={viewerUrl} 
+          downloadUrl={viewerDownloadUrl}
+          documentType={viewerType}
+          error={viewerError || undefined} 
+          title={viewerTitle || undefined} 
+          onClose={handleCloseViewer} 
+        />
       )}
       {isTaskLibraryOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">

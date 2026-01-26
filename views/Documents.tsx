@@ -33,27 +33,42 @@ const Documents: React.FC<DocumentsViewProps> = ({ user, projects, onRefresh }) 
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const [viewerTitle, setViewerTitle] = useState<string | null>(null);
   const [viewerError, setViewerError] = useState<string | null>(null);
+  const [viewerDownloadUrl, setViewerDownloadUrl] = useState<string | null>(null);
+  const [viewerType, setViewerType] = useState<string | null>(null);
 
   const handleOpenViewer = async (provided: any, title?: string) => {
     try {
-      let url = provided?.url;
-      if (!url && provided?.fileId) {
-        url = await documentService.getFileUrl(provided.fileId);
-      }
-      if (!url) throw new Error('No URL available');
-      try {
-        const resp = await fetch(url, { method: 'GET' });
-        if (resp.status === 404) {
-          setViewerError('Document not found in storage (file missing).');
-          setViewerUrl(null);
-          setViewerTitle(title || provided?.name || 'Document');
-          return;
+      let fileId = provided?.fileId;
+      let documentType = provided?.documentType;
+      let url = null;
+
+      if (fileId) {
+        url = await documentService.getFileUrl(fileId);
+        if (!documentType) {
+          try {
+            const fileInfo = await documentService.getFile(fileId);
+            documentType = fileInfo.mimeType;
+          } catch (me) {
+            console.warn('Could not fetch file metadata:', me);
+          }
         }
-      } catch (e) {
-        console.debug('Could not probe file URL before viewing:', e);
+      } else {
+        url = provided?.url;
       }
+
+      if (!url) throw new Error('No URL available');
+
+      // Generate normalized download URL if we have a fileId
+      if (fileId) {
+        let dl = documentService.getFileDownload(fileId);
+        setViewerDownloadUrl(dl);
+      } else {
+        setViewerDownloadUrl(null);
+      }
+
       setViewerError(null);
       setViewerUrl(url);
+      setViewerType(documentType);
       setViewerTitle(title || provided?.name || 'Document');
     } catch (e) {
       console.error('Error opening viewer:', e);
@@ -65,13 +80,20 @@ const Documents: React.FC<DocumentsViewProps> = ({ user, projects, onRefresh }) 
     setViewerUrl(null);
     setViewerTitle(null);
     setViewerError(null);
+    setViewerDownloadUrl(null);
+    setViewerType(null);
   };
 
   const documents = user.userDocuments || [];
   
   const filteredDocs = documents.filter(doc => 
-    doc.documentType.toLowerCase().includes(searchTerm.toLowerCase())
-  ).sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+    (doc.documentType || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (doc.name || '').toLowerCase().includes(searchTerm.toLowerCase())
+  ).sort((a, b) => {
+    const timeA = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
+    const timeB = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;
+    return timeB - timeA;
+  });
 
   const handleGeneralUpload = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -280,7 +302,14 @@ const Documents: React.FC<DocumentsViewProps> = ({ user, projects, onRefresh }) 
         </div>
       )}
       {(viewerUrl || viewerError) && (
-        <DocumentViewer url={viewerUrl} error={viewerError || undefined} title={viewerTitle || undefined} onClose={handleCloseViewer} />
+        <DocumentViewer 
+          url={viewerUrl} 
+          downloadUrl={viewerDownloadUrl}
+          documentType={viewerType}
+          error={viewerError || undefined} 
+          title={viewerTitle || undefined} 
+          onClose={handleCloseViewer} 
+        />
       )}
     </div>
   );

@@ -278,7 +278,7 @@ const AppContent: React.FC<{
                     <Route path="/projects" element={<Dashboard projects={projects} user={effectiveUser as AppUser} allUsers={allUsers} />} />
                     <Route path="/projects/:id" element={<ProjectDetail projects={projects} setProjects={setProjects} contracts={contracts} setContracts={setContracts} templates={templates} user={effectiveUser as AppUser} allUsers={allUsers} onRefresh={fetchData} />} />
                     <Route path="/contracts" element={<Contracts user={effectiveUser as AppUser} projects={projects} contracts={contracts} setContracts={setContracts} templates={templates} setTemplates={setTemplates} />} />
-                    <Route path="/documents" element={<Documents user={effectiveUser as AppUser} projects={projects} />} />
+                    <Route path="/documents" element={<Documents user={effectiveUser as AppUser} projects={projects} onRefresh={fetchData} />} />
                     <Route path="/admin/documents" element={<DocumentManagement user={effectiveUser as AppUser} />} />
                     <Route path="/admin/tasks" element={<TaskLibrary user={effectiveUser as AppUser} onRefresh={fetchData} />} />
                     <Route path="/users" element={<UsersManagement user={effectiveUser as AppUser} allUsers={allUsers} setAllUsers={setAllUsers} projects={projects} />} />
@@ -406,6 +406,7 @@ const Header: React.FC<{ user: AppUser }> = ({ user }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const { isImpersonating, stopImpersonation, impersonatedProfile } = useAuth();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -425,6 +426,21 @@ const Header: React.FC<{ user: AppUser }> = ({ user }) => {
       </div>
 
       <div className="flex items-center gap-4">
+        {isImpersonating && (
+          <div className="hidden lg:flex items-center gap-2 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full text-amber-700 animate-pulse">
+            <UserIcon size={14} />
+            <span className="text-[10px] font-bold uppercase tracking-widest">Viewing as {user.name}</span>
+            <button 
+              onClick={async () => {
+                await stopImpersonation();
+                window.location.href = '/';
+              }}
+              className="ml-2 bg-amber-200/50 hover:bg-amber-200 px-2 py-0.5 rounded text-[9px] font-bold text-amber-900 transition-colors"
+            >
+              EXIT
+            </button>
+          </div>
+        )}
         <div className="flex flex-col items-end mr-2">
           <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md ${
             user.role === UserRole.ADMIN ? 'bg-blue-100 text-blue-600' : 
@@ -466,6 +482,18 @@ const Header: React.FC<{ user: AppUser }> = ({ user }) => {
               >
                 <SettingsIcon size={16} className="text-slate-400" /> Account Settings
               </button>
+              {isImpersonating && (
+                <button 
+                  onClick={async () => {
+                    await stopImpersonation();
+                    setIsDropdownOpen(false);
+                    window.location.href = '/';
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-2 text-sm text-amber-600 hover:bg-amber-50 transition-colors text-left font-medium"
+                >
+                  <LogOut size={16} /> Stop Impersonating
+                </button>
+              )}
               <div className="border-t border-slate-50 mt-1 pt-1">
                 <button 
                   onClick={() => setIsDropdownOpen(false)}

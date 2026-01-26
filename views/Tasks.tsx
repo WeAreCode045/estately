@@ -32,25 +32,31 @@ const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const [viewerTitle, setViewerTitle] = useState<string | null>(null);
   const [viewerError, setViewerError] = useState<string | null>(null);
+  const [viewerDownloadUrl, setViewerDownloadUrl] = useState<string | null>(null);
 
   const handleOpenViewer = async (provided: any, title?: string) => {
     try {
       let url = provided?.url;
-      if (!url && provided?.fileId) {
-        url = await documentService.getFileUrl(provided.fileId);
+      let fileId = provided?.fileId;
+
+      if (!url && fileId) {
+        url = await documentService.getFileUrl(fileId);
       }
       if (!url) throw new Error('No URL available');
-      try {
-        const resp = await fetch(url, { method: 'GET' });
-        if (resp.status === 404) {
-          setViewerError('Document not found in storage (file missing).');
-          setViewerUrl(null);
-          setViewerTitle(title || provided?.name || 'Document');
-          return;
-        }
-      } catch (e) {
-        console.debug('Could not probe file URL before viewing:', e);
+
+      // Ensure mode=admin is present
+      if (!url.includes('mode=admin')) {
+        url = url.includes('?') ? `${url}&mode=admin` : `${url}?mode=admin`;
       }
+
+      // Generate normalized download URL if we have a fileId
+      if (fileId) {
+        let dl = documentService.getFileDownload(fileId);
+        setViewerDownloadUrl(dl);
+      } else {
+        setViewerDownloadUrl(null);
+      }
+
       setViewerError(null);
       setViewerUrl(url);
       setViewerTitle(title || provided?.name || 'Document');
@@ -64,6 +70,7 @@ const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
     setViewerUrl(null);
     setViewerTitle(null);
     setViewerError(null);
+    setViewerDownloadUrl(null);
   };
   
   // Personal Task State
@@ -384,7 +391,13 @@ const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
         </div>
       )}
       {(viewerUrl || viewerError) && (
-        <DocumentViewer url={viewerUrl} error={viewerError || undefined} title={viewerTitle || undefined} onClose={handleCloseViewer} />
+        <DocumentViewer 
+          url={viewerUrl} 
+          downloadUrl={viewerDownloadUrl}
+          error={viewerError || undefined} 
+          title={viewerTitle || undefined} 
+          onClose={handleCloseViewer} 
+        />
       )}
     </div>
   );
