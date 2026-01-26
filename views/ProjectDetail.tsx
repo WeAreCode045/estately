@@ -98,38 +98,6 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
   const [viewerError, setViewerError] = useState<string | null>(null);
   const [viewerDownloadUrl, setViewerDownloadUrl] = useState<string | null>(null);
   const [viewerType, setViewerType] = useState<string | null>(null);
-  const [inlinePreviewDoc, setInlinePreviewDoc] = useState<any | null>(null);
-
-  const handleInlinePreview = async (provided: any) => {
-    try {
-      let fileId = provided?.fileId;
-      let documentType = provided?.documentType;
-      let url = null;
-      
-      if (fileId) {
-        // Always regenerate URL to ensure correct structure (preview vs view)
-        url = await documentService.getFileUrl(fileId);
-        
-        // Also try to get metadata if documentType is missing
-        if (!documentType) {
-          try {
-            const fileInfo = await documentService.getFile(fileId);
-            documentType = fileInfo.mimeType;
-          } catch (me) {
-            console.warn('Could not fetch file metadata:', me);
-          }
-        }
-      } else {
-        url = provided?.url;
-      }
-      
-      if (!url) return;
-
-      setInlinePreviewDoc({ ...provided, url, documentType });
-    } catch (e) {
-      console.error('Error opening inline preview:', e);
-    }
-  };
 
   const handleOpenViewer = async (provided: any, title?: string) => {
     try {
@@ -865,9 +833,9 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                     </div>
                   </div>
                   
-                  <div className={`grid gap-6 ${inlinePreviewDoc ? 'grid-cols-1 xl:grid-cols-3' : 'grid-cols-1 md:grid-cols-2'}`}>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Tasks Columns */}
-                    <div className={`${inlinePreviewDoc ? 'xl:col-span-1' : 'md:col-span-2'} grid grid-cols-1 gap-6 ${!inlinePreviewDoc && 'md:grid-cols-2'}`}>
+                    <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
                       {/* Column for Seller tasks */}
                       <div className="space-y-3">
                         <h4 className="text-sm font-bold text-slate-700">Seller — <span className="text-sm font-medium text-slate-600">{(allUsers.find(u => u.id === project?.sellerId)?.name) || 'Unassigned'}</span></h4>
@@ -897,10 +865,10 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                                     if (provided) {
                                       return (
                                         <button 
-                                          onClick={() => handleInlinePreview(provided)} 
-                                          className={`text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors ${inlinePreviewDoc?.fileId === provided.fileId ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+                                          onClick={() => handleOpenViewer(provided, t.title)} 
+                                          className="text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
                                         >
-                                          {inlinePreviewDoc?.fileId === provided.fileId ? 'Previewing' : 'View Document'}
+                                          View Document
                                         </button>
                                       );
                                     }
@@ -950,10 +918,10 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                                     if (provided) {
                                       return (
                                         <button 
-                                          onClick={() => handleInlinePreview(provided)} 
-                                          className={`text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors ${inlinePreviewDoc?.fileId === provided.fileId ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+                                          onClick={() => handleOpenViewer(provided, t.title)} 
+                                          className="text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
                                         >
-                                          {inlinePreviewDoc?.fileId === provided.fileId ? 'Previewing' : 'View Document'}
+                                          View Document
                                         </button>
                                       );
                                     }
@@ -974,68 +942,6 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                         )}
                       </div>
                     </div>
-
-                    {/* Inline Preview Container */}
-                    {inlinePreviewDoc && (
-                      <div className="xl:col-span-2 bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col min-h-[600px] overflow-hidden sticky top-8 animate-in slide-in-from-right-4 duration-300">
-                        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                          <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Document Preview</p>
-                            <h4 className="font-bold text-slate-900 truncate max-w-[200px] md:max-w-md">{inlinePreviewDoc.name || 'Document'}</h4>
-                          </div>
-                          <div className="flex items-center gap-2">
-                             <a 
-                               href={documentService.getFileDownload(inlinePreviewDoc.fileId)} 
-                               className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
-                               title="Download"
-                               target="_blank" 
-                               rel="noreferrer"
-                             >
-                                <Download size={20} />
-                             </a>
-                             <button 
-                               onClick={() => setInlinePreviewDoc(null)}
-                               className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                             >
-                               <X size={20} />
-                             </button>
-                          </div>
-                        </div>
-                        <div className="flex-1 bg-slate-100 flex items-center justify-center p-4">
-                          {(() => {
-                            const url = inlinePreviewDoc.url;
-                            const lowerUrl = url?.toLowerCase() || '';
-                            const lowerName = inlinePreviewDoc.name?.toLowerCase() || '';
-                            const lowerType = inlinePreviewDoc.documentType?.toLowerCase() || '';
-
-                            const isPdf = lowerUrl.includes('.pdf') || lowerName.endsWith('.pdf') || lowerType.includes('pdf');
-                            const isImg = !isPdf && (lowerUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)/i) || lowerName.match(/\.(jpg|jpeg|png|gif|webp|svg)/i) || lowerType.includes('image'));
-                            
-                            if (isImg) {
-                              return <img src={url} alt={inlinePreviewDoc.name} className="max-w-full max-h-full object-contain shadow-lg rounded-lg" />;
-                            } else if (isPdf) {
-                              // Use <embed> or <object> instead of <iframe>
-                              return <embed src={url} type="application/pdf" className="w-full h-full rounded-lg shadow-inner" />;
-                            } else {
-                              return (
-                                <div className="text-center p-8">
-                                  <AlertCircle size={48} className="text-slate-300 mx-auto mb-4" />
-                                  <p className="text-slate-600 font-medium mb-4">This file type cannot be previewed natively.</p>
-                                  <a 
-                                    href={url} 
-                                    target="_blank" 
-                                    rel="noreferrer" 
-                                    className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all"
-                                  >
-                                    Open in new tab
-                                  </a>
-                                </div>
-                              );
-                            }
-                          })()}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
@@ -1059,8 +965,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                     )}
                   </div>
 
-                  <div className={`grid gap-6 ${inlinePreviewDoc ? 'grid-cols-1 xl:grid-cols-3' : 'grid-cols-1'}`}>
-                    <div className={inlinePreviewDoc ? 'xl:col-span-1' : 'w-full'}>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="w-full">
                       <div className="grid grid-cols-1 gap-4">
                         {projectStatusData.docs.length === 0 ? (
                           <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center">
@@ -1097,9 +1003,9 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                                     <div className="flex gap-2">
                                       {p.isProvided ? (
                                         <button 
-                                          onClick={() => handleInlinePreview({ url: p.url, name: rd.name, fileId: p.fileId })}
-                                          className={`p-1.5 rounded-lg transition-colors ${inlinePreviewDoc?.url === p.url ? 'bg-blue-600 text-white' : 'hover:bg-blue-100 text-blue-600'}`}
-                                          title="Preview"
+                                          onClick={() => handleOpenViewer({ fileId: p.fileId, url: p.url, documentType: p.documentType }, rd.name)}
+                                          className="p-1.5 rounded-lg transition-colors hover:bg-blue-100 text-blue-600"
+                                          title="View Document"
                                         >
                                           <Eye size={16} />
                                         </button>
@@ -1127,67 +1033,6 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                         )}
                       </div>
                     </div>
-
-                    {/* Inline Preview Container (Same logic as Tasks tab) */}
-                    {inlinePreviewDoc && (
-                      <div className="xl:col-span-2 bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col min-h-[600px] overflow-hidden sticky top-8 animate-in slide-in-from-right-4 duration-300">
-                        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                          <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Document Preview</p>
-                            <h4 className="font-bold text-slate-900 truncate max-w-[200px] md:max-w-md">{inlinePreviewDoc.name || 'Document'}</h4>
-                          </div>
-                          <div className="flex items-center gap-2">
-                             <a 
-                               href={documentService.getFileDownload(inlinePreviewDoc.fileId)} 
-                               className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
-                               title="Download"
-                               target="_blank" 
-                               rel="noreferrer"
-                             >
-                                <Download size={20} />
-                             </a>
-                             <button 
-                               onClick={() => setInlinePreviewDoc(null)}
-                               className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                             >
-                               <X size={20} />
-                             </button>
-                          </div>
-                        </div>
-                        <div className="flex-1 bg-slate-100 flex items-center justify-center p-4">
-                          {(() => {
-                            const url = inlinePreviewDoc.url;
-                            const lowerUrl = url?.toLowerCase() || '';
-                            const lowerName = inlinePreviewDoc.name?.toLowerCase() || '';
-                            const lowerType = inlinePreviewDoc.documentType?.toLowerCase() || '';
-
-                            const isPdf = lowerUrl.includes('.pdf') || lowerName.endsWith('.pdf') || lowerType.includes('pdf');
-                            const isImg = !isPdf && (lowerUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)/i) || lowerName.match(/\.(jpg|jpeg|png|gif|webp|svg)/i) || lowerType.includes('image'));
-                            
-                            if (isImg) {
-                              return <img src={url} alt={inlinePreviewDoc.name} className="max-w-full max-h-full object-contain shadow-lg rounded-lg" />;
-                            } else if (isPdf) {
-                              return <embed src={url} type="application/pdf" className="w-full h-full rounded-lg shadow-inner" />;
-                            } else {
-                              return (
-                                <div className="text-center p-8">
-                                  <AlertCircle size={48} className="text-slate-300 mx-auto mb-4" />
-                                  <p className="text-slate-600 font-medium mb-4">This file type cannot be previewed natively.</p>
-                                  <a 
-                                    href={url} 
-                                    target="_blank" 
-                                    rel="noreferrer" 
-                                    className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all"
-                                  >
-                                    Open in new tab
-                                  </a>
-                                </div>
-                              );
-                            }
-                          })()}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
