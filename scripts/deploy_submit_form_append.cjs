@@ -64,4 +64,27 @@ try { fs.writeFileSync(`${outDir}/${FUNCTION_ID}-deploy.json`, deployOut); } cat
 // Exit with non-zero if deploy response empty
 if (!deployOut || deployOut.trim().length === 0) process.exit(4);
 
+// Update function to listen for database create events (form_responses)
+try {
+  const dbId = process.env.VITE_APPWRITE_DATABASE_ID || process.env.APPWRITE_DATABASE_ID || 'estately-main';
+  const col = process.env.VITE_APPWRITE_COLLECTION_FORM_RESPONSES || 'form_responses';
+  const events = [`databases.${dbId}.collections.${col}.documents.*.create`];
+  console.log('Setting function events:', events);
+  const updateArgs = [
+    '-s',
+    '-X', 'PUT',
+    `${ENDPOINT}/functions/${FUNCTION_ID}`,
+    '-H', `X-Appwrite-Project: ${PROJECT}`,
+    '-H', `X-Appwrite-Key: ${KEY}`,
+    '-H', 'Content-Type: application/json',
+    '-d', JSON.stringify({ functionId: FUNCTION_ID, name: 'Submit Form Append', runtime: 'node-16.0', entrypoint: 'index.js', enabled: true, logging: true, events })
+  ];
+  const upd = spawnSync('curl', updateArgs, { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
+  if (upd.error) console.error('update error', upd.error);
+  console.log('update stdout:', upd.stdout || '(no stdout)');
+  console.error('update stderr:', upd.stderr || '(no stderr)');
+} catch (e) {
+  console.error('Failed to set function events', e);
+}
+
 console.log('Done.');
