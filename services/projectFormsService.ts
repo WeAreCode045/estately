@@ -37,20 +37,31 @@ export const projectFormsService = {
   },
 
   async listByProject(projectId: string, options?: { limit?: number; offset?: number; status?: FormStatus | FormStatus[]; assignedTo?: string }) {
-    const queries: any[] = [Query.equal('projectId', projectId)];
-    if (options?.status) {
-      if (Array.isArray(options.status)) {
-        // Appwrite doesn't support OR queries directly; fetch all and filter client-side if needed
-      } else {
-        queries.push(Query.equal('status', options.status));
-      }
+    const queries: string[] = [Query.equal('projectId', projectId)];
+    
+    if (options?.status && !Array.isArray(options.status)) {
+      queries.push(Query.equal('status', options.status));
     }
+    
     if (options?.assignedTo) {
       queries.push(Query.equal('assignedToUserId', options.assignedTo));
     }
 
-    const response = await databases.listDocuments(DATABASE_ID, COLLECTIONS.PROJECT_FORMS, queries, options?.limit, options?.offset);
-    const items = response.documents.map((d: any) => parseSubmissionDoc(d));
+    if (options?.limit !== undefined) queries.push(Query.limit(options.limit));
+    if (options?.offset !== undefined) queries.push(Query.offset(options.offset));
+
+    const response = await databases.listDocuments(
+      DATABASE_ID,
+      COLLECTIONS.PROJECT_FORMS,
+      queries
+    );
+    
+    let items = response.documents.map((d: any) => parseSubmissionDoc(d));
+
+    if (options?.status && Array.isArray(options.status)) {
+      items = items.filter(i => (options.status as string[]).includes(i.status));
+    }
+
     return { total: response.total || items.length, items };
   },
 
@@ -74,12 +85,11 @@ export const projectFormsService = {
   async deleteSubmission(id: string) {
     const doc = await databases.getDocument(DATABASE_ID, COLLECTIONS.PROJECT_FORMS, id);
     const attachments = doc.attachments ? (typeof doc.attachments === 'string' ? JSON.parse(doc.attachments) : doc.attachments) : [];
-    // delete attachments from storage
+    
     for (const fileId of attachments) {
       try {
         await storage.deleteFile(BUCKETS.DOCUMENTS, fileId);
       } catch (err) {
-        // ignore individual delete errors but log
         console.warn('Failed to delete attachment', fileId, err);
       }
     }
@@ -88,10 +98,49 @@ export const projectFormsService = {
   },
 
   async listByUser(userId: string, options?: { limit?: number; offset?: number; projectId?: string }) {
-    const queries: any[] = [Query.equal('submittedByUserId', userId)];
+    const queries: string[] = [Query.equal('submittedByUserId', userId)];
+    
     if (options?.projectId) queries.push(Query.equal('projectId', options.projectId));
-    const response = await databases.listDocuments(DATABASE_ID, COLLECTIONS.PROJECT_FORMS, queries, options?.limit, options?.offset);
+    if (options?.limit !== undefined) queries.push(Query.limit(options.limit));
+    if (options?.offset !== undefined) queries.push(Query.offset(options.offset));
+
+    const response = await databases.listDocuments(
+      DATABASE_ID,
+      COLLECTIONS.PROJECT_FORMS,
+      queries
+    );
     const items = response.documents.map((d: any) => parseSubmissionDoc(d));
+    return { total: response.total || items.length, items };
+  },
+
+  async listAll(options?: { limit?: number; offset?: number; projectId?: string; status?: string | string[]; assignedTo?: string; search?: string }) {
+    const queries: string[] = [];
+    
+    if (options?.projectId) queries.push(Query.equal('projectId', options.projectId));
+    if (options?.status && !Array.isArray(options.status)) {
+      queries.push(Query.equal('status', options.status));
+    }
+    if (options?.assignedTo) queries.push(Query.equal('assignedToUserId', options.assignedTo));
+    if (options?.limit !== undefined) queries.push(Query.limit(options.limit));
+    if (options?.offset !== undefined) queries.push(Query.offset(options.offset));
+
+    const response = await databases.listDocuments(
+      DATABASE_ID,
+      COLLECTIONS.PROJECT_FORMS,
+      queries
+    );
+    
+    let items = response.documents.map((d: any) => parseSubmissionDoc(d));
+
+    if (options?.status && Array.isArray(options.status)) {
+      items = items.filter(i => (options.status as string[]).includes(i.status));
+    }
+
+    if (options?.search) {
+      const q = options.search.toLowerCase();
+      items = items.filter(i => (i.title || i.formKey || '').toLowerCase().includes(q) || JSON.stringify(i.data).toLowerCase().includes(q));
+    }
+
     return { total: response.total || items.length, items };
   }
 };

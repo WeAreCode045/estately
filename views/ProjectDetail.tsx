@@ -41,8 +41,11 @@ import { GeminiService, GroundingLink } from '../services/geminiService';
 import { MOCK_USERS } from '../constants';
 import SignaturePad from '../components/SignaturePad';
 import DocumentViewer from '../components/DocumentViewer3';
+import FormListItem from '../components/FormListItem';
+import FormEditor from '../components/FormEditor';
+import FormRenderer from '../components/FormRenderer';
 import { downloadContractPDF } from '../utils/pdfGenerator';
-import { projectService, databases, DATABASE_ID, COLLECTIONS, client, inviteService } from '../services/appwrite';
+import { projectService, databases, DATABASE_ID, COLLECTIONS, client, inviteService, projectFormsService } from '../services/appwrite';
 import { ID, Query } from 'appwrite';
 import { useSettings } from '../utils/useSettings';
 import AddressAutocomplete from '../components/AddressAutocomplete';
@@ -65,7 +68,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
   const projectContracts = contracts.filter(c => c.projectId === id);
   const isAdmin = user.role === UserRole.ADMIN;
   
-  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'contracts' | 'messages' | 'team' | 'documents'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'contracts' | 'messages' | 'team' | 'documents' | 'forms'>('overview');
   const [isGenerating, setIsGenerating] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [aiInsight, setAiInsight] = useState<string | null>(null);
@@ -87,6 +90,10 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
   const [coverImage, setCoverImage] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [projectDocs, setProjectDocs] = useState<any[]>([]);
+    const [forms, setForms] = useState<any[]>([]);
+    const [isLoadingForms, setIsLoadingForms] = useState(false);
+    const [showFormEditor, setShowFormEditor] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState<any | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
   const [uploadingForUserId, setUploadingForUserId] = useState<string | null>(null);
@@ -362,6 +369,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
   useEffect(() => {
     if (id) {
       fetchMessages();
+        loadForms();
       
       const unsubscribe = client.subscribe(`databases.${DATABASE_ID}.collections.${COLLECTIONS.MESSAGES}.documents`, response => {
         if (response.events.some(e => e.includes('create'))) {
@@ -384,6 +392,26 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
       return () => unsubscribe();
     }
   }, [id]);
+
+  useEffect(() => {
+    if (activeTab === 'forms') {
+      loadForms();
+    }
+  }, [activeTab, id]);
+
+  const loadForms = async () => {
+    if (!id) return;
+    setIsLoadingForms(true);
+    try {
+      const res = await projectFormsService.listByProject(id);
+      setForms(res.items || []);
+    } catch (e) {
+      console.error('Error loading forms:', e);
+      setForms([]);
+    } finally {
+      setIsLoadingForms(false);
+    }
+  };
 
   const fetchMessages = async () => {
     try {
@@ -772,6 +800,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                   <TabButton active={activeTab === 'documents'} onClick={() => setActiveTab('documents')} icon={<FileText size={18}/>} label="Documents" />
                 </>
               )}
+              <TabButton active={activeTab === 'forms'} onClick={() => setActiveTab('forms')} icon={<ClipboardList size={18}/>} label="Forms" />
               <TabButton active={activeTab === 'contracts'} onClick={() => setActiveTab('contracts')} icon={<FileText size={18}/>} label="Contracts" />
               <TabButton active={activeTab === 'messages'} onClick={() => setActiveTab('messages')} icon={<MessageSquare size={18}/>} label="Chat" />
               {isAdmin && <TabButton active={activeTab === 'team'} onClick={() => setActiveTab('team')} icon={<UsersGroupIcon size={18}/>} label="Team Management" />}
@@ -1052,6 +1081,41 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                           </div>
                         ))}
                       </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'forms' && (
+                <div className="space-y-6 animate-in fade-in duration-300">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-bold">Forms</h3>
+                      <p className="text-xs text-slate-500">Project form submissions and templates</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setShowFormEditor(true)} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold">New Submission</button>
+                      <button onClick={loadForms} className="px-3 py-2 bg-slate-50 rounded-xl border border-slate-100 text-sm">Refresh</button>
+                    </div>
+                  </div>
+
+                  {isLoadingForms ? (
+                    <div className="p-8 text-center">Loading forms...</div>
+                  ) : forms.length === 0 ? (
+                    <div className="p-8 text-center text-slate-500">No submissions yet.</div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3">
+                      {forms.map((f: any) => (
+                        <FormListItem key={f.id} submission={f} onView={(s) => setSelectedSubmission(s)} />
+                      ))}
+                    </div>
+                  )}
+
+                  {showFormEditor && (
+                    <FormEditor projectId={project.id} onClose={() => setShowFormEditor(false)} onCreated={(s) => setForms(prev => [s, ...prev])} />
+                  )}
+
+                  {selectedSubmission && (
+                    <FormRenderer submission={selectedSubmission} onClose={() => setSelectedSubmission(null)} />
                   )}
                 </div>
               )}
