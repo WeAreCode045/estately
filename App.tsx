@@ -32,9 +32,6 @@ import TaskLibrary from './views/TaskLibrary';
 import Tasks from './views/Tasks';
 import UsersManagement from './views/UsersManagement';
 import Settings from './views/Settings';
-import DocTemplates from './views/DocTemplates';
-import AdminForms from './views/AdminForms';
-import FormResponses from './views/FormResponses';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './views/Login';
 import Register from './views/Register';
@@ -284,9 +281,6 @@ const AppContent: React.FC<{
                     <Route path="/contracts" element={<Contracts user={effectiveUser as AppUser} projects={projects} contracts={contracts} setContracts={setContracts} templates={templates} setTemplates={setTemplates} />} />
                     <Route path="/documents" element={<Documents user={effectiveUser as AppUser} projects={projects} onRefresh={fetchData} />} />
                     <Route path="/admin/documents" element={<DocumentManagement user={effectiveUser as AppUser} />} />
-                    <Route path="/admin/templates" element={<DocTemplates />} />
-                    <Route path="/admin/forms" element={<AdminForms />} />
-                    <Route path="/admin/forms/:formId/responses" element={<FormResponses />} />
                     <Route path="/admin/tasks" element={<TaskLibrary user={effectiveUser as AppUser} onRefresh={fetchData} />} />
                     <Route path="/users" element={<UsersManagement user={effectiveUser as AppUser} allUsers={allUsers} setAllUsers={setAllUsers} projects={projects} />} />
                     <Route path="/profile" element={<Profile user={effectiveUser as AppUser} projects={projects} taskTemplates={taskTemplates} docDefinitions={docDefinitions} allUsers={allUsers} />} />
@@ -332,8 +326,6 @@ const Sidebar: React.FC<{ user: AppUser, onSwitchRole: (role: UserRole) => void 
   const adminMenu: MenuNavItem[] = [
     { to: '/admin/tasks', icon: <Library size={20} />, label: 'Task Library' },
     { to: '/admin/documents', icon: <ShieldCheck size={20} />, label: 'Doc Requirements' },
-    { to: '/admin/templates', icon: <FileText size={20} />, label: 'Doc Templates' },
-    { to: '/admin/forms', icon: <FileText size={20} />, label: 'Forms' },
     { to: '/users', icon: <UsersIcon size={20} />, label: 'User Directory' },
     { to: '/settings', icon: <SettingsIcon size={20} />, label: 'System Settings' },
   ];

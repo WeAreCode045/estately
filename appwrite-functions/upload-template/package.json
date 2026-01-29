@@ -1,9 +1,0 @@
-{
-  "name": "upload-template",
-  "version": "0.1.0",
-  "description": "Appwrite Function to accept base64 upload and store file in Appwrite Storage",
-  "main": "index.js",
-  "dependencies": {
-    "node-appwrite": "^9.0.0"
-  }
-}

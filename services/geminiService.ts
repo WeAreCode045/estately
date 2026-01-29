@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI } from "@google/genai";
 import { Project, User, ContractTemplate } from "../types";
 
@@ -136,3 +137,6 @@ export class GeminiService {
     }
   }
 }
+
+
+
