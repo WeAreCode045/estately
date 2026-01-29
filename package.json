@@ -11,8 +11,11 @@
   "dependencies": {
     "@google/genai": "^1.37.0",
     "appwrite": "^21.5.0",
+    "form-data": "^4.0.5",
     "jspdf": "^2.5.1",
     "lucide-react": "^0.563.0",
+    "node-appwrite": "^4.0.0",
+    "node-fetch": "^2.7.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-router-dom": "^7.13.0"

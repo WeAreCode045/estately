@@ -27,6 +27,8 @@ export const COLLECTIONS = {
     TASKS: 'tasks',
     TASK_TEMPLATES: 'task_templates',
     FILE_TEMPLATES: 'file_templates',
+    FORMS: import.meta.env.VITE_APPWRITE_COLLECTION_FORMS,
+    FORM_RESPONSES: import.meta.env.VITE_APPWRITE_COLLECTION_FORM_RESPONSES,
 };
 
 export const BUCKETS = {

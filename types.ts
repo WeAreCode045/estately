@@ -54,6 +54,7 @@ export interface User {
   notificationPreference?: 'EMAIL' | 'APP' | 'BOTH';
   assignedTasks?: AssignedTask[]; // JSON Array in Profile
   userDocuments?: UploadedDocument[]; // JSON Array in Profile (renamed from assignedDocuments for consistency)
+  formResponses?: { formId: string; responseId: string; title?: string; submittedAt: string; metadata?: Record<string, any> }[];
   status?: 'ACTIVE' | 'PENDING_INVITE';
   projectId?: string;
 }
@@ -85,6 +86,23 @@ export interface RequiredDocument {
   allowedFileTypes?: string[];
   isGlobal?: boolean;
   status: 'ACTIVE' | 'ARCHIVED';
+}
+
+export interface DocTemplate {
+  id: string;
+  title: string;
+  description?: string;
+  fileId: string; // original uploaded PDF file id
+  fileUrl?: string; // view url
+  analysisStatus: 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED';
+  extractedSchema?: any; // raw OCR + LLM output
+  formSchema?: any; // UI-consumable form schema (JSON Schema or simplified array)
+  htmlPreview?: string; // optional rendered preview
+  rolesAssigned: ('BUYER' | 'SELLER' | 'BOTH')[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt?: string;
+  isActive?: boolean;
 }
 
 export interface ProjectDocument {
