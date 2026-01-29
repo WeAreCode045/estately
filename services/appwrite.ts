@@ -224,3 +224,7 @@ export const contractService = {
         return await databases.createDocument(DATABASE_ID, COLLECTIONS.CONTRACTS, ID.unique(), data);
     }
 };
+
+// Re-export project forms service for central imports
+import projectFormsService from './projectFormsService';
+export { projectFormsService };
