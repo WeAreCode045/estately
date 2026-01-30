@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { projectService } from '../services/appwrite';
 import { documentService } from '../services/documentService';
+import { projectFormsService } from '../services/projectFormsService';
 import { useSettings } from '../utils/useSettings';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 
@@ -100,6 +101,16 @@ const Dashboard: React.FC<DashboardProps> = ({ projects = [], user, allUsers = [
         await documentService.syncProjectRequirements(newProject.$id, 'PROJECT_CREATION');
       } catch (syncError) {
         console.error('Error syncing initial document requirements:', syncError);
+      }
+
+      // Auto-provision forms
+      try {
+        await projectFormsService.autoProvisionForms(newProject.$id, {
+          ...data,
+          id: newProject.$id
+        });
+      } catch (formError) {
+        console.error('Error auto-provisioning forms:', formError);
       }
 
       setShowNewProjectModal(false);

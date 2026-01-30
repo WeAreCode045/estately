@@ -1,6 +1,5 @@
-
 import { jsPDF } from 'jspdf';
-import { Contract, User, Project } from '../types';
+import { Contract, User, Project, FormSubmission, FormDefinition } from '../types';
 
 export const downloadContractPDF = async (contract: Contract, project: Project, allUsers: User[]) => {
   const doc = new jsPDF();
@@ -90,5 +89,169 @@ export const downloadContractPDF = async (contract: Contract, project: Project, 
   doc.text(splitNote, margin, finalY);
 
   // Download
-  doc.save(`${contract.title.replace(/\s+/g, '_')}_${contract.id}.pdf`);
+  doc.save(contract.title.replace(/\s+/g, '_') + "_" + contract.id + ".pdf");
+};
+
+export const downloadFormPDF = async (submission: FormSubmission, definition: FormDefinition, allUsers: User[], project: Project) => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 20;
+  let cursorY = 20;
+
+  const checkPageBreak = (needed: number) => {
+    if (cursorY + needed > pageHeight - margin) {
+      doc.addPage();
+      cursorY = margin;
+    }
+  };
+
+  // Header
+  doc.setFontSize(22);
+  doc.setTextColor(15, 23, 42); // slate-900
+  doc.text('EstateFlow Pro', margin, cursorY);
+  
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.text(`FORM ID: ${submission.id}`, pageWidth - margin - 50, cursorY);
+  cursorY += 15;
+
+  // Title
+  doc.setFontSize(18);
+  doc.setTextColor(0);
+  doc.text(submission.title || definition.title, margin, cursorY);
+  cursorY += 10;
+
+  // Project Info
+  doc.setFontSize(10);
+  doc.text(`Project: ${project.title}`, margin, cursorY);
+  cursorY += 5;
+  doc.text(`Address: ${project.property.address}`, margin, cursorY);
+  cursorY += 5;
+  doc.text(`Submission Date: ${new Date(submission.createdAt).toLocaleDateString()}`, margin, cursorY);
+  cursorY += 15;
+
+  // Form Data
+  const fields = definition.schema?.fields || [];
+  
+  const renderFields = (fieldsList: any[]) => {
+    fieldsList.forEach(field => {
+      const fieldName = field.name || field.id;
+      const value = (submission.data as any)[fieldName];
+
+      if (field.type === 'header') {
+        checkPageBreak(15);
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.text(field.label, margin, cursorY);
+        cursorY += 10;
+        doc.line(margin, cursorY - 2, pageWidth - margin, cursorY - 2);
+        cursorY += 5;
+      } else if (field.type === 'section') {
+        if (field.label) {
+          checkPageBreak(12);
+          doc.setFontSize(12);
+          doc.setFont('helvetica', 'bold');
+          doc.text(field.label, margin, cursorY);
+          cursorY += 8;
+        }
+        if (field.fields) renderFields(field.fields);
+      } else {
+        checkPageBreak(10);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text(field.label + ":", margin, cursorY);
+        
+        doc.setFont('helvetica', 'normal');
+        let displayValue = '';
+        if (value === true) displayValue = 'Yes';
+        else if (value === false) displayValue = 'No';
+        else if (value === undefined || value === null) displayValue = '-';
+        else if (Array.isArray(value)) displayValue = value.join(', ');
+        else displayValue = String(value);
+
+        const splitValue = doc.splitTextToSize(displayValue, pageWidth - margin * 2 - 60);
+        doc.text(splitValue, margin + 55, cursorY);
+        cursorY += (splitValue.length * 5) + 3;
+      }
+    });
+  };
+
+  renderFields(fields);
+
+  // Signatures Section
+  cursorY += 10;
+  checkPageBreak(60);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Digital Signatures & Approvals', margin, cursorY);
+  cursorY += 15;
+
+  let meta: any = {};
+  try {
+    if (typeof submission.meta === 'object' && submission.meta !== null) {
+      meta = submission.meta;
+    } else if (typeof submission.meta === 'string' && (submission.meta as string).trim()) {
+      meta = JSON.parse(submission.meta as string);
+    }
+  } catch (e) {}
+
+  const signatures: Record<string, string> = meta.signatures || {};
+  const signatureMeta: any = meta.signatureMeta || {};
+  
+  const colWidth = (pageWidth - margin * 2) / 2;
+  
+  const activeSignatures = Object.entries(signatures);
+  if (activeSignatures.length === 0) {
+     doc.setFontSize(10);
+     doc.setFont('helvetica', 'italic');
+     doc.setTextColor(150);
+     doc.text('No digital signatures provided for this submission.', margin, cursorY);
+     doc.setTextColor(0);
+  } else {
+    activeSignatures.forEach(([role, dataUrl], index) => {
+      const signerId = role === 'seller' ? project.sellerId : project.buyerId;
+      const signer = allUsers.find(u => u.userId === signerId || u.id === signerId);
+      const sigTime = signatureMeta[role]?.timestamp || submission.updatedAt || submission.createdAt;
+      
+      const xPos = margin + (index % 2) * colWidth;
+      const yPosStart = cursorY;
+
+      checkPageBreak(65);
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text(signer?.name || role.toUpperCase(), xPos, yPosStart + 45);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100);
+      doc.text(role.toUpperCase() + " SIGNATURE", xPos, yPosStart + 50);
+      doc.text("Date: " + new Date(sigTime).toLocaleString(), xPos, yPosStart + 54);
+      doc.setTextColor(0);
+
+      // Signature line and image
+      doc.setDrawColor(200);
+      doc.line(xPos, yPosStart + 40, xPos + colWidth - 10, yPosStart + 40);
+
+      try {
+        doc.addImage(dataUrl, 'PNG', xPos + 5, yPosStart + 10, 40, 25);
+      } catch (e) {
+        doc.text('[Digital Signature Adopted]', xPos + 5, yPosStart + 25);
+      }
+
+      if (index % 2 === 1) cursorY += 65;
+      else if (index === activeSignatures.length - 1) cursorY += 65;
+    });
+  }
+
+  // Verification Note
+  checkPageBreak(30);
+  doc.setFontSize(8);
+  doc.setTextColor(150);
+  const note = `VERIFICATION: This form was digitally completed and signed on the EstateFlow Pro platform. All actions are logged and associated with verified user accounts. Document ID: ${submission.id}. Generated on ${new Date().toLocaleString()}.`;
+  const splitNote = doc.splitTextToSize(note, pageWidth - margin * 2);
+  doc.text(splitNote, margin, cursorY + 10);
+
+  // Download
+  doc.save((submission.title || definition.title).replace(/\s+/g, '_') + "_" + submission.id.substring(0,8) + ".pdf");
 };

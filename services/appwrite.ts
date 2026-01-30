@@ -27,6 +27,7 @@ export const COLLECTIONS = {
     TASKS: 'tasks',
     TASK_TEMPLATES: 'task_templates',
     FILE_TEMPLATES: 'file_templates',
+    FORM_DEFINITIONS: 'form_definitions',
     PROJECT_FORMS: import.meta.env.VITE_APPWRITE_COLLECTION_PROJECT_FORMS || 'project_forms',
 };
 
@@ -152,7 +153,7 @@ export const profileService = {
     async delete(id: string) {
         return await databases.deleteDocument(DATABASE_ID, COLLECTIONS.PROFILES, id);
     },
-    async assignTask(profileId: string, taskId: string, extra?: { status?: 'PENDING' | 'COMPLETED', completedAt?: string, projectId?: string }) {
+    async assignTask(profileId: string, taskId: string, extra?: { status?: 'PENDING' | 'COMPLETED', completedAt?: string, projectId?: string, title?: string, description?: string, dueDate?: string }) {
         const profile = await databases.getDocument(DATABASE_ID, COLLECTIONS.PROFILES, profileId);
         const tasks = profile.assignedTasks ? (typeof profile.assignedTasks === 'string' ? JSON.parse(profile.assignedTasks) : profile.assignedTasks) : [];
         

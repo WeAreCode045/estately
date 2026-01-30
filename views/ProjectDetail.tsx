@@ -45,9 +45,11 @@ import FormListItem from '../components/FormListItem';
 import FormEditor from '../components/FormEditor';
 import FormRenderer from '../components/FormRenderer';
 import { downloadContractPDF } from '../utils/pdfGenerator';
-import { projectService, databases, DATABASE_ID, COLLECTIONS, client, inviteService, projectFormsService } from '../services/appwrite';
+import { projectService, databases, DATABASE_ID, COLLECTIONS, client, inviteService, projectFormsService, profileService } from '../services/appwrite';
+import { formDefinitionsService } from '../services/formDefinitionsService';
 import { ID, Query } from 'appwrite';
 import { useSettings } from '../utils/useSettings';
+import type { FormSubmission, FormDefinition } from '../types';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 
 interface ProjectDetailProps {
@@ -59,9 +61,10 @@ interface ProjectDetailProps {
   user: User;
   allUsers: User[];
   onRefresh?: () => void;
+  onSwitchUser?: (identifier: UserRole | string) => void;
 }
 
-const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, contracts, setContracts, templates, user, allUsers, onRefresh }) => {
+const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, contracts, setContracts, templates, user, allUsers, onRefresh, onSwitchUser }) => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const project = projects.find(p => p.id === id);
@@ -92,6 +95,9 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
   const [projectDocs, setProjectDocs] = useState<any[]>([]);
     const [forms, setForms] = useState<any[]>([]);
     const [isLoadingForms, setIsLoadingForms] = useState(false);
+    const [formDefinitions, setFormDefinitions] = useState<FormDefinition[]>([]);
+    const [selectedTemplate, setSelectedTemplate] = useState<FormDefinition | null>(null);
+    const [isAssigningForm, setIsAssigningForm] = useState(false);
     const [showFormEditor, setShowFormEditor] = useState(false);
   const [selectedSubmission, setSelectedSubmission] = useState<any | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -403,11 +409,125 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
     if (!id) return;
     setIsLoadingForms(true);
     try {
-      const res = await projectFormsService.listByProject(id);
+      const [res, defs] = await Promise.all([
+        projectFormsService.listByProject(id),
+        formDefinitionsService.list()
+      ]);
       setForms(res.items || []);
+      setFormDefinitions(defs);
     } catch (e) {
       console.error('Error loading forms:', e);
       setForms([]);
+    } finally {
+      setIsLoadingForms(false);
+    }
+  };
+
+  const handleDeleteForm = async (submission: FormSubmission) => {
+    try {
+      await projectFormsService.deleteSubmission(submission.id);
+      setForms(prev => prev.filter(f => f.id !== submission.id));
+    } catch (e: any) {
+      alert('Failed to delete: ' + (e.message || 'Unknown error'));
+    }
+  };
+
+  const handleTemplateAssignmentClick = async (def: FormDefinition) => {
+    if (!id || !project) return;
+
+    // Handle Auto-Assignment if configured
+    if (def.autoAssignTo && def.autoAssignTo.length > 0) {
+      const targetUserIds: string[] = [];
+      const missingRoles: string[] = [];
+
+      def.autoAssignTo.forEach(role => {
+        let targetUserId = '';
+        if (role === 'seller') targetUserId = project.sellerId;
+        else if (role === 'buyer') targetUserId = project.buyerId || '';
+        else if (role === 'admin') targetUserId = project.managerId;
+
+        if (targetUserId) {
+          targetUserIds.push(targetUserId);
+        } else {
+          missingRoles.push(role);
+        }
+      });
+
+      if (missingRoles.length > 0) {
+        alert(`Cannot auto-assign some roles: ${missingRoles.join(', ')} is not yet set for this project.`);
+        // If we have some targets, we'll assign to them, but we might want to also allow manual assignment for the rest?
+        // For simplicity, if any are missing, we'll show the manual picker for the missing roles later?
+        // Actually, let's just assign to the ones we have and inform the user.
+      }
+
+      if (targetUserIds.length > 0) {
+        for (const userId of targetUserIds) {
+          await executeFormAssignment(def, userId);
+        }
+      } else {
+        // Fallback to manual assignment if NO auto-assignment was possible
+        setSelectedTemplate(def);
+        setIsAssigningForm(true);
+      }
+    } else {
+      // Manual Assignment
+      setSelectedTemplate(def);
+      setIsAssigningForm(true);
+    }
+  };
+
+  const executeFormAssignment = async (def: FormDefinition, targetProfileId: string) => {
+    if (!id || !project) return;
+    
+    try {
+      setIsLoadingForms(true);
+      // 1. Create Form Submission
+      await projectFormsService.createSubmission({
+        projectId: project.id,
+        formKey: def.key,
+        title: def.title,
+        data: def.defaultData || {},
+        assignedToUserId: targetProfileId,
+        status: 'assigned',
+        meta: {
+          needsSignatureFromSeller: def.needSignatureFromSeller,
+          needsSignatureFromBuyer: def.needSignatureFromBuyer
+        }
+      });
+
+      // 2. Handle Auto-Task Creation if enabled
+      if (def.autoCreateTaskForAssignee) {
+        const newTask: ProjectTask = {
+          id: ID.unique(),
+          title: `Fill out form: ${def.title}`,
+          description: `Please complete the ${def.title} form as requested.`,
+          category: 'Legal',
+          dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Default 3 days
+          completed: false,
+          notifyAssignee: true,
+          notifyAgentOnComplete: true
+        };
+
+        const updatedTasks = [...project.tasks, newTask];
+        await projectService.update(id, { tasks: JSON.stringify(updatedTasks) });
+        
+        // Also assign to profile for "My Tasks" view
+        await profileService.assignTask(targetProfileId, newTask.id, {
+          title: newTask.title,
+          description: newTask.description,
+          dueDate: newTask.dueDate,
+          projectId: id,
+          status: 'PENDING'
+        });
+
+        // Update local state for tasks
+        setProjects(prev => prev.map(p => p.id === id ? { ...p, tasks: updatedTasks } : p));
+      }
+
+      setIsAssigningForm(false);
+      loadForms();
+    } catch (err: any) {
+      alert('Failed to assign form: ' + err.message);
     } finally {
       setIsLoadingForms(false);
     }
@@ -585,15 +705,21 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
     }
   };
 
-  const assignUser = async (role: 'seller' | 'buyer', userId: string) => {
+  const assignUser = async (role: 'seller' | 'buyer' | 'manager', userId: string) => {
     if (!isAdmin || !id) return;
     try {
-      const field = role === 'seller' ? 'sellerId' : 'buyerId';
+      let field: string;
+      if (role === 'seller') field = 'sellerId';
+      else if (role === 'buyer') field = 'buyerId';
+      else field = 'managerId';
+
       await projectService.update(id, { [field]: userId });
       
       setProjects(prev => prev.map(p => {
         if (p.id === project.id) {
-          return role === 'seller' ? { ...p, sellerId: userId } : { ...p, buyerId: userId };
+          if (role === 'seller') return { ...p, sellerId: userId };
+          if (role === 'buyer') return { ...p, buyerId: userId };
+          return { ...p, managerId: userId };
         }
         return p;
       }));
@@ -631,6 +757,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
 
   const seller = allUsers.find(u => u.id === project.sellerId);
   const buyer = allUsers.find(u => u.id === project.buyerId);
+  const agent = allUsers.find(u => u.id === (project.managerId || defaultAgentId));
 
   const currentCoverImage = project.coverImageId 
     ? projectService.getImagePreview(project.coverImageId)
@@ -1086,27 +1213,156 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
               )}
 
               {activeTab === 'forms' && (
-                <div className="space-y-6 animate-in fade-in duration-300">
+                <div className="space-y-8 animate-in fade-in duration-300">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-lg font-bold">Forms</h3>
-                      <p className="text-xs text-slate-500">Project form submissions and templates</p>
+                      <h3 className="text-lg font-bold text-slate-900">Project Forms</h3>
+                      <p className="text-xs text-slate-500">Official documentation and questionnaires</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => setShowFormEditor(true)} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold">New Submission</button>
-                      <button onClick={loadForms} className="px-3 py-2 bg-slate-50 rounded-xl border border-slate-100 text-sm">Refresh</button>
+                    <div className="flex items-center gap-3">
+                      {isAdmin && (
+                        <button onClick={() => setShowFormEditor(true)} className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-slate-900/20 hover:bg-slate-800 transition-all">
+                          <Plus size={18} />
+                          Manual Entry
+                        </button>
+                      )}
+                      <button onClick={loadForms} className="p-2 bg-white rounded-xl border border-slate-100 text-slate-400 hover:text-blue-600 transition-colors">
+                        <History size={20} />
+                      </button>
                     </div>
                   </div>
 
+                  {/* User's Assigned Forms */}
+                  {forms.some(f => f.assignedToUserId === user.id && f.status !== 'submitted') && (
+                    <div className="bg-blue-600 rounded-3xl p-6 text-white shadow-xl shadow-blue-600/20">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="shrink-0 p-2 bg-white/20 rounded-xl">
+                          <ClipboardList size={24} />
+                        </div>
+                        <div>
+                          <h4 className="font-bold">Pending Action</h4>
+                          <p className="text-xs text-blue-100">You have forms waiting for your input</p>
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        {forms.filter(f => f.assignedToUserId === user.id && f.status !== 'submitted').map(f => (
+                          <div key={f.id} className="bg-white/10 hover:bg-white/20 border border-white/10 rounded-2xl p-4 flex items-center justify-between transition-all">
+                            <div>
+                              <div className="font-bold">{f.title}</div>
+                              <div className="text-[10px] text-blue-100 uppercase tracking-widest">{f.formKey.replace(/_/g, ' ')}</div>
+                            </div>
+                            <button 
+                              onClick={() => setSelectedSubmission(f)}
+                              className="bg-white text-blue-600 px-4 py-2 rounded-xl text-xs font-bold shadow-sm hover:bg-blue-50 transition-colors"
+                            >
+                              Fill Form
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {isLoadingForms ? (
-                    <div className="p-8 text-center">Loading forms...</div>
+                    <div className="p-8 text-center text-slate-400 flex flex-col items-center">
+                      <Loader2 className="animate-spin mb-2" />
+                      Loading...
+                    </div>
                   ) : forms.length === 0 ? (
-                    <div className="p-8 text-center text-slate-500">No submissions yet.</div>
+                    <div className="py-20 text-center bg-white rounded-3xl border border-dashed border-slate-200">
+                      <div className="p-4 bg-slate-50 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4 text-slate-300">
+                        <ClipboardList size={32} />
+                      </div>
+                      <h4 className="font-bold text-slate-900">No forms yet</h4>
+                      <p className="text-sm text-slate-500 max-w-xs mx-auto">Templates can be assigned to participants to start the documentation process.</p>
+                    </div>
                   ) : (
-                    <div className="grid grid-cols-1 gap-3">
-                      {forms.map((f: any) => (
-                        <FormListItem key={f.id} submission={f} onView={(s) => setSelectedSubmission(s)} />
-                      ))}
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 px-1">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Project Activity</span>
+                        <div className="h-[1px] flex-1 bg-slate-100"></div>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3">
+                        {forms
+                          .filter((f: any) => {
+                            if (isAdmin) return true;
+                            
+                            // Get user IDs (Profile $id and Auth userId)
+                            const myAuthId = user.id;
+                            const myProfileId = user.$id;
+                            const isAssignee = f.assignedToUserId === myAuthId || (myProfileId && f.assignedToUserId === myProfileId);
+                            if (isAssignee) return true;
+
+                            // Non-assignees (Approvers) logic
+                            let meta: any = {};
+                            try {
+                              if (typeof f.meta === 'object' && f.meta !== null) {
+                                meta = f.meta;
+                              } else if (typeof f.meta === 'string' && f.meta.trim()) {
+                                meta = JSON.parse(f.meta);
+                              }
+                            } catch (e) {
+                              console.error('Error parsing meta', e);
+                            }
+                            
+                            const status = f.status;
+                            const signatures = meta?.signatures || {};
+                            const hasAnySignature = Object.keys(signatures).length > 0;
+
+                            // Determine if current user needs to sign
+                            const userRole = user.role?.toUpperCase();
+                            const needsMySign = (
+                                (userRole === UserRole.SELLER && (meta.needsSignatureFromSeller === true || meta.needsSignatureFromSeller === 'true' || meta.needSignatureFromSeller === true || meta.needSignatureFromSeller === 'true')) ||
+                                (userRole === UserRole.BUYER && (meta.needsSignatureFromBuyer === true || meta.needsSignatureFromBuyer === 'true' || meta.needSignatureFromBuyer === true || meta.needSignatureFromBuyer === 'true'))
+                            );
+
+                            // Project participants should see forms if they need to sign, or if it's already signed/submitted
+                            if (!needsMySign && !isAssignee && !isAdmin) {
+                                // If I don't need to sign and I'm not the assignee/admin, only show if already submitted or has signatures
+                                if (status === 'draft' || status === 'assigned') return false;
+                            }
+
+                            // Sequential visibility logic for approvers (non-assignees)
+                            // "Only show to approver if assignee has signed (if required) or at least submitted"
+                            if (!isAssignee && !isAdmin) {
+                                // 1. Hide if it's still in draft/assigned and has no signatures at all
+                                if (!hasAnySignature && (status === 'draft' || status === 'assigned')) return false;
+
+                                const isSellerAssignee = f.assignedToUserId === project?.sellerId;
+                                const isBuyerAssignee = f.assignedToUserId === project?.buyerId;
+
+                                // 2. If user is Buyer, but Seller signature is required and missing, hide it
+                                const sellerNeedsToSign = (meta.needsSignatureFromSeller === true || meta.needsSignatureFromSeller === 'true' || meta.needSignatureFromSeller === true || meta.needSignatureFromSeller === 'true');
+                                if (userRole === UserRole.BUYER && sellerNeedsToSign && !signatures.seller) {
+                                    // Buyer should only see it AFTER Seller has approved
+                                    return false;
+                                }
+
+                                // 3. If form was assigned specifically to one party to fill, other parties wait until they submit/sign
+                                // (This is mostly redundant with point 1 but good for clarity)
+                                if (isSellerAssignee && sellerNeedsToSign && !signatures.seller) return false;
+                                if (isBuyerAssignee && (meta.needsSignatureFromBuyer === true || meta.needsSignatureFromBuyer === 'true' || meta.needSignatureFromBuyer === true || meta.needSignatureFromBuyer === 'true') && !signatures.buyer) {
+                                    // This hides it from Seller if Buyer is the primary filler and hasn't finished
+                                    if (userRole === UserRole.SELLER) return false;
+                                }
+                            }
+
+                            return true;
+                          })
+                          .map((f: any) => (
+                            <div key={f.id}>
+                              <FormListItem 
+                                submission={f} 
+                                onView={(s) => setSelectedSubmission(s)} 
+                                onDelete={isAdmin ? handleDeleteForm : undefined}
+                                user={user}
+                                onUpdate={(updated) => {
+                                  setForms(prev => prev.map(old => old.id === updated.id ? updated : old));
+                                }}
+                              />
+                            </div>
+                          ))}
+                      </div>
                     </div>
                   )}
 
@@ -1115,7 +1371,96 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                   )}
 
                   {selectedSubmission && (
-                    <FormRenderer submission={selectedSubmission} onClose={() => setSelectedSubmission(null)} />
+                    <FormRenderer 
+                      submission={selectedSubmission} 
+                      user={user}
+                      allUsers={allUsers}
+                      project={project}
+                      onClose={() => setSelectedSubmission(null)} 
+                      onUpdate={(updated) => {
+                        setForms(prev => prev.map(f => f.id === updated.id ? updated : f));
+                      }}
+                    />
+                  )}
+
+                  {isAssigningForm && selectedTemplate && (
+                    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+                      <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                          <h3 className="font-bold text-lg">Assign {selectedTemplate.title}</h3>
+                          <button onClick={() => setIsAssigningForm(false)} className="p-2 text-slate-400 hover:text-slate-600"><X /></button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                          <p className="text-sm text-slate-500">Select a user to assign this form to. This will create a pending submission for them to fill out.</p>
+                          <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                            {allUsers
+                              .filter(u => u.id === project.sellerId || u.id === project.buyerId || u.id === project.managerId)
+                              .map(u => (
+                                <button 
+                                  key={u.id}
+                                  onClick={() => executeFormAssignment(selectedTemplate, u.id)}
+                                  className="w-full flex items-center gap-3 p-3 rounded-2xl border border-slate-100 hover:bg-blue-50 hover:border-blue-200 transition-all text-left group"
+                                >
+                                  <img src={u.avatar} className="w-10 h-10 rounded-full" alt="" />
+                                  <div className="flex-1">
+                                    <div className="text-sm font-bold text-slate-900">{u.name}</div>
+                                    <div className="text-[10px] text-slate-500 uppercase tracking-widest">{u.role}</div>
+                                  </div>
+                                  <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-500 transition-colors" />
+                                </button>
+                              ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {isAdmin && (
+                    <div className="pt-6 border-t border-slate-100">
+                      <h4 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+                         <Library size={16} className="text-blue-600" />
+                         Available Form Templates
+                      </h4>
+                      
+                      {isLoadingForms ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-pulse">
+                          {[1, 2].map(i => (
+                            <div key={i} className="bg-slate-50 h-16 rounded-2xl border border-slate-100"></div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {formDefinitions.length === 0 ? (
+                            <div className="col-span-2 p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                              <p className="text-sm text-slate-500 italic">No form templates defined in the system.</p>
+                            </div>
+                          ) : (
+                            formDefinitions.map(def => (
+                              <div key={def.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow flex items-center justify-between group">
+                                <div className="min-w-0 pr-4">
+                                  <h5 className="text-sm font-bold text-slate-900 truncate">{def.title}</h5>
+                                  <div className="flex flex-wrap gap-1.5 mt-1">
+                                    {def.needSignatureFromSeller && (
+                                      <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100 uppercase">Seller Sign</span>
+                                    )}
+                                    {def.needSignatureFromBuyer && (
+                                      <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase">Buyer Sign</span>
+                                    )}
+                                    <p className="text-[10px] text-slate-400 line-clamp-1">{def.description || 'Standard form'}</p>
+                                  </div>
+                                </div>
+                                <button 
+                                  onClick={() => handleTemplateAssignmentClick(def)}
+                                  className="px-3 py-1.5 bg-blue-50 text-blue-600 text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
+                                >
+                                  {def.autoAssignTo && def.autoAssignTo !== 'none' ? 'Invite' : 'Assign'}
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -1211,7 +1556,37 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                       <UserPlus size={18} /> Invite New
                     </button>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    {/* Agent Management */}
+                    <div className="space-y-4">
+                      <h3 className="font-bold text-slate-900 flex items-center gap-2"><UserIcon size={18}/> Real Estate Agent</h3>
+                      <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between">
+                        {agent ? (
+                          <div className="flex items-center gap-3">
+                            <img src={agent.avatar} className="w-10 h-10 rounded-full" alt="" />
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <Link to={`/profile/${agent.id}`} className="font-bold text-sm hover:text-blue-600 transition-colors">{agent.name}</Link>
+                                {onSwitchUser && (
+                                  <button 
+                                    onClick={() => onSwitchUser(agent.id)}
+                                    className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-all tooltip"
+                                    title="View as Agent"
+                                  >
+                                    <Eye size={14} />
+                                  </button>
+                                )}
+                              </div>
+                              <p className="text-xs text-slate-500">{agent.email}</p>
+                            </div>
+                          </div>
+                        ) : <p className="text-sm text-slate-400 italic">No agent assigned</p>}
+                      </div>
+                      <select onChange={(e) => assignUser('manager', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm" value={project.managerId || defaultAgentId || ''}>
+                        {allUsers.filter(u => u.role === UserRole.AGENT || u.role === UserRole.ADMIN).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      </select>
+                    </div>
+
                     {/* Seller Management */}
                     <div className="space-y-4">
                       <h3 className="font-bold text-slate-900 flex items-center gap-2"><UserIcon size={18}/> Seller</h3>
@@ -1220,7 +1595,18 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                           <div className="flex items-center gap-3">
                             <img src={seller.avatar} className="w-10 h-10 rounded-full" alt="" />
                             <div>
-                              <Link to={`/profile/${seller.id}`} className="font-bold text-sm hover:text-blue-600 transition-colors">{seller.name}</Link>
+                              <div className="flex items-center gap-2">
+                                <Link to={`/profile/${seller.id}`} className="font-bold text-sm hover:text-blue-600 transition-colors">{seller.name}</Link>
+                                {onSwitchUser && (
+                                  <button 
+                                    onClick={() => onSwitchUser(seller.id)}
+                                    className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-all tooltip"
+                                    title="View as Seller"
+                                  >
+                                    <Eye size={14} />
+                                  </button>
+                                )}
+                              </div>
                               <p className="text-xs text-slate-500">{seller.email}</p>
                             </div>
                           </div>
@@ -1239,7 +1625,18 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                           <div className="flex items-center gap-3">
                             <img src={buyer.avatar} className="w-10 h-10 rounded-full" alt="" />
                             <div>
-                              <Link to={`/profile/${buyer.id}`} className="font-bold text-sm hover:text-blue-600 transition-colors">{buyer.name}</Link>
+                              <div className="flex items-center gap-2">
+                                <Link to={`/profile/${buyer.id}`} className="font-bold text-sm hover:text-blue-600 transition-colors">{buyer.name}</Link>
+                                {onSwitchUser && (
+                                  <button 
+                                    onClick={() => onSwitchUser(buyer.id)}
+                                    className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-all tooltip"
+                                    title="View as Buyer"
+                                  >
+                                    <Eye size={14} />
+                                  </button>
+                                )}
+                              </div>
                               <p className="text-xs text-slate-500">{buyer.email}</p>
                             </div>
                           </div>
@@ -1276,8 +1673,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
 
           <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-6">
             <h3 className="font-bold text-slate-900 border-b border-slate-50 pb-4">Key Participants</h3>
-            <ParticipantRow user={seller} role="Seller" isAdmin={isAdmin} />
-            <ParticipantRow user={buyer} role="Buyer" isAdmin={isAdmin} />
+            <ParticipantRow user={seller} role="Seller" isAdmin={isAdmin} onSwitchUser={onSwitchUser} />
+            <ParticipantRow user={buyer} role="Buyer" isAdmin={isAdmin} onSwitchUser={onSwitchUser} />
             <ParticipantRow 
               user={(() => {
                  const managerId = project.managerId || defaultAgentId; // Fallback to default
@@ -1291,6 +1688,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
               })()}
               role="Agent" 
               isAdmin={isAdmin} 
+              onSwitchUser={onSwitchUser}
             />
           </div>
         </div>
@@ -1489,22 +1887,40 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
   );
 };
 
-const ParticipantRow: React.FC<{ user?: User, role: string, isAdmin?: boolean }> = ({ user, role, isAdmin }) => (
-  <div className="flex items-center gap-3">
-    <img 
-      src={user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(role)}&background=f1f5f9&color=64748b`} 
-      className="w-10 h-10 rounded-full border border-slate-100 object-cover" 
-      alt={role} 
-    />
-    <div className="min-w-0">
-      {isAdmin && user ? (
-        <Link to={`/profile/${user.id}`} className="text-sm font-bold text-slate-900 truncate hover:text-blue-600 transition-colors">
-          {user.name}
-        </Link>
-      ) : (
-        <p className="text-sm font-bold text-slate-900 truncate">{user?.name || 'Unassigned'}</p>
-      )}
-      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{role}</p>
+const ParticipantRow: React.FC<{ 
+  user?: User, 
+  role: string, 
+  isAdmin?: boolean,
+  onSwitchUser?: (identifier: string) => void
+}> = ({ user, role, isAdmin, onSwitchUser }) => (
+  <div className="flex items-center justify-between group/row">
+    <div className="flex items-center gap-3">
+      <img 
+        src={user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(role)}&background=f1f5f9&color=64748b`} 
+        className="w-10 h-10 rounded-full border border-slate-100 object-cover" 
+        alt={role} 
+      />
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          {isAdmin && user ? (
+            <Link to={`/profile/${user.id}`} className="text-sm font-bold text-slate-900 truncate hover:text-blue-600 transition-colors">
+              {user.name}
+            </Link>
+          ) : (
+            <p className="text-sm font-bold text-slate-900 truncate">{user?.name || 'Unassigned'}</p>
+          )}
+          {isAdmin && onSwitchUser && user && (
+            <button 
+              onClick={() => onSwitchUser(user.id)}
+              className="opacity-0 group-hover/row:opacity-100 p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-all tooltip"
+              title={`View as ${role}`}
+            >
+              <Eye size={12} />
+            </button>
+          )}
+        </div>
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{role}</p>
+      </div>
     </div>
   </div>
 );

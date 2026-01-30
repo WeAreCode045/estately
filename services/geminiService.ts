@@ -1,7 +1,8 @@
 
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { Project, User, ContractTemplate } from "../types";
+import type { FormSchema } from "../components/form-builder/types";
 
 export interface GroundingLink {
   title: string;
@@ -15,10 +16,11 @@ export interface LocationInsightsResponse {
 
 export class GeminiService {
   private get ai() {
-    return new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || process.env.API_KEY;
+    return new GoogleGenAI({ apiKey });
   }
 
-  // Fix: Upgraded model to 'gemini-3-pro-preview' for advanced reasoning task of legal contract generation
+  // Fix: Upgraded model to 'gemini-3-pro' for advanced reasoning task of legal contract generation
   async generateContractDraft(
     project: Project, 
     seller: User, 
@@ -91,7 +93,7 @@ export class GeminiService {
     }
   }
 
-  // Fix: Maintaining gemini-2.5-flash as it is mandatory for Maps Grounding tasks
+  // Fix: Using gemini-3-flash-preview for Maps Grounding tasks
   async getPropertyLocationInsights(address: string, userLatLng?: { latitude: number, longitude: number }): Promise<LocationInsightsResponse> {
     const prompt = `Provide detailed neighborhood insights for the property at "${address}". 
     Include information about nearby amenities like schools, parks, transportation, and popular local spots. 
@@ -99,7 +101,7 @@ export class GeminiService {
 
     try {
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3-flash-preview",
         contents: prompt,
         config: {
           tools: [{ googleMaps: {} }],
@@ -134,6 +136,135 @@ export class GeminiService {
     } catch (error) {
       console.error("Maps grounding failed:", error);
       return { text: "Failed to load neighborhood insights. Please try again.", links: [] };
+    }
+  }
+
+  private getFieldSchema() {
+    return {
+      type: Type.OBJECT,
+      properties: {
+        id: { type: Type.STRING },
+        type: { 
+          type: Type.STRING, 
+          description: "One of: text, textarea, number, select, checkbox, radio, date, email, tel, section" 
+        },
+        label: { type: Type.STRING },
+        placeholder: { type: Type.STRING },
+        required: { type: Type.BOOLEAN },
+        helpText: { type: Type.STRING },
+        isCollapsed: { type: Type.BOOLEAN },
+        options: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              label: { type: Type.STRING },
+              value: { type: Type.STRING }
+            },
+            required: ["label", "value"]
+          }
+        },
+        children: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              type: { type: Type.STRING },
+              label: { type: Type.STRING },
+              placeholder: { type: Type.STRING },
+              required: { type: Type.BOOLEAN },
+              options: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    label: { type: Type.STRING },
+                    value: { type: Type.STRING }
+                  }
+                }
+              }
+            },
+            required: ["id", "type", "label"]
+          }
+        }
+      },
+      required: ["id", "type", "label", "required"]
+    };
+  }
+
+  async generateFormFromPrompt(prompt: string): Promise<FormSchema> {
+    const response = await this.ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [{ role: 'user', parts: [{ text: `Generate a complete form schema JSON for: ${prompt}` }] }],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            description: { type: Type.STRING },
+            submitButtonText: { type: Type.STRING },
+            fields: {
+              type: Type.ARRAY,
+              items: this.getFieldSchema()
+            }
+          },
+          required: ["title", "description", "fields", "submitButtonText"]
+        }
+      }
+    });
+
+    return this.parseResponse(response.text);
+  }
+
+  async generateFormFromPDF(base64DataUri: string): Promise<FormSchema> {
+    const base64Data = base64DataUri.split(',')[1] || base64DataUri;
+
+    const response = await this.ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [{
+        role: 'user',
+        parts: [
+          {
+            inlineData: {
+              data: base64Data,
+              mimeType: "application/pdf"
+            }
+          },
+          {
+            text: "Extract all form elements from this PDF. Group related fields into logical sections using the 'section' type. Identify labels, logical field types, and any multiple choice options."
+          }
+        ]
+      }],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            description: { type: Type.STRING },
+            submitButtonText: { type: Type.STRING },
+            fields: {
+              type: Type.ARRAY,
+              items: this.getFieldSchema()
+            }
+          },
+          required: ["title", "description", "fields", "submitButtonText"]
+        }
+      }
+    });
+
+    return this.parseResponse(response.text);
+  }
+
+  private parseResponse(text: string | undefined): FormSchema {
+    try {
+      const cleanedText = text?.trim() || '{}';
+      return JSON.parse(cleanedText) as FormSchema;
+    } catch (e) {
+      console.error("Failed to parse Gemini response", e);
+      throw new Error("The AI generated an invalid schema structure. Please try again with a clearer prompt or document.");
     }
   }
 }

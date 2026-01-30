@@ -1,6 +1,7 @@
 
 export enum UserRole {
   ADMIN = 'ADMIN',
+  AGENT = 'AGENT',
   SELLER = 'SELLER',
   BUYER = 'BUYER'
 }
@@ -196,6 +197,24 @@ export interface ProjectForm {
   meta?: Record<string, any> | string;
 }
 
+export interface FormDefinition {
+  id: string;
+  key: string;
+  title: string;
+  description?: string;
+  schema?: Record<string, any>; // JSON schema or UI schema
+  defaultData?: Record<string, any>;
+  role?: UserRole; // Who usually fills this in
+  
+  // Settings
+  needSignatureFromSeller?: boolean;
+  needSignatureFromBuyer?: boolean;
+  autoCreateTaskForAssignee?: boolean;
+  autoAssignTo?: string[]; // e.g. ['seller', 'buyer']
+  autoAddToNewProjects?: boolean;
+  allowChanges?: 'always' | 'before_submission' | 'never';
+}
+
 export interface FormSubmission {
   id: string; // document $id
   projectId: string;
@@ -220,6 +239,7 @@ export interface CreateSubmissionParams {
   assignedToUserId?: string | null;
   status?: FormStatus;
   submittedByUserId?: string;
+  meta?: Record<string, any> | string;
 }
 
 export interface FormSubmissionPatch {
@@ -228,4 +248,5 @@ export interface FormSubmissionPatch {
   attachments?: string[];
   assignedToUserId?: string | null;
   status?: FormStatus;
+  meta?: Record<string, any> | string;
 }

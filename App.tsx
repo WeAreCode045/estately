@@ -18,7 +18,8 @@ import {
   Mail,
   BookOpen,
   Library,
-  ShieldCheck
+  ShieldCheck,
+  ClipboardList
 } from 'lucide-react';
 import { UserRole, Project, User as AppUser, Contract, ContractTemplate } from './types';
 import { MOCK_USERS, MOCK_PROJECTS, MOCK_CONTRACTS, MOCK_TEMPLATES } from './constants';
@@ -32,6 +33,9 @@ import TaskLibrary from './views/TaskLibrary';
 import Tasks from './views/Tasks';
 import UsersManagement from './views/UsersManagement';
 import Settings from './views/Settings';
+import FormsList from './views/FormsList';
+import FormEditorView from './views/FormEditor';
+import FormDefinitionEditor from './views/FormDefinitionEditor';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './views/Login';
 import Register from './views/Register';
@@ -50,28 +54,15 @@ const PlaceholderView: React.FC<{ title: string }> = ({ title }) => (
 );
 
 const App: React.FC = () => {
-  const [currentUser, setCurrentUser] = useState<AppUser>({
-    id: 'guest',
-    name: 'Guest User',
-    email: '',
-    role: UserRole.BUYER,
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=guest'
-  }); 
   const [projects, setProjects] = useState<Project[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [templates, setTemplates] = useState<ContractTemplate[]>([]);
   const [allUsers, setAllUsers] = useState<AppUser[]>([]);
 
-  const switchUser = (role: UserRole) => {
-    const found = allUsers.find(u => u.role === role);
-    if (found) setCurrentUser(found);
-  };
-
   return (
     <AuthProvider>
       <HashRouter>
         <AppContent 
-          currentUser={currentUser} 
           projects={projects} 
           setProjects={setProjects}
           contracts={contracts}
@@ -80,7 +71,6 @@ const App: React.FC = () => {
           setTemplates={setTemplates}
           allUsers={allUsers}
           setAllUsers={setAllUsers}
-          switchUser={switchUser}
         />
       </HashRouter>
     </AuthProvider>
@@ -88,7 +78,6 @@ const App: React.FC = () => {
 };
 
 const AppContent: React.FC<{
-  currentUser: AppUser,
   projects: Project[],
   setProjects: React.Dispatch<React.SetStateAction<Project[]>>,
   contracts: Contract[],
@@ -96,10 +85,8 @@ const AppContent: React.FC<{
   templates: ContractTemplate[],
   setTemplates: React.Dispatch<React.SetStateAction<ContractTemplate[]>>,
   allUsers: AppUser[],
-  setAllUsers: React.Dispatch<React.SetStateAction<AppUser[]>>,
-  switchUser: (role: UserRole) => void
+  setAllUsers: React.Dispatch<React.SetStateAction<AppUser[]>>
 }> = ({ 
-  currentUser, 
   projects, 
   setProjects, 
   contracts, 
@@ -107,15 +94,25 @@ const AppContent: React.FC<{
   templates, 
   setTemplates, 
   allUsers, 
-  setAllUsers, 
-  switchUser 
+  setAllUsers 
 }) => {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, impersonate, stopImpersonation, isImpersonating } = useAuth();
   const [authView, setAuthView] = useState<'login' | 'register'>('login');
   const [taskTemplates, setTaskTemplates] = useState<any[]>([]);
   const [docDefinitions, setDocDefinitions] = useState<any[]>([]);
 
-  // Deriving the effective user: Prioritize profile from DB, then account from Auth, then fallback (initial state/last mock switch)
+  const switchUser = (identifier: UserRole | string) => {
+    // Check if identifier is a role
+    if (Object.values(UserRole).includes(identifier as UserRole)) {
+      const found = allUsers.find(u => u.role === identifier);
+      if (found) impersonate(found.id);
+    } else {
+      // Treat as userId
+      impersonate(identifier);
+    }
+  };
+
+  // Deriving the effective user: Prioritize profile from DB (which is updated by impersonation in AuthContext)
   const effectiveUser = React.useMemo(() => {
     if (profile) {
       return {
@@ -124,19 +121,19 @@ const AppContent: React.FC<{
         avatar: profile.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.email}`,
         assignedTasks: profile.assignedTasks ? (typeof profile.assignedTasks === 'string' ? JSON.parse(profile.assignedTasks) : profile.assignedTasks) : [],
         userDocuments: profile.userDocuments ? (typeof profile.userDocuments === 'string' ? JSON.parse(profile.userDocuments) : profile.userDocuments) : []
-      };
+      } as AppUser;
     }
     if (user) {
       return {
         id: user.$id,
         name: user.name,
         email: user.email,
-        role: currentUser.role || UserRole.BUYER,
+        role: UserRole.BUYER,
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.email}`
-      };
+      } as AppUser;
     }
-    return currentUser;
-  }, [profile, user, currentUser.role]);
+    return null;
+  }, [profile, user]);
 
   useEffect(() => {
     if (user) {
@@ -273,15 +270,40 @@ const AppContent: React.FC<{
               <div className="flex-1 flex flex-col min-w-0">
                 <Header user={effectiveUser as AppUser} />
                 
+                {isImpersonating && (
+                  <div className="bg-emerald-600 text-white px-6 py-2 flex items-center justify-between shadow-lg z-50 animate-in slide-in-from-top duration-300">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-white/20 p-1.5 rounded-lg">
+                        <ShieldCheck size={18} />
+                      </div>
+                      <p className="text-sm font-bold">
+                        Impersonation Active: <span className="underline decoration-2 underline-offset-4 decoration-white/40">Viewing portal as {effectiveUser?.name} ({effectiveUser?.role})</span>
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        stopImpersonation();
+                        window.location.href = '#/'; // Force back to dashboard
+                      }}
+                      className="bg-white text-emerald-700 px-4 py-1.5 rounded-xl text-xs font-black hover:bg-emerald-50 transition-all shadow-sm active:scale-95"
+                    >
+                      EXIT IMPERSONATION
+                    </button>
+                  </div>
+                )}
+                
                 <main className="flex-1 overflow-y-auto p-4 md:p-8 no-scrollbar">
                   <Routes>
                     <Route path="/" element={<Dashboard projects={projects} user={effectiveUser as AppUser} allUsers={allUsers} taskTemplates={taskTemplates} />} />
                     <Route path="/projects" element={<Dashboard projects={projects} user={effectiveUser as AppUser} allUsers={allUsers} />} />
-                    <Route path="/projects/:id" element={<ProjectDetail projects={projects} setProjects={setProjects} contracts={contracts} setContracts={setContracts} templates={templates} user={effectiveUser as AppUser} allUsers={allUsers} onRefresh={fetchData} />} />
+                    <Route path="/projects/:id" element={<ProjectDetail projects={projects} setProjects={setProjects} contracts={contracts} setContracts={setContracts} templates={templates} user={effectiveUser as AppUser} allUsers={allUsers} onRefresh={fetchData} onSwitchUser={switchUser} />} />
                     <Route path="/contracts" element={<Contracts user={effectiveUser as AppUser} projects={projects} contracts={contracts} setContracts={setContracts} templates={templates} setTemplates={setTemplates} />} />
                     <Route path="/documents" element={<Documents user={effectiveUser as AppUser} projects={projects} onRefresh={fetchData} />} />
                     <Route path="/admin/documents" element={<DocumentManagement user={effectiveUser as AppUser} />} />
                     <Route path="/admin/tasks" element={<TaskLibrary user={effectiveUser as AppUser} onRefresh={fetchData} />} />
+                    <Route path="/admin/forms" element={<FormsList />} />
+                    <Route path="/admin/forms/edit/:id" element={<FormEditorView />} />
+                    <Route path="/admin/forms/templates/edit/:id" element={<FormDefinitionEditor />} />
                     <Route path="/users" element={<UsersManagement user={effectiveUser as AppUser} allUsers={allUsers} setAllUsers={setAllUsers} projects={projects} />} />
                     <Route path="/profile" element={<Profile user={effectiveUser as AppUser} projects={projects} taskTemplates={taskTemplates} docDefinitions={docDefinitions} allUsers={allUsers} />} />
                     <Route path="/profile/:userId" element={<Profile user={effectiveUser as AppUser} projects={projects} taskTemplates={taskTemplates} docDefinitions={docDefinitions} allUsers={allUsers} />} />
@@ -326,6 +348,7 @@ const Sidebar: React.FC<{ user: AppUser, onSwitchRole: (role: UserRole) => void 
   const adminMenu: MenuNavItem[] = [
     { to: '/admin/tasks', icon: <Library size={20} />, label: 'Task Library' },
     { to: '/admin/documents', icon: <ShieldCheck size={20} />, label: 'Doc Requirements' },
+    { to: '/admin/forms', icon: <ClipboardList size={20} />, label: 'Project Forms' },
     { to: '/users', icon: <UsersIcon size={20} />, label: 'User Directory' },
     { to: '/settings', icon: <SettingsIcon size={20} />, label: 'System Settings' },
   ];
@@ -374,7 +397,8 @@ const Sidebar: React.FC<{ user: AppUser, onSwitchRole: (role: UserRole) => void 
       <div className="p-4 border-t border-slate-800 hidden md:block">
         <p className="text-[10px] uppercase font-bold text-slate-500 mb-2 px-3 tracking-widest">Switch View</p>
         <div className="space-y-1">
-          <button onClick={() => onSwitchRole(UserRole.ADMIN)} className={`w-full text-left px-3 py-1.5 rounded text-xs transition-all ${user.role === UserRole.ADMIN ? 'bg-blue-600/20 text-blue-400 font-bold' : 'hover:bg-slate-800'}`}>Agent Portal</button>
+          <button onClick={() => onSwitchRole(UserRole.ADMIN)} className={`w-full text-left px-3 py-1.5 rounded text-xs transition-all ${user.role === UserRole.ADMIN ? 'bg-blue-600/20 text-blue-400 font-bold' : 'hover:bg-slate-800'}`}>Admin Portal</button>
+          <button onClick={() => onSwitchRole(UserRole.AGENT)} className={`w-full text-left px-3 py-1.5 rounded text-xs transition-all ${user.role === UserRole.AGENT ? 'bg-blue-600/20 text-blue-400 font-bold' : 'hover:bg-slate-800'}`}>Agent Portal</button>
           <button onClick={() => onSwitchRole(UserRole.SELLER)} className={`w-full text-left px-3 py-1.5 rounded text-xs transition-all ${user.role === UserRole.SELLER ? 'bg-emerald-600/20 text-emerald-400 font-bold' : 'hover:bg-slate-800'}`}>Seller Portal</button>
           <button onClick={() => onSwitchRole(UserRole.BUYER)} className={`w-full text-left px-3 py-1.5 rounded text-xs transition-all ${user.role === UserRole.BUYER ? 'bg-indigo-600/20 text-indigo-400 font-bold' : 'hover:bg-slate-800'}`}>Buyer Portal</button>
         </div>

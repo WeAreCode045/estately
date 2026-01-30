@@ -1,6 +1,7 @@
-import { databases, DATABASE_ID, COLLECTIONS, storage, Query, BUCKETS } from './appwrite';
+import { databases, DATABASE_ID, COLLECTIONS, storage, Query, BUCKETS, profileService, projectService } from './appwrite';
 import { ID } from 'appwrite';
-import type { CreateSubmissionParams, FormSubmission, FormSubmissionPatch, FormStatus } from '../types';
+import type { CreateSubmissionParams, FormSubmission, FormSubmissionPatch, FormStatus, FormDefinition, ProjectTask } from '../types';
+import { formDefinitionsService } from './formDefinitionsService';
 
 function parseSubmissionDoc(doc: any): FormSubmission {
   return {
@@ -27,9 +28,10 @@ export const projectFormsService = {
       title: params.title || '',
       data: typeof params.data === 'string' ? params.data : JSON.stringify(params.data || {}),
       attachments: params.attachments ? JSON.stringify(params.attachments) : JSON.stringify([]),
-      submittedByUserId: params.submittedByUserId || null,
-      assignedToUserId: params.assignedToUserId || null,
-      status: params.status || 'submitted'
+      submittedByUserId: params.submittedByUserId || '',
+      assignedToUserId: params.assignedToUserId || '',
+      status: params.status || 'submitted',
+      meta: typeof params.meta === 'string' ? params.meta : JSON.stringify(params.meta || {})
     };
 
     const doc = await databases.createDocument(DATABASE_ID, COLLECTIONS.PROJECT_FORMS, ID.unique(), payload);
@@ -77,6 +79,7 @@ export const projectFormsService = {
     if (patch.attachments !== undefined) payload.attachments = JSON.stringify(patch.attachments);
     if (patch.assignedToUserId !== undefined) payload.assignedToUserId = patch.assignedToUserId;
     if (patch.status !== undefined) payload.status = patch.status;
+    if (patch.meta !== undefined) payload.meta = typeof patch.meta === 'string' ? patch.meta : JSON.stringify(patch.meta);
 
     const doc = await databases.updateDocument(DATABASE_ID, COLLECTIONS.PROJECT_FORMS, id, payload);
     return parseSubmissionDoc(doc);
@@ -95,6 +98,89 @@ export const projectFormsService = {
     }
 
     return await databases.deleteDocument(DATABASE_ID, COLLECTIONS.PROJECT_FORMS, id);
+  },
+
+  async assignFormToUser(def: FormDefinition, projectId: string, targetProfileId: string) {
+    // 1. Create Form Submission
+    await this.createSubmission({
+      projectId: projectId,
+      formKey: def.key,
+      title: def.title,
+      data: def.defaultData || {},
+      assignedToUserId: targetProfileId,
+      status: 'assigned',
+      meta: {
+        needsSignatureFromSeller: def.needSignatureFromSeller,
+        needsSignatureFromBuyer: def.needSignatureFromBuyer
+      }
+    });
+
+    // 2. Handle Auto-Task Creation if enabled
+    if (def.autoCreateTaskForAssignee) {
+      const newTask: ProjectTask = {
+        id: ID.unique(),
+        title: `Fill out form: ${def.title}`,
+        description: `Please complete the ${def.title} form as requested.`,
+        category: 'Legal',
+        dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Default 3 days
+        completed: false,
+        notifyAssignee: true,
+        notifyAgentOnComplete: true
+      };
+
+      // Get current project to update tasks
+      const project = await projectService.get(projectId);
+      const currentTasks = project.tasks ? (typeof project.tasks === 'string' ? JSON.parse(project.tasks) : project.tasks) : [];
+      const updatedTasks = [...currentTasks, newTask];
+      
+      await projectService.update(projectId, { tasks: JSON.stringify(updatedTasks) });
+      
+      // Also assign to profile for "My Tasks" view
+      await profileService.assignTask(targetProfileId, newTask.id, {
+        title: newTask.title,
+        description: newTask.description,
+        dueDate: newTask.dueDate,
+        projectId: projectId,
+        status: 'PENDING'
+      });
+    }
+  },
+
+  async autoProvisionForms(projectId: string, project: any) {
+    try {
+      const defs = await formDefinitionsService.list();
+      const autoAddDefs = defs.filter(d => d.autoAddToNewProjects);
+
+      for (const def of autoAddDefs) {
+        if (def.autoAssignTo && def.autoAssignTo.length > 0) {
+          for (const role of def.autoAssignTo) {
+            let targetUserId = '';
+            if (role === 'seller') targetUserId = project.sellerId;
+            else if (role === 'buyer') targetUserId = project.buyerId || '';
+            else if (role === 'admin') targetUserId = project.managerId;
+
+            if (targetUserId) {
+              await this.assignFormToUser(def, projectId, targetUserId);
+            }
+          }
+        } else {
+          // Add without assignment if no auto-assign roles set but auto-add is true
+          await this.createSubmission({
+            projectId: projectId,
+            formKey: def.key,
+            title: def.title,
+            data: def.defaultData || {},
+            status: 'draft',
+            meta: {
+              needsSignatureFromSeller: def.needSignatureFromSeller,
+              needsSignatureFromBuyer: def.needSignatureFromBuyer
+            }
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error auto-provisioning forms:', err);
+    }
   },
 
   async listByUser(userId: string, options?: { limit?: number; offset?: number; projectId?: string }) {
@@ -142,6 +228,45 @@ export const projectFormsService = {
     }
 
     return { total: response.total || items.length, items };
+  },
+
+  async backfillFormToProjects(def: FormDefinition) {
+    try {
+      const projectsRes = await projectService.list();
+      const projects = projectsRes.documents;
+
+      for (const project of projects) {
+        // Check if this specific form key already exists in this project
+        const { items: existingForms } = await this.listByProject(project.$id);
+        const alreadyHasForm = existingForms.some(f => f.formKey === def.key);
+
+        if (!alreadyHasForm) {
+          console.log(`Backfilling form ${def.key} to project ${project.$id}`);
+          if (def.autoAssignTo && def.autoAssignTo.length > 0) {
+            for (const role of def.autoAssignTo) {
+              let targetUserId = '';
+              if (role === 'seller') targetUserId = project.sellerId;
+              else if (role === 'buyer') targetUserId = project.buyerId || '';
+              else if (role === 'admin') targetUserId = project.managerId;
+
+              if (targetUserId) {
+                await this.assignFormToUser(def, project.$id, targetUserId);
+              }
+            }
+          } else if (def.autoAddToNewProjects) {
+            await this.createSubmission({
+              projectId: project.$id,
+              formKey: def.key,
+              title: def.title,
+              data: def.defaultData || {},
+              status: 'draft'
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error backfilling forms:', err);
+    }
   }
 };
 
