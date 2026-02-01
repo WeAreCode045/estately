@@ -1,4 +1,4 @@
-import https from 'https';
+const https = require('https');
 
 const config = {
     endpoint: 'https://appwrite.code045.nl/v1',
@@ -41,32 +41,29 @@ function request(method, path, data) {
 }
 
 async function run() {
-    console.log('Fetching attributes...');
-    const result = await request('GET', `/databases/${config.databaseId}/collections/${config.collectionId}/attributes`);
+    console.log('Creating "autoCreateTaskForAssignee" (boolean)...');
+    await request('POST', `/databases/${config.databaseId}/collections/${config.collectionId}/attributes/boolean`, {
+        key: 'autoCreateTaskForAssignee',
+        required: false,
+        default: true
+    });
 
-    if (result.attributes) {
-        const existing = result.attributes.map(a => a.key);
-        console.log('Existing attributes:', existing);
+    console.log('Creating "autoAddToNewProjects" (boolean)...');
+    await request('POST', `/databases/${config.databaseId}/collections/${config.collectionId}/attributes/boolean`, {
+        key: 'autoAddToNewProjects',
+        required: false,
+        default: true
+    });
 
-        const needed = [
-            { key: 'visibility', type: 'string', size: 50, required: false, default: 'public' }
-        ];
+    console.log('Creating "autoAssignTo" (string array)...');
+    await request('POST', `/databases/${config.databaseId}/collections/${config.collectionId}/attributes/string`, {
+        key: 'autoAssignTo',
+        size: 50,
+        required: false,
+        array: true
+    });
 
-        for (const attr of needed) {
-            if (!existing.includes(attr.key)) {
-                console.log(`Creating missing attribute: ${attr.key}`);
-                const typePath = attr.type === 'string' ? 'string' : 'boolean';
-                const payload = { ...attr };
-                delete payload.type;
-                const createRes = await request('POST', `/databases/${config.databaseId}/collections/${config.collectionId}/attributes/${typePath}`, payload);
-                console.log(`Result for ${attr.key}:`, createRes.key ? 'Created' : createRes.message);
-            } else {
-                console.log(`Attribute ${attr.key} already exists.`);
-            }
-        }
-    } else {
-        console.error('Failed to fetch attributes:', result);
-    }
+    console.log('Done.');
 }
 
 run();

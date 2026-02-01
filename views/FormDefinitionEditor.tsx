@@ -343,6 +343,20 @@ const FormDefinitionEditor: React.FC = () => {
         <div className="w-[1px] h-4 bg-slate-100" />
 
         <div className="flex items-center gap-2 min-w-fit">
+          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Visibility</label>
+          <select
+            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-1 focus:ring-blue-500 outline-none"
+            value={formData.visibility || 'public'}
+            onChange={e => setFormData(f => ({ ...f, visibility: e.target.value as any }))}
+          >
+            <option value="public">Public</option>
+            <option value="private">Private</option>
+          </select>
+        </div>
+
+        <div className="w-[1px] h-4 bg-slate-100" />
+
+        <div className="flex items-center gap-2 min-w-fit">
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Assign</label>
           <div className="flex items-center gap-2">
             {['seller', 'buyer', 'admin'].map(role => (

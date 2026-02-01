@@ -523,6 +523,21 @@ const Contracts: React.FC<ContractsProps> = ({ user, projects, contracts, setCon
                     <div className="space-y-4">
                       <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 shadow-sm group hover:border-blue-200 transition-all">
                         <div>
+                          <p className="font-bold text-slate-900 text-sm">Visibility</p>
+                          <p className="text-[11px] text-slate-500">Control who can see this document.</p>
+                        </div>
+                        <select
+                          value={editingTemplate.visibility || 'public'}
+                          onChange={(e) => setEditingTemplate({ ...editingTemplate, visibility: e.target.value as any })}
+                          className="text-sm bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-blue-500/20"
+                        >
+                          <option value="public">Public</option>
+                          <option value="private">Private</option>
+                        </select>
+                      </div>
+
+                      <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 shadow-sm group hover:border-blue-200 transition-all">
+                        <div>
                           <p className="font-bold text-slate-900 text-sm">Auto-Add to Projects</p>
                           <p className="text-[11px] text-slate-500">Spawn this contract for every new project created.</p>
                         </div>

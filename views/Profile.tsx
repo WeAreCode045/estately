@@ -22,7 +22,8 @@ import DocumentViewer from '../components/DocumentViewer';
 import { useAuth } from '../contexts/AuthContext';
 import { profileService } from '../services/appwrite';
 import { documentService } from '../services/documentService';
-import { Project, User, UserRole } from '../types';
+import type { Project, User } from '../types';
+import { UserRole } from '../types';
 import { useSettings } from '../utils/useSettings';
 
 interface ProfileProps {

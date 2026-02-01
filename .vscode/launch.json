@@ -6,11 +6,11 @@
       "request": "launch",
       "name": "Launch Chrome against localhost",
       "url": "http://localhost:3000",
-      "webRoot": "${workspaceFolder}",
+      "webRoot": "${workspaceFolder}/estately",
       "sourceMaps": true,
       "sourceMapPathOverrides": {
-        "webpack:///./~/*": "${webspaceFolder}/node_modules/*",
-        "webpack:///./*": "${webspaceFolder}/*",
+        "webpack:///./~/*": "${webspaceFolder}/node_modules/estately/*",
+        "webpack:///./*": "${webspaceFolder}/estately/*",
         "webpack:///*": "*"
       }
     },
@@ -19,7 +19,7 @@
       "request": "attach",
       "name": "Attach to Chrome",
       "port": 3000,
-      "webRoot": "${workspaceFolder}"
+      "webRoot": "${workspaceFolder}/estately"
     },
     {
       "type": "node",

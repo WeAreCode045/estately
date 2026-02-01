@@ -34,7 +34,8 @@ export const formDefinitionsService = {
           autoCreateTaskForAssignee: doc.autoCreateTaskForAssignee || false,
           autoAddToNewProjects: doc.autoAddToNewProjects || false,
           autoAssignTo: Array.isArray(doc.autoAssignTo) ? doc.autoAssignTo : (doc.autoAssignTo ? [doc.autoAssignTo] : []),
-          allowChanges: doc.allowChanges || 'always'
+          allowChanges: doc.allowChanges || 'always',
+          visibility: doc.visibility
         } as FormDefinition;
       });
     } catch (err) {
@@ -52,7 +53,7 @@ export const formDefinitionsService = {
       console.log(`found ${res.total} documents for key: "${key}"`);
       if (res.total === 0) return null;
       const doc: any = res.documents[0];
-      
+
       let schema = {};
       try {
         console.log(`Raw schema for ${key}:`, doc.schema?.substring(0, 50) + '...');
@@ -81,7 +82,8 @@ export const formDefinitionsService = {
         autoCreateTaskForAssignee: doc.autoCreateTaskForAssignee || false,
         autoAddToNewProjects: doc.autoAddToNewProjects || false,
         autoAssignTo: Array.isArray(doc.autoAssignTo) ? doc.autoAssignTo : (doc.autoAssignTo ? [doc.autoAssignTo] : []),
-        allowChanges: doc.allowChanges || 'always'
+        allowChanges: doc.allowChanges || 'always',
+        visibility: doc.visibility
       } as FormDefinition;
     } catch (err) {
       console.error('Error getting form definition by key', err);
@@ -104,7 +106,8 @@ export const formDefinitionsService = {
       autoCreateTaskForAssignee: doc.autoCreateTaskForAssignee || false,
       autoAddToNewProjects: doc.autoAddToNewProjects || false,
       autoAssignTo: Array.isArray(doc.autoAssignTo) ? doc.autoAssignTo : (doc.autoAssignTo ? [doc.autoAssignTo] : []),
-      allowChanges: doc.allowChanges || 'always'
+      allowChanges: doc.allowChanges || 'always',
+      visibility: doc.visibility
     } as FormDefinition;
   },
 
@@ -121,7 +124,8 @@ export const formDefinitionsService = {
       autoCreateTaskForAssignee: data.autoCreateTaskForAssignee,
       autoAddToNewProjects: data.autoAddToNewProjects,
       autoAssignTo: data.autoAssignTo,
-      allowChanges: data.allowChanges
+      allowChanges: data.allowChanges,
+      visibility: data.visibility
     };
     const res = await databases.createDocument(DATABASE_ID, COLLECTIONS.FORM_DEFINITIONS, ID.unique(), payload);
     return { ...data, id: res.$id } as FormDefinition;
@@ -141,6 +145,7 @@ export const formDefinitionsService = {
     if (data.autoAddToNewProjects !== undefined) payload.autoAddToNewProjects = data.autoAddToNewProjects;
     if (data.autoAssignTo !== undefined) payload.autoAssignTo = data.autoAssignTo;
     if (data.allowChanges !== undefined) payload.allowChanges = data.allowChanges;
+    if (data.visibility !== undefined) payload.visibility = data.visibility;
 
     const res = await databases.updateDocument(DATABASE_ID, COLLECTIONS.FORM_DEFINITIONS, id, payload);
     return { ...data, id: res.$id } as FormDefinition;

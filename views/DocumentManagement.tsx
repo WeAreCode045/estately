@@ -1,4 +1,3 @@
-import { ID } from 'appwrite';
 import {
     CheckCircle2,
     CheckSquare,
@@ -46,7 +45,7 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ user: _user }) 
       const response = await databases.listDocuments(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS);
       setDocDefinitions(response.documents.map((doc: any) => ({
         id: doc.$id,
-        key: doc.key,
+        key: doc.$id, // Use ID as key
         title: doc.title || doc.name,
         description: doc.description,
         allowedFileTypes: doc.allowedFileTypes || [],
@@ -54,7 +53,8 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ user: _user }) 
         status: doc.status || 'ACTIVE',
         autoCreateTaskForAssignee: doc.autoCreateTaskForAssignee ?? true,
         autoAssignTo: doc.autoAssignTo || [],
-        autoAddToNewProjects: doc.autoAddToNewProjects ?? true
+        autoAddToNewProjects: doc.autoAddToNewProjects ?? true,
+        visibility: doc.visibility || 'public'
       } as UserDocumentDefinition)));
     } catch (error) {
       console.error('Error fetching doc definitions:', error);
@@ -68,22 +68,26 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ user: _user }) 
     try {
       setLoading(true);
 
+      // Exclude 'key' from attributes as it's not in the schema (it's the Document ID)
+      // Map 'title' to 'name' as per database schema
       const payload = {
-        key: formData.key,
-        title: formData.title,
+        name: formData.title,
         description: formData.description,
         status: formData.status || 'ACTIVE',
         allowedFileTypes: formData.allowedFileTypes,
         overrideDocumentName: formData.overrideDocumentName,
         autoCreateTaskForAssignee: formData.autoCreateTaskForAssignee,
         autoAssignTo: formData.autoAssignTo,
-        autoAddToNewProjects: formData.autoAddToNewProjects
+        autoAddToNewProjects: formData.autoAddToNewProjects,
+        visibility: formData.visibility
       };
 
       if (editingDoc) {
         await databases.updateDocument(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS, editingDoc.id, payload);
       } else {
-        await databases.createDocument(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS, ID.unique(), payload);
+        // Use the custom key as the Document ID on creation
+        const customId = formData.key!.toLowerCase().replace(/[^a-z0-9._-]/g, '_');
+        await databases.createDocument(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS, customId, payload);
       }
       setIsModalOpen(false);
       setEditingDoc(null);
@@ -174,6 +178,9 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ user: _user }) 
                           <CheckCircle2 size={14} />
                           <span>Auto-Add: <strong>{def.autoAddToNewProjects ? 'Enabled' : 'Disabled'}</strong></span>
                         </div>
+                        <div className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full ${def.visibility === 'public' || !def.visibility ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-600'}`}>
+                          <span>Visibility: <strong>{def.visibility === 'public' || !def.visibility ? 'Public' : 'Private'}</strong></span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -234,14 +241,15 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ user: _user }) 
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">Internal Key</label>
+                    <label className="text-sm font-bold text-slate-700">Internal Key (ID)</label>
                     <input
                       type="text"
                       required
+                      disabled={!!editingDoc}
                       value={formData.key}
                       onChange={e => setFormData({...formData, key: e.target.value.toLowerCase().replace(/\s+/g, '_')})}
                       placeholder="e.g. passport_copy"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
 
@@ -268,6 +276,18 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ user: _user }) 
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest px-1">
                       Final filename will be: [Name]_[UserId].[ext]
                     </p>
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-bold text-slate-700">Visibility</label>
+                    <select
+                      value={formData.visibility || 'public'}
+                      onChange={e => setFormData({...formData, visibility: e.target.value as any})}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    >
+                      <option value="public">Public (Visible to all participants)</option>
+                      <option value="private">Private (Visible to admins & assignee)</option>
+                    </select>
                   </div>
 
                   <div className="space-y-2 md:col-span-2">

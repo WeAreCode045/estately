@@ -35,6 +35,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         user={user}
         allUsers={allUsers}
         taskTemplates={taskTemplates}
+        onRefresh={onRefresh}
       />
     );
   }

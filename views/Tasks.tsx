@@ -1,20 +1,20 @@
 import { ID } from 'appwrite';
 import {
-    Bell,
-    CheckSquare,
-    Clock,
-    FileText,
-    Inbox,
-    Loader2,
-    Plus,
-    Upload,
-    X
+  Bell,
+  CheckSquare,
+  Clock,
+  FileText,
+  Inbox,
+  Loader2,
+  Plus,
+  Upload,
+  X
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import DocumentViewer from '../components/DocumentViewer';
 import { COLLECTIONS, DATABASE_ID, databases, profileService } from '../services/appwrite';
 import { documentService } from '../services/documentService';
-import { Project, TaskTemplate, User, UserDocumentDefinition } from '../types';
+import type { Project, TaskTemplate, User, UserDocumentDefinition } from '../types';
 
 interface TasksViewProps {
   user: User;
@@ -37,7 +37,7 @@ const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
   const handleOpenViewer = async (provided: any, title?: string) => {
     try {
       let url = provided?.url;
-      let fileId = provided?.fileId;
+      const fileId = provided?.fileId;
 
       if (!url && fileId) {
         url = await documentService.getFileUrl(fileId);
@@ -51,7 +51,7 @@ const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
 
       // Generate normalized download URL if we have a fileId
       if (fileId) {
-        let dl = documentService.getFileDownload(fileId);
+        const dl = documentService.getFileDownload(fileId);
         setViewerDownloadUrl(dl);
       } else {
         setViewerDownloadUrl(null);

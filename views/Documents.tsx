@@ -11,9 +11,9 @@ import {
   X
 } from 'lucide-react';
 import React, { useRef, useState } from 'react';
-import DocumentViewer from '../components/DocumentViewer';
 import { profileService } from '../services/appwrite';
 import { documentService } from '../services/documentService';
+import DocumentViewer from '../components/DocumentViewer';
 import { Project, UploadedDocument, User } from '../types';
 
 interface DocumentsViewProps {

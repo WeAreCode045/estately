@@ -1,30 +1,31 @@
 import {
-    Bell,
-    BookOpen,
-    Building2,
-    Calendar,
-    CheckSquare,
-    ChevronDown,
-    ClipboardList,
-    FileSignature,
-    FileText,
-    Home,
-    LayoutDashboard,
-    Library,
-    LogOut,
-    Mail,
-    Search,
-    Settings as SettingsIcon,
-    ShieldCheck,
-    User as UserIcon,
-    Users as UsersIcon
+  Bell,
+  BookOpen,
+  Building2,
+  Calendar,
+  CheckSquare,
+  ChevronDown,
+  ClipboardList,
+  FileSignature,
+  FileText,
+  Home,
+  LayoutDashboard,
+  Library,
+  LogOut,
+  Mail,
+  Search,
+  Settings as SettingsIcon,
+  ShieldCheck,
+  User as UserIcon,
+  Users as UsersIcon
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { HashRouter, Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { COLLECTIONS, DATABASE_ID, databases, projectService, Query } from './services/appwrite';
 import { contractTemplatesService } from './services/contractTemplatesService';
-import { User as AppUser, Contract, ContractTemplate, Project, UserRole } from './types';
+import type { User as AppUser, Contract, ContractTemplate, Project } from './types';
+import { UserRole } from './types';
 import AcceptInvite from './views/AcceptInvite';
 import AgencyInfo from './views/AgencyInfo';
 import Contracts from './views/Contracts';
@@ -36,7 +37,21 @@ import FormEditorView from './views/FormEditor';
 import FormsList from './views/FormsList';
 import Login from './views/Login';
 import Profile from './views/Profile';
-import ProjectDetail from './views/ProjectDetail';
+
+const ProjectDetail: React.FC<any> = (props) => {
+  const Component = React.lazy(async () => {
+    const mod = await import('./views/ProjectDetail');
+    const Comp = (mod as any).ProjectDetail ?? (mod as any).default;
+    return { default: Comp ?? (() => <div>ProjectDetail export not found</div>) };
+  });
+
+  return (
+    <React.Suspense fallback={<div />}>
+      <Component {...props} />
+    </React.Suspense>
+  );
+};
+
 import Register from './views/Register';
 import Settings from './views/Settings';
 import TaskLibrary from './views/TaskLibrary';
@@ -184,11 +199,28 @@ const AppContent: React.FC<{
       setAllUsers(Array.from(userMap.values()));
 
       const projectsData = await projectService.list();
-      const [templatesResponse, docsResponse, contractTemplates] = await Promise.all([
+      const [templatesResponse, docsResponse, contractTemplates, contractsResponse] = await Promise.all([
         databases.listDocuments(DATABASE_ID, COLLECTIONS.TASK_TEMPLATES),
         databases.listDocuments(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS),
-        contractTemplatesService.list()
+        contractTemplatesService.list(),
+        databases.listDocuments(DATABASE_ID, COLLECTIONS.CONTRACTS, [
+          Query.limit(100),
+          Query.orderDesc('$createdAt')
+        ])
       ]);
+
+      setContracts(contractsResponse.documents.map((doc: any) => ({
+        id: doc.$id,
+        projectId: doc.projectId,
+        title: doc.title,
+        content: doc.content,
+        status: doc.status as ContractStatus,
+        assignees: doc.assignees || [],
+        signedBy: doc.signedBy || [],
+        createdAt: doc.$createdAt,
+        signatureData: doc.signatureData ? (typeof doc.signatureData === 'string' ? JSON.parse(doc.signatureData) : doc.signatureData) : {},
+        visibility: doc.visibility || 'public'
+      })));
 
       setTemplates(contractTemplates);
 
@@ -236,7 +268,7 @@ const AppContent: React.FC<{
         messages: doc.messages ? (typeof doc.messages === 'string' ? JSON.parse(doc.messages) : doc.messages) : [],
       })));
     } catch (error) {
-      console.error('Error fetching data:', error);
+      globalThis.console?.error?.('Error fetching data:', error);
     }
   };
 
@@ -410,8 +442,14 @@ const Header: React.FC<{ user: AppUser }> = ({ user }) => {
         setIsDropdownOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    if (typeof document !== 'undefined' && document?.addEventListener) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      if (typeof document !== 'undefined' && document?.removeEventListener) {
+        document.removeEventListener('mousedown', handleClickOutside);
+      }
+    };
   }, []);
 
   return (

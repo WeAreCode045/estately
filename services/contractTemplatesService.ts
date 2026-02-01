@@ -16,7 +16,8 @@ export const contractTemplatesService = {
         autoCreateTaskForAssignee: doc.autoCreateTaskForAssignee || false,
         autoAddToNewProjects: doc.autoAddToNewProjects || false,
         autoAssignTo: Array.isArray(doc.autoAssignTo) ? doc.autoAssignTo : (doc.autoAssignTo ? [doc.autoAssignTo] : []),
-        allowChanges: doc.allowChanges || 'always'
+        allowChanges: doc.allowChanges || 'always',
+        visibility: doc.visibility
       } as ContractTemplate));
     } catch (err) {
       console.error('Error listing contract templates', err);
@@ -37,7 +38,8 @@ export const contractTemplatesService = {
         autoCreateTaskForAssignee: doc.autoCreateTaskForAssignee || false,
         autoAddToNewProjects: doc.autoAddToNewProjects || false,
         autoAssignTo: Array.isArray(doc.autoAssignTo) ? doc.autoAssignTo : (doc.autoAssignTo ? [doc.autoAssignTo] : []),
-        allowChanges: doc.allowChanges || 'always'
+        allowChanges: doc.allowChanges || 'always',
+        visibility: doc.visibility
       } as ContractTemplate;
     } catch (err) {
       console.error('Error getting contract template', err);
@@ -53,7 +55,8 @@ export const contractTemplatesService = {
       needSignatureFromBuyer: !!data.needSignatureFromBuyer,
       autoCreateTaskForAssignee: !!data.autoCreateTaskForAssignee,
       autoAddToNewProjects: !!data.autoAddToNewProjects,
-      allowChanges: data.allowChanges || 'always'
+      allowChanges: data.allowChanges || 'always',
+      visibility: data.visibility
     };
 
     if (data.description) payload.description = data.description;
@@ -78,6 +81,7 @@ export const contractTemplatesService = {
     if (data.autoAddToNewProjects !== undefined) payload.autoAddToNewProjects = data.autoAddToNewProjects;
     if (data.autoAssignTo !== undefined) payload.autoAssignTo = data.autoAssignTo;
     if (data.allowChanges !== undefined) payload.allowChanges = data.allowChanges;
+    if (data.visibility !== undefined) payload.visibility = data.visibility;
 
     const res = await databases.updateDocument(DATABASE_ID, COLLECTIONS.TEMPLATES, id, payload);
     return { ...data, id: res.$id } as ContractTemplate;
@@ -144,7 +148,18 @@ export const contractTemplatesService = {
           'property.price': projectData.price?.toLocaleString() || '0',
 
           'project.number': projectId.substring(0, 8).toUpperCase(),
-          'project.handover_date': projectData.handover_date || 'TBD',
+          'project.handover_date': projectData.handover_date ? (() => {
+            const d = new Date(projectData.handover_date);
+            return `${d.getDate().toString().padStart(2, '0')}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getFullYear()}`;
+          })() : 'TBD',
+          'property.handover_date': projectData.handover_date ? (() => {
+            const d = new Date(projectData.handover_date);
+            return `${d.getDate().toString().padStart(2, '0')}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getFullYear()}`;
+          })() : 'TBD',
+          current_date: (() => {
+            const d = new Date();
+            return `${d.getDate().toString().padStart(2, '0')}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getFullYear()}`;
+          })(),
 
         };
 
@@ -154,8 +169,8 @@ export const contractTemplatesService = {
 
         Object.entries(replacements).forEach(([key, value]) => {
           const escapedKey = escapeRegExp(key);
-          // Match [key] or {{key}} globally
-          const regex = new RegExp(`\\[${escapedKey}\\]|\\{\\{${escapedKey}\\}\\}`, 'g');
+          // Match [key] or {{key}} globally, case-insensitive
+          const regex = new RegExp(`\\[${escapedKey}\\]|\\{\\{${escapedKey}\\}\\}`, 'gi');
           // Use a replacer function to avoid issue with '$' in value when using .replace()
           finalizedContent = finalizedContent.replace(regex, () => value);
         });
@@ -204,9 +219,10 @@ export const contractTemplatesService = {
           title: template.name,
           content: brandedContent,
           status: 'PENDING_SIGNATURE',
-          assignees: assignees,
+          assignees,
           signedBy: [],
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          visibility: template.visibility
         });
       }
     } catch (err) {
@@ -269,9 +285,19 @@ export const contractTemplatesService = {
         'property.price': projectData.price?.toLocaleString() || '0',
 
         'project.number': projectId.substring(0, 8).toUpperCase(),
-        'project.handover_date': projectData.handover_date || 'TBD',
+        'project.handover_date': projectData.handover_date ? (() => {
+          const d = new Date(projectData.handover_date);
+          return `${d.getDate().toString().padStart(2, '0')}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getFullYear()}`;
+        })() : 'TBD',
+        'property.handover_date': projectData.handover_date ? (() => {
+          const d = new Date(projectData.handover_date);
+          return `${d.getDate().toString().padStart(2, '0')}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getFullYear()}`;
+        })() : 'TBD',
 
-        'current_date': new Date().toLocaleDateString()
+        current_date: (() => {
+          const d = new Date();
+          return `${d.getDate().toString().padStart(2, '0')}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getFullYear()}`;
+        })()
       };
 
       const escapeRegExp = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -281,8 +307,8 @@ export const contractTemplatesService = {
         let finalizedContent = t.content;
         Object.entries(replacements).forEach(([key, value]) => {
           const escapedKey = escapeRegExp(key);
-          // Match [key] or {{key}} globally
-          const regex = new RegExp(`\\[${escapedKey}\\]|\\{\\{${escapedKey}\\}\\}`, 'g');
+          // Match [key] or {{key}} globally, case-insensitive
+          const regex = new RegExp(`\\[${escapedKey}\\]|\\{\\{${escapedKey}\\}\\}`, 'gi');
           // Use a replacer function to avoid issue with '$' in value when using .replace()
           finalizedContent = finalizedContent.replace(regex, () => value);
         });
@@ -331,7 +357,7 @@ export const contractTemplatesService = {
           title: t.name,
           content: brandedContent,
           status: 'PENDING_SIGNATURE',
-          assignees: assignees,
+          assignees,
           signedBy: [],
           createdAt: new Date().toISOString()
         });

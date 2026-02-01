@@ -33,13 +33,15 @@ interface AdminDashboardProps {
   user: User;
   allUsers: User[];
   taskTemplates?: TaskTemplate[];
+  onRefresh?: () => void;
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({
   projects = [],
   user,
   allUsers = [],
-  taskTemplates = []
+  taskTemplates = [],
+  onRefresh
 }) => {
   const { googleApiKey } = useSettings();
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
@@ -110,14 +112,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           id: s.id,
           type: 'form',
           title: descriptiveTitle,
-          userName: userName,
+          userName,
           date: s.updatedAt || s.createdAt,
           projectName: project?.title || 'Unknown Project',
           projectId: s.projectId,
           link: `/projects/${s.projectId}?tab=forms&submission=${s.id}`,
           isExternal: false,
           rawSubmission: s,
-          project: project,
+          project,
           icon: <ClipboardList className="text-indigo-500" size={16} />
         };
       }),
@@ -211,14 +213,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         status: ProjectStatus.ACTIVE,
         managerId: user.id,
         description: (formData.get('description') as string) || '',
-        coverImageId: coverImageId,
+        coverImageId,
         bedrooms: parseInt(formData.get('bedrooms') as string) || 0,
         bathrooms: parseInt(formData.get('bathrooms') as string) || 0,
         sqft: parseInt(formData.get('sqft') as string) || 0,
         livingArea: parseInt(formData.get('livingArea') as string) || 0,
         garages: parseInt(formData.get('garages') as string) || 0,
         buildYear: parseInt(formData.get('buildYear') as string) || null,
-        handover_date: formData.get('handover_date') as string || null
+        handover_date: formData.get('handover_date') ? new Date(formData.get('handover_date') as string).toISOString() : null
       };
 
       const newProject = await projectService.create(data);
@@ -247,11 +249,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         console.error('Error auto-provisioning contracts:', contractError);
       }
 
+      if (onRefresh) onRefresh();
       setShowNewProjectModal(false);
       setCoverImage(null);
       setProjectAddress('');
       alert('Project launched successfully!');
-      window.location.reload();
     } catch (error: any) {
       console.error('Error creating project:', error);
       alert(`Failed to launch project: ${error.message || 'Unknown error'}`);
@@ -280,14 +282,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         address: projectAddress || (formData.get('address') as string) || editingProject.property.address,
         price: priceValue ? parseFloat(priceValue) : editingProject.property.price,
         description: (formData.get('description') as string) || editingProject.property.description,
-        coverImageId: coverImageId,
+        coverImageId,
         bedrooms: parseInt(formData.get('bedrooms') as string) || 0,
         bathrooms: parseInt(formData.get('bathrooms') as string) || 0,
         sqft: parseInt(formData.get('sqft') as string) || 0,
         livingArea: parseInt(formData.get('livingArea') as string) || 0,
         garages: parseInt(formData.get('garages') as string) || 0,
         buildYear: parseInt(formData.get('buildYear') as string) || null,
-        handover_date: formData.get('handover_date') as string || null
+        handover_date: formData.get('handover_date') ? new Date(formData.get('handover_date') as string).toISOString() : null
       };
 
       await projectService.update(editingProject.id, updates);

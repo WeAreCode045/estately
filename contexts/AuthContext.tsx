@@ -1,4 +1,5 @@
-import { ID, Models } from 'appwrite';
+import type { Models } from 'appwrite';
+import { ID } from 'appwrite';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { account, inviteService, profileService, projectService } from '../services/appwrite';
 
@@ -104,7 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         userId: currentUser.$id,
                         name: currentUser.name,
                         email: currentUser.email,
-                        role: role,
+                        role,
                         status: 'ACTIVE'
                     });
                 }

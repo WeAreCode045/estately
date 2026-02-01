@@ -117,6 +117,7 @@ export interface UserDocumentDefinition {
   autoCreateTaskForAssignee?: boolean;
   autoAssignTo?: string[];
   autoAddToNewProjects?: boolean;
+  visibility?: 'public' | 'private';
 }
 
 export interface UserDocument {
@@ -188,6 +189,7 @@ export interface ContractTemplate {
   autoAssignTo?: string[];
   autoAddToNewProjects?: boolean;
   allowChanges?: 'always' | 'before_submission' | 'never';
+  visibility?: 'public' | 'private';
 }
 
 export interface Message {
@@ -207,6 +209,8 @@ export interface Contract {
   signedBy: string[];
   createdAt: string;
   signatureData?: Record<string, string>;
+  isLocked?: boolean;
+  visibility?: 'public' | 'private';
 }
 
 export interface Project {
@@ -242,12 +246,14 @@ export interface ProjectForm {
   createdAt: string;
   updatedAt?: string;
   meta?: Record<string, any> | string;
+  isLocked?: boolean;
 }
 
 export interface FormDefinition {
   id: string;
   key: string;
   title: string;
+  visibility?: 'public' | 'private';
   description?: string;
   schema?: Record<string, any>; // JSON schema or UI schema
   defaultData?: Record<string, any>;

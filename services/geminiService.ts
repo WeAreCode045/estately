@@ -1,8 +1,8 @@
 
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Project, User, ContractTemplate } from "../types";
 import type { FormSchema } from "../components/form-builder/types";
+import { ContractTemplate, Project, User } from "../types";
 
 export interface GroundingLink {
   title: string;
@@ -22,33 +22,42 @@ export class GeminiService {
 
   // Fix: Upgraded model to 'gemini-3-pro' for advanced reasoning task of legal contract generation
   async generateContractDraft(
-    project: Project, 
-    seller: User, 
-    buyer?: User, 
+    project: Project,
+    seller: User,
+    buyer?: User,
     template?: ContractTemplate
   ) {
-    const templateContext = template 
+    const templateContext = template
       ? `Use the following structure and content as a base for the contract:\n\n${template.content}\n\n`
       : `Generate a professional Sales Purchase Agreement from scratch.`;
 
     const prompt = `
       As a legal expert in real estate, generate a professional contract.
       ${templateContext}
-      
+
       Project Data to integrate:
       - Title: ${project.title}
       - Property Address: ${project.property.address}
       - Sale Price: $${project.property.price.toLocaleString()}
       - Description: ${project.property.description}
-      
+      - Handover Date: ${project.handover_date || 'To be determined'}
+      - Contract Date: ${new Date().toLocaleDateString('en-GB')}
+      - Project Ref: ${project.referenceNumber || project.id.substring(0, 8).toUpperCase()}
+
       Seller Details:
       - Name: ${seller.name}
+      - Legal Name: ${seller.firstName || ''} ${seller.lastName || ''}
       - Email: ${seller.email}
-      
+      - Address: ${seller.address || ''}
+      - Phone: ${seller.phone || ''}
+      - ID Number: ${seller.idNumber || ''}
+
       Buyer Details:
-      ${buyer ? `- Name: ${buyer.name}\n- Email: ${buyer.email}` : 'To be determined'}
-      
-      IMPORTANT: If a base structure was provided, preserve its tone and mandatory sections but replace all placeholders (like [PROPERTY_ADDRESS], [PRICE], [SELLER_NAME], etc.) with the real data provided above.
+      ${buyer
+        ? `- Name: ${buyer.name}\n- Legal Name: ${buyer.firstName || ''} ${buyer.lastName || ''}\n- Email: ${buyer.email}\n- Address: ${buyer.address || ''}\n- Phone: ${buyer.phone || ''}\n- ID Number: ${buyer.idNumber || ''}`
+        : 'To be determined'}
+
+      IMPORTANT: If a base structure was provided, preserve its tone and mandatory sections but replace all placeholders (like [PROPERTY_ADDRESS], [PRICE], [SELLER_NAME], [seller.name], [current_date], etc.) with the real data provided above.
       Please format the final response in professional Markdown.
     `;
 
@@ -73,12 +82,12 @@ export class GeminiService {
   async getProjectInsights(project: Project) {
     const prompt = `
       Analyze the current status of this real estate project and provide 3 key action items or risks.
-      
+
       Project: ${project.title}
       Status: ${project.status}
       Tasks: ${JSON.stringify(project.tasks)}
       Milestones: ${JSON.stringify(project.milestones)}
-      
+
       Return as a concise summary.
     `;
 
@@ -95,8 +104,8 @@ export class GeminiService {
 
   // Fix: Using gemini-3-flash-preview for Maps Grounding tasks
   async getPropertyLocationInsights(address: string, userLatLng?: { latitude: number, longitude: number }): Promise<LocationInsightsResponse> {
-    const prompt = `Provide detailed neighborhood insights for the property at "${address}". 
-    Include information about nearby amenities like schools, parks, transportation, and popular local spots. 
+    const prompt = `Provide detailed neighborhood insights for the property at "${address}".
+    Include information about nearby amenities like schools, parks, transportation, and popular local spots.
     Use real-time map data to ensure accuracy.`;
 
     try {
@@ -144,9 +153,9 @@ export class GeminiService {
       type: Type.OBJECT,
       properties: {
         id: { type: Type.STRING },
-        type: { 
-          type: Type.STRING, 
-          description: "One of: text, textarea, number, select, checkbox, radio, date, email, tel, section" 
+        type: {
+          type: Type.STRING,
+          description: "One of: text, textarea, number, select, checkbox, radio, date, email, tel, section"
         },
         label: { type: Type.STRING },
         placeholder: { type: Type.STRING },

@@ -10,19 +10,25 @@ import {
   ChevronLeft,
   ChevronRight,
   Circle,
+  ClipboardList,
   Clock,
   Download,
-  Edit3,
   Eye,
   FileSignature,
   FileText,
   FormInput,
+  Globe,
+  History,
   Home,
+  Lock,
   Mail,
   Map,
   MessageSquare,
   Phone,
+  RefreshCcw,
+  Shield,
   Square,
+  Trash2,
   Upload,
   User as UserIcon,
   Users,
@@ -34,9 +40,12 @@ import AdminAgendaWidget from '../components/AdminAgendaWidget';
 import DocumentViewer from '../components/DocumentViewer';
 import FormRenderer from '../components/FormRenderer';
 import SignaturePad from '../components/SignaturePad';
-import { contractService, profileService, projectFormsService, projectService } from '../services/appwrite';
+import { COLLECTIONS, DATABASE_ID, contractService, databases, profileService, projectFormsService, projectService } from '../services/appwrite';
 import { documentService } from '../services/documentService';
+import { formDefinitionsService } from '../services/formDefinitionsService';
 import type { Contract, FormSubmission, Project, TaskTemplate, User } from '../types';
+import { ContractStatus, UserRole } from '../types';
+import { downloadContractPDF, downloadFormPDF } from '../utils/pdfGenerator';
 
 interface UserDashboardProps {
   projects: Project[];
@@ -53,7 +62,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
   taskTemplates = [],
   onRefresh
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'details' | 'contracts' | 'forms' | 'notifications' | 'timeline'>('overview');
+  const [activeTab, setActiveTab] = useState<'details' | 'documents' | 'notifications' | 'timeline'>('documents');
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [forms, setForms] = useState<FormSubmission[]>([]);
   const [loading, setLoading] = useState(false);
@@ -63,7 +72,17 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
   const [selectedForm, setSelectedForm] = useState<FormSubmission | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<{ url: string, title: string } | null>(null);
   const [signingContract, setSigningContract] = useState<Contract | null>(null);
+  const [showSignaturePad, setShowSignaturePad] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [viewerDocs, setViewerDocs] = useState<any[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false); // Placeholder for copied view
+  const [showFormEditor, setShowFormEditor] = useState(false); // Placeholder
+  const [isGenerating, setIsGenerating] = useState(false); // Placeholder
+  const [formDefinitions, setFormDefinitions] = useState<any[]>([]);
+
+  const isAdmin = user.role === UserRole.ADMIN || user.role === UserRole.AGENT;
 
   // Filter to only projects where user is seller, buyer or manager
   const visibleProjects = (projects || []).filter(
@@ -75,20 +94,288 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
   // Focus on the first matching project for the personal dashboard
   const userProject = visibleProjects[0] || null;
 
+  const projectStatusData = React.useMemo(() => {
+    if (!userProject) return { tasks: [], docs: [] };
+
+    const participants = [
+      { role: 'SELLER' as UserRole, id: userProject.sellerId },
+      { role: 'BUYER' as UserRole, id: userProject.buyerId }
+    ];
+
+    const tasks: any[] = [];
+    const docsFound: any[] = [];
+
+    participants.forEach(p => {
+      if (!p.id) return;
+      const profile = allUsers.find(u => u.id === p.id);
+      if (profile) {
+        const pDocs = profile.userDocuments || [];
+        pDocs.forEach(d => {
+          docsFound.push({ ...d, role: p.role, user: profile });
+        });
+      }
+    });
+
+    const combinedDocs = requiredDocs
+      .map(rd => {
+        const roles = rd.autoAssignTo || [];
+
+        const participantsData = roles.map((role: string) => {
+          const u = allUsers.find(user =>
+            (role.toLowerCase() === 'seller' && user.id === userProject.sellerId) ||
+            (role.toLowerCase() === 'buyer' && user.id === userProject.buyerId)
+          );
+          // Match by definition ID and project scope
+          const log = docsFound.find(df =>
+            df.userDocumentDefinitionId === (rd as any).$id &&
+            df.user.id === u?.id &&
+            (df.projectId === userProject.id)
+          );
+          return {
+             role,
+             user: u,
+             isProvided: !!log,
+             url: log?.url,
+             fileId: log?.fileId,
+             documentType: log?.documentType,
+             providedAt: log?.uploadedAt,
+             name: log?.name
+          };
+        });
+        return { ...rd, participants: participantsData };
+      });
+
+    return { tasks, docs: combinedDocs };
+  }, [allUsers, userProject, requiredDocs]);
+
+  const handleOpenViewer = async (provided: any | any[], title?: string) => {
+    try {
+      if (Array.isArray(provided)) {
+         // Resolve all
+         const resolved = await Promise.all(provided.map(async (doc) => {
+             if (doc.url) return doc;
+             if (doc.fileId) {
+                try {
+                    const file = await documentService.getFile(doc.fileId);
+                    const isImage = file.mimeType.startsWith('image/');
+                    const url = isImage ? documentService.getFilePreview(doc.fileId) : documentService.getFileView(doc.fileId);
+                    return { ...doc, url, documentType: file.mimeType, name: file.name };
+                } catch(e) {
+                    const url = await documentService.getFileUrl(doc.fileId);
+                    return { ...doc, url };
+                }
+             }
+             return doc;
+         }));
+         setViewerDocs(resolved);
+      } else {
+        if (provided.url) {
+           setViewerDocs([{ ...provided, title: title || provided.title || 'Document' }]);
+        } else if (provided.fileId) {
+           try {
+               const file = await documentService.getFile(provided.fileId);
+               const isImage = file.mimeType.startsWith('image/');
+               const url = isImage ? documentService.getFilePreview(provided.fileId) : documentService.getFileView(provided.fileId);
+               setViewerDocs([{ ...provided, url, title: title || provided.title || 'Document', documentType: file.mimeType, name: file.name }]);
+           } catch(e) {
+               const url = await documentService.getFileUrl(provided.fileId);
+               setViewerDocs([{ ...provided, url, title: title || provided.title || 'Document' }]);
+           }
+        }
+      }
+      // setSelectedDocument({ url: '', title: '' }); // REMOVED to prevent double modal opening
+    } catch (e) {
+      console.error('Error opening viewer:', e);
+      alert('Could not load document for viewing.');
+    }
+  };
+
+  const handleUndoRequirement = async (fileId: string) => {
+    if (!isAdmin) {
+      // Permission Check: Ensure user owns this document
+      let isMine = false;
+      for (const rd of projectStatusData.docs) {
+          const part = rd.participants.find((p:any) => p.fileId === fileId);
+          if (part && (part.user?.id === user.id || part.user?.$id === user.id || part.user?.userId === user.id)) {
+              isMine = true;
+              break;
+          }
+      }
+      if (!isMine) {
+          alert("You can only remove documents you uploaded.");
+          return;
+      }
+    }
+
+    if (!confirm('Undo this upload? The file will be deleted.')) return;
+    setIsProcessing(true);
+    try {
+        await documentService.deleteDocument(fileId);
+        onRefresh?.();
+        // Since we don't have direct access to refresh the parent props easily unless passed,
+        // we might strictly rely on onRefresh or re-fetch locally.
+        // For UserDashboard, we have a local fetch in useEffect. We should trigger it.
+        // We can check if we need to call the fetch function again.
+        // For now, let's assume onRefresh handles it or we update local state if possible.
+    } catch (error) {
+        console.error("Failed to undo upload:", error);
+    } finally {
+        setIsProcessing(false);
+    }
+  };
+
+  const handleUndoContractSignature = async (contractId: string, userId: string) => {
+    // 1. Check Locked Status
+    const contract = contracts.find(c => c.id === contractId);
+    if (!contract) return;
+
+    // If fully signed, it is locked (unless admin unlocks it later)
+    if (contract.status === ContractStatus.SIGNED && !isAdmin) {
+       alert('This contract is finalized and locked. Contact an admin to unlock it.');
+       return;
+    }
+
+    // 2. Permission Check
+    const isMySignature = (userId === user.id || userId === user.$id);
+    if (!isAdmin && !isMySignature) {
+       alert('You can only undo your own signature.');
+       return;
+    }
+
+    if (!confirm('Undo signature? This will revert the status.')) return;
+    try {
+        const updatedSignedBy = contract.signedBy.filter(id => id !== userId);
+        const newStatus = ContractStatus.PENDING_SIGNATURE;
+
+        const newSigData = contract.signatureData ? { ...contract.signatureData } : {};
+        delete newSigData[userId];
+
+        await databases.updateDocument(DATABASE_ID, COLLECTIONS.CONTRACTS, contractId, {
+            signedBy: updatedSignedBy,
+            status: newStatus,
+            signatureData: JSON.stringify(newSigData)
+        });
+
+        setContracts(prev => prev.map(c => c.id === contractId ? {
+             ...c, signedBy: updatedSignedBy, status: newStatus, signatureData: newSigData
+        } : c));
+
+    } catch(e) {
+        console.error("Undo sign failed", e);
+        alert("Could not undo signature.");
+    }
+  };
+
+  const handleUndoForm = async (form: any, role: string) => {
+     // 1. Check Locked Status
+     let meta: any = {};
+     try { meta = typeof form.meta === 'string' ? JSON.parse(form.meta) : (form.meta || {}); } catch(e){}
+     const signatures = meta.signatures || {};
+     const needsSeller = meta.needsSignatureFromSeller === true || meta.needsSignatureFromSeller === 'true';
+     const needsBuyer = meta.needsSignatureFromBuyer === true || meta.needsSignatureFromBuyer === 'true';
+     const allSigned = (!needsSeller || signatures.seller) && (!needsBuyer || signatures.buyer);
+
+     // If complete and all signed, it is locked
+     if ((form.status === 'completed' || form.status === 'closed' || allSigned) && !isAdmin) {
+        alert('This form is finalized and locked. Contact an admin to unlock it.');
+        return;
+     }
+
+     // 2. Permission Check
+     const isSeller = user.id === userProject?.sellerId || user.$id === userProject?.sellerId;
+     const isBuyer = user.id === userProject?.buyerId || user.$id === userProject?.buyerId;
+     const isMyRole = (role === 'SELLER' && isSeller) || (role === 'BUYER' && isBuyer) || (role === 'ASSIGNEE' && (form.assignedToUserId === user.id || form.assignedToUserId === user.$id));
+
+     if (!isAdmin && !isMyRole) {
+          alert('You can only undo your own actions.');
+          return;
+     }
+
+     if (!confirm('Undo form completion?')) return;
+     try {
+         if (form.status === 'submitted' || form.status === 'completed' || form.status === 'closed') {
+             const updates: any = {};
+
+             if (role === 'SELLER' && meta.signatures?.seller) {
+                 delete meta.signatures.seller;
+                 delete meta.signatures.sellerDate;
+                 updates.meta = JSON.stringify(meta);
+                 updates.status = 'submitted';
+             } else if (role === 'BUYER' && meta.signatures?.buyer) {
+                 delete meta.signatures.buyer;
+                 delete meta.signatures.buyerDate;
+                 updates.meta = JSON.stringify(meta);
+                 updates.status = 'submitted';
+             } else if (role === 'ASSIGNEE' || role === 'SUBMITTED') {
+                 updates.status = 'assigned';
+             }
+
+             await projectFormsService.update(form.id, updates);
+             setForms(prev => prev.map(f => f.id === form.id ? { ...f, ...updates, meta: updates.meta || f.meta } : f));
+         }
+     } catch (e) {
+         console.error("Undo form failed", e);
+     }
+  };
+
+  const handleSyncDocs = async () => {
+    setIsSyncing(true);
+    try {
+      if (userProject) {
+        await documentService.autoProvisionDocuments(userProject.id, userProject);
+        alert('Missing document assignments synced successfully.');
+        onRefresh?.();
+      }
+    } catch (error) {
+      console.error('Error syncing documents:', error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleDeleteContract = async (contractId: string) => {
+    if (!isAdmin || !confirm('Delete this contract?')) return;
+    try {
+        await contractService.delete(contractId);
+        setContracts(prev => prev.filter(c => c.id !== contractId));
+    } catch(e) { console.error(e); }
+  };
+
+  const handleDeleteForm = async (f: any) => {
+    if (!isAdmin || !confirm('Delete this form?')) return;
+    try {
+        await projectFormsService.delete(f.id);
+        setForms(prev => prev.filter(form => form.id !== f.id));
+    } catch(e) { console.error(e); }
+  };
+
+  const handleDeleteRequirement = async (fileIds: string[]) => {
+      // Re-use logic or implement separate
+      // Ideally reuse handleUndoRequirement logic but loop it
+      if (!isAdmin || !confirm('Delete these documents?')) return;
+      try {
+        await Promise.all(fileIds.map(fid => documentService.deleteDocument(fid)));
+        // Refresh handled by caller or refresh generic
+        if (onRefresh) onRefresh();
+      } catch (e) { console.error(e); }
+  };
+
   // Fetch additional data
   useEffect(() => {
     if (userProject) {
       const fetchData = async () => {
         setLoading(true);
         try {
-          const [contractsRes, formsRes, reqDocsRes] = await Promise.all([
+          const [contractsRes, formsRes, reqDocsRes, defsRes] = await Promise.all([
             contractService.listByProject(userProject.id),
             projectFormsService.listByProject(userProject.id),
-            documentService.listDefinitions()
+            documentService.listDefinitions(),
+            formDefinitionsService.list()
           ]);
           setContracts((contractsRes.documents as any) || []);
           setForms(formsRes.items || []);
           setRequiredDocs(reqDocsRes.documents);
+          setFormDefinitions(defsRes || []);
         } catch (error) {
           console.error('Error fetching dashboard data:', error);
         } finally {
@@ -98,6 +385,48 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
       fetchData();
     }
   }, [userProject]);
+
+  useEffect(() => {
+    if (signingContract) {
+      setShowSignaturePad(false);
+    }
+  }, [signingContract]);
+
+
+
+  const handleUnlockContract = async (contract: Contract) => {
+    if (!isAdmin) return;
+    if (!confirm('Unlock this contract? It will be editable and signatures may be invalidated.')) return;
+    try {
+        await databases.updateDocument(DATABASE_ID, COLLECTIONS.CONTRACTS, contract.id, {
+            status: ContractStatus.PENDING_SIGNATURE
+        });
+        setContracts(prev => prev.map(c => c.id === contract.id ? { ...c, status: ContractStatus.PENDING_SIGNATURE } : c));
+    } catch (error) {
+        console.error("Failed to unlock:", error);
+    }
+  };
+
+  const handleUnlockForm = async (form: any) => {
+    if (!isAdmin) return;
+    if (!confirm('Unlock this form?')) return;
+    // We assume setting back to submitted (allows editing only incomplete parts? or triggers re-sign?)
+    // Actually, unlocking usually means allowing edits. So maybe back to 'submitted' or 'assigned'.
+    // If it was 'closed', make it 'submitted'.
+    try {
+        await projectFormsService.update(form.id, { status: 'submitted' });
+        setForms(prev => prev.map(f => f.id === form.id ? { ...f, status: 'submitted' } : f));
+    } catch(e) { console.error(e); }
+  };
+
+  const handleToggleVisibility = async (contract: Contract) => {
+    if (!isAdmin) return;
+    const newVis = contract.visibility === 'public' ? 'private' : 'public';
+    try {
+        await databases.updateDocument(DATABASE_ID, COLLECTIONS.CONTRACTS, contract.id, { visibility: newVis });
+        setContracts(prev => prev.map(c => c.id === contract.id ? { ...c, visibility: newVis } : c));
+    } catch(e) { console.error(e); }
+  };
 
   const handleToggleTask = async (taskId: string, currentStatus: boolean) => {
     const newStatus = currentStatus ? 'PENDING' : 'COMPLETED';
@@ -129,18 +458,25 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
     const file = e.target.files[0];
     setLoading(true);
     try {
-      // Find matching required doc definition
-      const task = (user.assignedTasks || []).find(at => at.taskId === uploadingTaskId);
-      const matchTitlePrefix = "Upload Document: ";
-      const docTitle = task?.title?.replace(matchTitlePrefix, "");
-      const reqDoc = requiredDocs.find(d => d.title === docTitle);
+      let definitionId = 'general';
 
-      const definitionId = reqDoc?.$id || 'general';
+      // Check if it's a virtual task for a required document
+      if (uploadingTaskId && uploadingTaskId.startsWith('req_doc_')) {
+        definitionId = uploadingTaskId.replace('req_doc_', '');
+      } else {
+        // Find matching required doc definition from explicit assigned tasks
+        const task = (user.assignedTasks || []).find((at: any) => at.taskId === uploadingTaskId);
+        const matchTitlePrefix = "Upload Document: ";
+        const docTitle = task?.title?.replace(matchTitlePrefix, "");
+        const reqDoc = requiredDocs.find(d => d.title === docTitle);
+        if (reqDoc) definitionId = reqDoc.$id || reqDoc.id;
+      }
 
       await documentService.uploadDocument(profileId, definitionId, userProject.id, file);
 
       if (onRefresh) onRefresh();
-      alert('Document uploaded successfully and task marked as completed!');
+      // Optimistically update local state if needed, or rely on refresh
+      alert('Document uploaded successfully!');
     } catch (err) {
       console.error('Upload failed:', err);
       alert('Upload failed. Please try again.');
@@ -178,7 +514,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
     if (matchingForm) {
       setSelectedForm(matchingForm);
     } else {
-      setActiveTab('forms');
+      setActiveTab('documents');
     }
   };
 
@@ -190,12 +526,38 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
         .filter((at: any) => !at.projectId || at.projectId === userProject.id || at.projectId === 'personal')
         .map((at: any) => {
           const template = taskTemplates.find(tpl => tpl.id === at.taskId);
+          const taskTitle = template?.title || at.title || at.taskId || 'Untitled Task';
+
+          // Heuristic to check if work is actually done even if task status isn't updated
+          let heuristicCompleted = false;
+
+          // Check if it's a form task
+          if (taskTitle.startsWith('Fill out form: ')) {
+            const formTitle = taskTitle.replace('Fill out form: ', '').trim();
+            const matchingForm = forms.find(f => f.title === formTitle);
+            if (matchingForm && (matchingForm.status === 'submitted' || matchingForm.status === 'completed' || matchingForm.status === 'closed')) {
+              heuristicCompleted = true;
+            }
+          }
+
+          // Check if it's a document upload task
+          if (taskTitle.startsWith('Upload Document: ')) {
+            const docTitle = taskTitle.replace('Upload Document: ', '').trim();
+            const docDef = requiredDocs.find(d => d.title === docTitle);
+            if (docDef) {
+               const hasUploaded = (user.userDocuments || []).some((ud: any) =>
+                 ud.userDocumentDefinitionId === docDef.$id || ud.userDocumentDefinitionId === docDef.id
+               );
+               if (hasUploaded) heuristicCompleted = true;
+            }
+          }
+
           return {
             ...at,
             id: at.id || at.taskId || `task_${Math.random()}`,
             taskId: at.taskId,
-            title: template?.title || at.title || at.taskId || 'Untitled Task',
-            completed: at.status === 'COMPLETED',
+            title: taskTitle,
+            completed: at.status === 'COMPLETED' || heuristicCompleted,
             type: 'task',
             assignedAt: at.assignedAt || new Date().toISOString()
           };
@@ -203,7 +565,11 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
 
         // 2. Forms assigned to the user
         ...forms
-        .filter(f => (f.assignedToUserId === user.id || f.assignedToUserId === user.$id))
+        .filter(f => (
+          f.assignedToUserId === user.id ||
+          f.assignedToUserId === user.$id ||
+          f.assignedToUserId === user.userId
+        ))
         .map(f => {
           let meta: any = {};
           try {
@@ -215,8 +581,10 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
           const signatures = meta.signatures || {};
 
           const userId = user.id || user.$id;
-          const isUserSeller = userId && (userId === userProject?.sellerId || userId === userProject?.sellerId); // Adjusted for safety
-          const isUserBuyer = userId && (userId === userProject?.buyerId || userId === userProject?.buyerId);
+          const userAuthId = user.userId;
+
+          const isUserSeller = (userId && userId === userProject?.sellerId) || (userAuthId && userAuthId === userProject?.sellerId);
+          const isUserBuyer = (userId && userId === userProject?.buyerId) || (userAuthId && userAuthId === userProject?.buyerId);
 
           const needsMySign = (isUserSeller && needsSeller) || (isUserBuyer && needsBuyer);
           const iSigned = !!(isUserSeller ? signatures.seller : isUserBuyer ? signatures.buyer : false);
@@ -253,7 +621,44 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
             assignedAt: c.createdAt,
             needsSignature: !isSigned && c.status === 'PENDING_SIGNATURE'
           };
+        }),
+
+        // 4. Missing Document Uploads (Virtual Tasks)
+        ...requiredDocs
+        .filter(docDef => {
+             // Determine user role
+             const isSeller = user.id === userProject.sellerId || user.$id === userProject.sellerId;
+             const isBuyer = user.id === userProject.buyerId || user.$id === userProject.buyerId;
+
+             // Check relevance
+             if (docDef.autoAssignTo && docDef.autoAssignTo.length > 0) {
+               const roles = docDef.autoAssignTo.map((r: string) => r.toUpperCase());
+               if (isSeller && !roles.includes('SELLER')) return false;
+               if (isBuyer && !roles.includes('BUYER')) return false;
+             }
+
+             // Check if explicit task already exists (to avoid duplicates)
+             const existingTask = (user.assignedTasks || []).some((t: any) => t.title === `Upload Document: ${docDef.title}`);
+             if (existingTask) return false;
+
+             return true;
         })
+        .map(docDef => {
+             const uploaded = (user.userDocuments || []).some((ud: any) =>
+               ud.userDocumentDefinitionId === docDef.$id || ud.userDocumentDefinitionId === docDef.id
+             );
+
+             return {
+                id: `req_doc_${docDef.$id}`,
+                taskId: `req_doc_${docDef.$id}`,
+                title: `Upload Document: ${docDef.title}`,
+                completed: uploaded,
+                type: 'document-upload',
+                assignedAt: userProject.createdAt || new Date().toISOString(),
+                data: docDef
+             };
+        })
+
       ].sort((a, b) => {
         // Sort incomplete tasks to the top, then by date
         if (a.completed !== b.completed) return a.completed ? 1 : -1;
@@ -304,143 +709,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'overview':
-        return (
-          <div className="space-y-8">
-            {/* Progress Widget */}
-            <div className="bg-gradient-to-br from-indigo-600 to-blue-700 rounded-3xl p-8 text-white shadow-xl shadow-blue-500/20 relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
-                <CheckCircle2 size={120} />
-              </div>
-              <div className="relative z-10">
-                <p className="text-blue-100 text-xs font-bold uppercase tracking-widest mb-2">Overall Sale Progress</p>
-                <h2 className="text-4xl font-bold mb-6">
-                  {progressPercent}% <span className="text-lg font-normal opacity-70">to completion</span>
-                </h2>
-                <div className="w-full h-3 bg-white/20 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-white rounded-full shadow-sm transition-all duration-500"
-                    style={{ width: `${progressPercent}%` }}
-                  ></div>
-                </div>
-                <div className="mt-6 flex gap-6">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase opacity-60">Status</p>
-                    <p className="text-sm font-bold">{(userProject.status || '').replace('_', ' ')}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase opacity-60">Property</p>
-                    <p className="text-sm font-bold truncate max-w-[200px]">{userProject.title}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
 
-            {/* TASK LIST WIDGET */}
-            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <CheckSquare className="text-emerald-500" size={20} /> Action Items
-                </h2>
-                <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg uppercase tracking-wider">
-                  {userProjectTasks.filter((t: any) => !t.completed).length} Pending
-                </span>
-              </div>
-              <div className="p-6 space-y-3">
-                {userProjectTasks.map((task: any) => {
-                  const isDocTask = requiredDocs.some(rd => rd.taskId === (task.taskId || task.id));
-                  const isFormTask = task.type === 'form' || task.title?.toLowerCase().includes('form');
-                  const isContractTask = task.type === 'contract';
-
-                  return (
-                    <div
-                      key={task.id}
-                      className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
-                        task.completed
-                          ? 'bg-slate-50 border-slate-50 opacity-60'
-                          : 'bg-white border-slate-100 hover:border-blue-200 shadow-sm'
-                      }`}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className={task.completed ? 'text-emerald-500' : 'text-slate-300'}>
-                          {task.completed ? <CheckCircle size={22} /> : <Circle size={22} />}
-                        </div>
-                        <div>
-                          <p className={`font-bold text-sm ${task.completed ? 'line-through text-slate-400' : 'text-slate-900'}`}>
-                            {task.title}
-                          </p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <p className="text-[10px] text-slate-500 font-medium">
-                              {task.type === 'contract' ? 'Contract Assignment' : task.type === 'form' ? 'Assigned Form' : 'Task'} • {new Date(task.assignedAt || Date.now()).toLocaleDateString()}
-                            </p>
-                            {task.needsSignature && (
-                              <span className="flex items-center gap-1 text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded uppercase tracking-tighter">
-                                <FileSignature size={10} /> Needs Signature
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {!task.completed && (
-                          <>
-                            {isDocTask && (
-                              <button
-                                onClick={() => triggerUpload(task.taskId || task.id)}
-                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
-                                title="Upload Document"
-                              >
-                                <Upload size={18} />
-                              </button>
-                            )}
-                            {isFormTask && (
-                              <button
-                                onClick={() => handleViewForm(task.title)}
-                                className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors"
-                                title="Go to Form"
-                              >
-                                <FormInput size={18} />
-                              </button>
-                            )}
-                            {isContractTask && (
-                              <button
-                                onClick={() => setSigningContract(task.data)}
-                                className="p-2 text-amber-600 hover:bg-amber-50 rounded-xl transition-colors"
-                                title="Sign Contract"
-                              >
-                                <FileSignature size={18} />
-                              </button>
-                            )}
-                          </>
-                        )}
-                        {task.type === 'task' && (
-                          <button
-                            onClick={() => handleToggleTask(task.taskId || task.id, task.completed)}
-                            className={`p-2 rounded-xl transition-colors ${
-                              task.completed ? 'text-emerald-500 bg-emerald-50' : 'text-slate-400 hover:bg-slate-50'
-                            }`}
-                            title={task.completed ? "Mark incomplete" : "Mark complete"}
-                          >
-                            <CheckCircle2 size={18} />
-                          </button>
-                        )}
-                        {task.completed && (task.type === 'form' || task.type === 'contract') && (
-                          <div className="p-2 text-emerald-500 bg-emerald-50 rounded-xl">
-                            <CheckCircle size={18} />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-                {userProjectTasks.length === 0 && (
-                  <p className="text-center py-8 text-slate-400 italic">No tasks assigned for this project.</p>
-                )}
-              </div>
-            </div>
-          </div>
-        );
 
       case 'details':
         return (
@@ -549,169 +818,562 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
           </div>
         );
 
-      case 'contracts':
+      case 'documents':
+        // Filter visible items based on visibility settings + user role + assignments
+        const visibleContracts = contracts.filter(c =>
+          isAdmin ||
+          !c.visibility || c.visibility === 'public' ||
+          (c.assignees?.some(id => id === user.id || id === user.$id))
+        );
+
+        const visibleForms = forms.filter(f => {
+            if (isAdmin) return true;
+            if (f.assignedToUserId === user.id || f.assignedToUserId === user.$id) return true;
+            // Lookup Definition Visibility
+            const def = formDefinitions?.find((d:any) => d.key === f.formKey);
+            // Default to public if not specified
+            if (!def || !def.visibility || def.visibility === 'public') return true;
+
+            const metaStr = typeof f.meta === 'string' ? f.meta : JSON.stringify(f.meta || {});
+            if ((userProject?.sellerId === user.id || userProject?.sellerId === user.$id) && metaStr.includes('seller')) return true; // Loose check
+            if ((userProject?.buyerId === user.id || userProject?.buyerId === user.$id) && metaStr.includes('buyer')) return true; // Loose check
+            return false;
+        });
+
+        const visibleDocs = projectStatusData.docs.filter(rd => {
+            const def: any = rd;
+            const isPublic = !def.visibility || def.visibility === 'public';
+            const isParticipant = rd.participants.some((p: any) => p.user?.id === user.id || p.user?.$id === user.id || p.user?.userId === user.id);
+            return isAdmin || isPublic || isParticipant;
+        });
+
         return (
-          <div className="space-y-4">
-            <h2 className="text-lg font-bold text-slate-900">Contracts</h2>
-            {contracts.length > 0 ? (
-              contracts.map((contract: any) => (
-                <div key={contract.id} className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 hover:shadow-md transition-shadow">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className={`p-3 rounded-2xl ${contract.status === 'SIGNED' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
-                        {contract.status === 'SIGNED' ? <CheckCircle2 size={24} /> : <FileSignature size={24} />}
+                <div className="space-y-8 animate-in fade-in duration-300">
+                  <div className="flex items-center justify-between pt-4">
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900">Document Vault</h3>
+                      <p className="text-xs text-slate-500">Unified repository for Contracts, Forms, and Property Requirements.</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {isAdmin && (
+                        <>
+                          <button
+                            onClick={() => setShowTemplatePicker(true)}
+                            className="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-800 transition-all flex items-center gap-2"
+                            disabled={isGenerating}
+                          >
+                            <FileSignature size={16} />
+                            Contract Builder
+                          </button>
+                          <button
+                            onClick={() => setShowFormEditor(true)}
+                            className="bg-white text-slate-900 border border-slate-200 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm"
+                          >
+                            <FormInput size={16} />
+                            Manual Form
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={handleSyncDocs}
+                        className="p-2 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-xl border border-slate-100 transition-colors"
+                        title="Sync Requirements"
+                        disabled={isSyncing}
+                      >
+                        {isSyncing ? <RefreshCcw size={18} className="animate-spin" /> : <History size={18} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Document Summary Stats */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                        <FileText size={24}/>
                       </div>
                       <div>
-                        <h3 className="font-bold text-slate-900">{contract.title}</h3>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${
-                            contract.status === 'SIGNED' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                          }`}>
-                            {contract.status === 'SIGNED' ? 'Completed' : 'Signature Required'}
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-medium tracking-wide">
-                            CREATED {new Date(contract.createdAt).toLocaleDateString()}
-                          </span>
-                        </div>
+                        <div className="text-2xl font-black text-slate-900">{visibleContracts.length}</div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Contracts</div>
                       </div>
                     </div>
-                    <button
-                      onClick={() => setSigningContract(contract)}
-                      className="flex items-center gap-2 bg-slate-900 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-800 transition-all shadow-sm"
-                    >
-                      <Eye size={16} /> Open Document
-                    </button>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-center py-8 text-slate-400 italic">No contracts available.</p>
-            )}
-          </div>
-        );
-
-      case 'forms':
-        return (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-900">Project Forms</h2>
-              <div className="flex items-center gap-2">
-                <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase">
-                  {forms.length} Total
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {forms.length > 0 ? (
-                forms.map((form: any) => {
-                  let meta: any = {};
-                  try {
-                    meta = typeof form.meta === 'string' ? JSON.parse(form.meta) : (form.meta || {});
-                  } catch (e) {}
-
-                  const needsSeller = meta.needsSignatureFromSeller === true || meta.needsSignatureFromSeller === 'true' || meta.needSignatureFromSeller === true || meta.needSignatureFromSeller === 'true';
-                  const needsBuyer = meta.needsSignatureFromBuyer === true || meta.needsSignatureFromBuyer === 'true' || meta.needSignatureFromBuyer === true || meta.needSignatureFromBuyer === 'true';
-                  const signatures = meta.signatures || {};
-                  const isSellerSigned = !!signatures.seller;
-                  const isBuyerSigned = !!signatures.buyer;
-
-                  // Determine display status based on user requirements
-                  let displayStatus = form.status;
-                  let statusColor = "bg-slate-50 text-slate-600";
-
-                  if (form.status === 'assigned') {
-                    displayStatus = 'assigned';
-                    statusColor = "bg-amber-50 text-amber-600";
-                  } else if (form.status === 'submitted') {
-                    const missingSeller = needsSeller && !isSellerSigned;
-                    const missingBuyer = needsBuyer && !isBuyerSigned;
-
-                    if (missingSeller && missingBuyer) {
-                      displayStatus = 'submitted/waiting for signature';
-                      statusColor = "bg-indigo-50 text-indigo-600";
-                    } else if (missingSeller) {
-                      displayStatus = 'waiting for seller signature';
-                      statusColor = "bg-indigo-50 text-indigo-600";
-                    } else if (missingBuyer) {
-                      displayStatus = 'waiting for buyer signature';
-                      statusColor = "bg-indigo-50 text-indigo-600";
-                    } else {
-                      displayStatus = 'submitted';
-                      statusColor = "bg-emerald-50 text-emerald-600";
-                    }
-                  } else if (form.status === 'completed') {
-                    displayStatus = 'completed';
-                    statusColor = "bg-emerald-50 text-emerald-600";
-                  }
-
-                  return (
-                    <div key={form.id} className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 group hover:border-blue-100 transition-all">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="bg-blue-50 text-blue-600 w-10 h-10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-blue-600 group-hover:text-white transition-all">
-                            <FormInput size={20} />
-                          </div>
-                          <h3 className="font-bold text-slate-900 text-lg mb-1">{form.title}</h3>
-                          <div className="flex flex-wrap items-center gap-2 mb-4">
-                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${statusColor}`}>
-                              {displayStatus}
-                            </span>
-
-                            {needsSeller && (
-                              <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded flex items-center gap-1 ${
-                                isSellerSigned ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-400'
-                              }`}>
-                                {isSellerSigned ? <CheckCircle2 size={10} /> : <Clock size={10} />} Seller Sign
-                              </span>
-                            )}
-
-                            {needsBuyer && (
-                              <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded flex items-center gap-1 ${
-                                isBuyerSigned ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-400'
-                              }`}>
-                                {isBuyerSigned ? <CheckCircle2 size={10} /> : <Clock size={10} />} Buyer Sign
-                              </span>
-                            )}
-
-                            <span className="text-[10px] text-slate-400 font-medium ml-auto">
-                              {new Date(form.updatedAt || form.createdAt).toLocaleDateString()}
-                            </span>
-                          </div>
-                        </div>
+                    <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <ClipboardList size={24}/>
                       </div>
-                      <div className="flex gap-2">
-                        {form.status === 'submitted' || form.status === 'completed' || form.status === 'closed' ? (
-                          <button
-                            onClick={() => setSelectedForm(form)}
-                            className="flex-1 flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl transition-all text-xs"
-                          >
-                            <Eye size={14} /> View Response
-                          </button>
+                      <div>
+                        <div className="text-2xl font-black text-slate-900">{visibleForms.length}</div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Forms</div>
+                      </div>
+                    </div>
+                    <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                        <CheckCircle2 size={24}/>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-black text-emerald-600">
+                          {visibleDocs.filter(d => d.participants.every((p: any) => p.isProvided)).length}
+                        </div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Provided</div>
+                      </div>
+                    </div>
+                    <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                        <Clock size={24}/>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-black text-amber-600">
+                          {visibleDocs.filter(d => d.participants.some((p: any) => !p.isProvided)).length}
+                        </div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Attention</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section: Legal Contracts */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 px-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Legal Contracts</span>
+                      <div className="h-[1px] flex-1 bg-slate-100"></div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4">
+                      {visibleContracts.map(contract => (
+                        <div key={contract.id} className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm hover:border-indigo-200 transition-all group">
+                           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                              <div className="flex items-start gap-4 flex-1">
+                                 <div className="p-3 bg-slate-50 text-slate-600 rounded-2xl group-hover:scale-110 transition-transform">
+                                    <FileText size={24} />
+                                 </div>
+                                 <div className="min-w-0">
+                                    <h4 className="font-bold text-slate-900 text-lg truncate mb-1 flex items-center gap-2">
+                                        {contract.title}
+                                        {contract.status === ContractStatus.SIGNED && <Lock size={14} className="text-amber-500"/>}
+                                    </h4>
+                                    <p className="text-sm text-slate-500 line-clamp-1">{contract.content.replace(/<[^>]*>/g, ' ').substring(0, 80)}...</p>
+                                 </div>
+                              </div>
+
+                              <div className="flex flex-wrap gap-3 items-center">
+                                 {/* Status Cards */}
+                                 {contract.assignees && contract.assignees.length > 0 ? (
+                                   contract.assignees.map((assigneeId) => {
+                                     const assignee = allUsers.find((u) => u.id === assigneeId);
+                                     const isSigned = contract.signedBy.includes(assigneeId);
+                                     const isLocked = contract.status === ContractStatus.SIGNED;
+
+                                     // Determine role display
+                                     const isSeller = assigneeId === userProject?.sellerId;
+                                     const isBuyer = assigneeId === userProject?.buyerId;
+                                     const roleLabel = isSeller ? 'SELLER' : isBuyer ? 'BUYER' : 'ASSIGNEE';
+
+                                     return (
+                                       <div key={assigneeId} className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all ${isSigned ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-slate-100'}`}>
+                                          <div className="relative shrink-0">
+                                            <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center overflow-hidden">
+                                              {assignee?.avatar ? <img src={assignee.avatar} className="w-full h-full object-cover" /> : <UserIcon size={14} className="text-slate-400" />}
+                                            </div>
+                                            <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${isSigned ? 'bg-emerald-500' : 'bg-amber-400'}`}></div>
+                                          </div>
+
+                                          <div className="min-w-[80px]">
+                                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter leading-none mb-1">{roleLabel}</div>
+                                            <div className="text-xs font-bold text-slate-700 truncate max-w-[100px]">{assignee?.name || 'Pending...'}</div>
+                                          </div>
+
+                                          {isSigned ? (
+                                             <div className="flex items-center gap-2">
+                                                 <div className="text-[10px] font-bold text-emerald-600 bg-white px-1.5 py-0.5 rounded shadow-sm">
+                                                    {new Date().toLocaleDateString()}
+                                                 </div>
+                                                 {!isLocked || isAdmin ? (
+                                                     <button
+                                                        onClick={() => handleUndoContractSignature(contract.id, assigneeId)}
+                                                        className={`p-1 rounded text-slate-400 hover:text-red-500 transition-colors ${isLocked ? 'hover:bg-red-50' : 'hover:bg-slate-100'}`}
+                                                        title="Undo Signature"
+                                                     >
+                                                        <X size={12} />
+                                                     </button>
+                                                 ) : null}
+                                             </div>
+                                          ) : (
+                                            <div className="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded shadow-sm">
+                                              Waiting
+                                            </div>
+                                          )}
+                                       </div>
+                                     );
+                                   })
+                                 ) : (
+                                   <span
+                                     className={`text-[10px] font-bold uppercase ${
+                                       contract.status === ContractStatus.SIGNED
+                                         ? 'text-emerald-600'
+                                         : 'text-amber-600'
+                                     }`}
+                                   >
+                                     {contract.status.replace('_', ' ')}
+                                   </span>
+                                 )}
+
+                                 {/* Actions */}
+                                 <div className="flex gap-2 ml-2 pl-2 border-l border-slate-100 transition-opacity">
+                                     {contract.assignees.includes(user.id) && !contract.signedBy.includes(user.id) && contract.status !== ContractStatus.SIGNED && (
+                                       <button onClick={() => setSigningContract(contract)} className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-sm" title="Sign Contract">
+                                          <FileSignature size={16}/>
+                                       </button>
+                                     )}
+
+                                     {isAdmin && contract.status === ContractStatus.SIGNED && (
+                                        <button onClick={() => handleUnlockContract(contract)} className="p-2 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100 transition-colors border border-amber-100" title="Unlock Contract">
+                                           <LockIcon size={16}/>
+                                        </button>
+                                     )}
+
+                                     <button onClick={() => setSigningContract(contract)} className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors border border-slate-200" title="View Contract">
+                                        <Eye size={16}/>
+                                     </button>
+                                     <button onClick={() => downloadContractPDF(contract, userProject, allUsers)} className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors border border-slate-200" title="Download PDF">
+                                        <Download size={16}/>
+                                     </button>
+                                     {isAdmin && (
+                                       <>
+                                           <button onClick={() => handleToggleVisibility(contract)} className={`p-2 rounded-xl transition-colors border ${contract.visibility === 'public' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-slate-100 text-slate-400 border-slate-200'}`} title={contract.visibility === 'public' ? 'Make Private' : 'Make Public'}>
+                                              {contract.visibility === 'public' ? <Globe size={16}/> : <Shield size={16}/>}
+                                           </button>
+                                           <button onClick={() => handleDeleteContract(contract.id)} className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-100" title="Delete Contract">
+                                              <Trash2 size={16}/>
+                                           </button>
+                                       </>
+                                     )}
+                                 </div>
+                              </div>
+                           </div>
+                        </div>
+                      ))}
+                      {visibleContracts.length === 0 && (
+                        <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400 text-xs italic">
+                           No contracts visible.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                   {/* Section: Project Forms */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 px-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Information Forms</span>
+                      <div className="h-[1px] flex-1 bg-slate-100"></div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4">
+                        {visibleForms.length === 0 ? (
+                           <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400 text-xs italic">
+                              No forms visible.
+                           </div>
                         ) : (
-                          <button
-                            onClick={() => setSelectedForm(form)}
-                            className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition-all text-xs shadow-md shadow-blue-500/10"
-                          >
-                            <Edit3 size={14} /> Fill Out Form
-                          </button>
+                          visibleForms.map((f: any) => {
+                             let meta: any = {};
+                             try { meta = typeof f.meta === 'string' ? JSON.parse(f.meta) : (f.meta || {}); } catch(e){}
+
+                             const needsSeller = meta.needsSignatureFromSeller === true || meta.needsSignatureFromSeller === 'true' || meta.needSignatureFromSeller === true || meta.needSignatureFromSeller === 'true';
+                             const needsBuyer = meta.needsSignatureFromBuyer === true || meta.needsSignatureFromBuyer === 'true' || meta.needSignatureFromBuyer === true || meta.needSignatureFromBuyer === 'true';
+                             const signatures = meta.signatures || {};
+
+                             const assignedUser = allUsers.find(u => u.id === f.assignedToUserId || u.$id === f.assignedToUserId || u.userId === f.assignedToUserId);
+
+                             // Build Participants List
+                             const participants: any[] = [];
+
+                             // 1. Assignee (Submission Status)
+                             const isSubmitted = f.status === 'submitted' || f.status === 'completed' || f.status === 'closed';
+                             const allSigned = (!needsSeller || signatures.seller) && (!needsBuyer || signatures.buyer);
+                             const isLocked = (f.status === 'completed' || f.status === 'closed' || allSigned);
+
+                             if (!isSubmitted || (!needsSeller && !needsBuyer)) {
+                               const isSeller = assignedUser?.id === userProject?.sellerId;
+                               const isBuyer = assignedUser?.id === userProject?.buyerId;
+                               participants.push({
+                                 user: assignedUser,
+                                 role: isSeller ? 'SELLER' : isBuyer ? 'BUYER' : 'ASSIGNEE',
+                                 status: isSubmitted ? 'SUBMITTED' : 'PENDING',
+                                 label: isSubmitted ? 'Submitted' : 'Pending',
+                                 isComplete: isSubmitted,
+                                 date: f.updatedAt || f.createdAt
+                               });
+                             }
+
+                             // 2. Signers (if submitted)
+                             if (isSubmitted) {
+                               if (needsSeller) {
+                                 const sellerUser = allUsers.find(u => u.id === userProject?.sellerId || u.userId === userProject?.sellerId);
+                                 const signed = !!signatures.seller;
+                                 participants.push({
+                                   user: sellerUser,
+                                   role: 'SELLER',
+                                   status: signed ? 'SIGNED' : 'PENDING',
+                                   label: signed ? 'Signed' : 'Pending Sign',
+                                   isComplete: signed,
+                                   date: signatures.sellerDate || new Date().toISOString()
+                                 });
+                               }
+                               if (needsBuyer) {
+                                 const buyerUser = allUsers.find(u => u.id === userProject?.buyerId || u.userId === userProject?.buyerId);
+                                 const signed = !!signatures.buyer;
+                                 participants.push({
+                                   user: buyerUser,
+                                   role: 'BUYER',
+                                   status: signed ? 'SIGNED' : 'PENDING',
+                                   label: signed ? 'Signed' : 'Pending Sign',
+                                   isComplete: signed,
+                                   date: signatures.buyerDate || new Date().toISOString()
+                                 });
+                               }
+                             }
+
+                             return (
+                              <div key={f.id} className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm hover:border-indigo-200 transition-all group">
+                                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                                   <div className="flex items-start gap-4 flex-1">
+                                      <div className="p-3 bg-slate-50 text-slate-600 rounded-2xl group-hover:scale-110 transition-transform">
+                                         <ClipboardList size={24} />
+                                      </div>
+                                      <div className="min-w-0">
+                                         <h4 className="font-bold text-slate-900 text-lg truncate mb-1 flex items-center gap-2">
+                                            {f.title}
+                                            {isLocked && <Lock size={14} className="text-amber-500"/>}
+                                         </h4>
+                                         <p className="text-sm text-slate-500 line-clamp-1">
+                                            {isSubmitted
+                                              ? (needsSeller || needsBuyer ? 'Pending final signatures.' : 'Form successfully submitted.')
+                                              : 'Waiting for initial submission.'}
+                                         </p>
+                                      </div>
+                                   </div>
+
+                                   <div className="flex flex-wrap gap-3 items-center">
+                                      {/* Status Cards */}
+                                      {participants.map((p, idx) => (
+                                          <div key={`${f.id}-p-${idx}`} className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all ${p.isComplete ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-slate-100'}`}>
+                                              <div className="relative shrink-0">
+                                                <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center overflow-hidden">
+                                                  {p.user?.avatar ? <img src={p.user.avatar} className="w-full h-full object-cover" alt="Avatar" /> : <UserIcon size={14} className="text-slate-400" />}
+                                                </div>
+                                                <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${p.isComplete ? 'bg-emerald-500' : 'bg-amber-400'}`}></div>
+                                              </div>
+
+                                              <div className="min-w-[80px]">
+                                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter leading-none mb-1">{p.role}</div>
+                                                <div className="text-xs font-bold text-slate-700 truncate max-w-[100px]">{p.user?.name || 'Unknown'}</div>
+                                              </div>
+
+                                              {p.isComplete && p.date ? (
+                                                 <div className="flex items-center gap-2">
+                                                     <div className="text-[10px] font-bold text-emerald-600 bg-white px-1.5 py-0.5 rounded shadow-sm">
+                                                        {new Date(p.date).toLocaleDateString()}
+                                                     </div>
+                                                     {!isLocked || isAdmin ? (
+                                                         <button
+                                                             onClick={() => handleUndoForm(f, p.role)}
+                                                             className={`p-1 rounded text-slate-400 hover:text-red-500 transition-colors ${isLocked ? 'hover:bg-red-50' : 'hover:bg-slate-100'}`}
+                                                             title="Undo Completion"
+                                                         >
+                                                             <X size={12} />
+                                                         </button>
+                                                     ) : null}
+                                                 </div>
+                                              ) : (
+                                                <div className="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded shadow-sm">
+                                                  Waiting
+                                                </div>
+                                              )}
+                                          </div>
+                                      ))}
+
+                                      {/* Actions */}
+                                      <div className="flex gap-2 ml-2 pl-2 border-l border-slate-100 transition-opacity">
+                                         {isAdmin && isLocked && (
+                                            <button
+                                               onClick={() => handleUnlockForm(f)}
+                                               className="p-2 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100 transition-colors border border-amber-100"
+                                               title="Unlock Form"
+                                            >
+                                               <LockIcon size={16}/>
+                                            </button>
+                                         )}
+
+                                         <button
+                                            onClick={() => setSelectedForm(f)}
+                                            className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors border border-slate-200"
+                                            title="View Submission"
+                                         >
+                                            <Eye size={16}/>
+                                         </button>
+                                         <button
+                                            onClick={async () => {
+                                                try {
+                                                    let def = null;
+                                                    const fetchedDef = await formDefinitionsService.getByKey(f.formKey);
+                                                    if (fetchedDef) def = fetchedDef;
+
+                                                    if (def && userProject) {
+                                                       await downloadFormPDF(f, def, allUsers, userProject);
+                                                    }
+                                                } catch (e) {
+                                                    console.error("Download failed", e);
+                                                    alert("Could not generate PDF.");
+                                                }
+                                            }}
+                                            className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors border border-slate-200"
+                                            title="Download PDF"
+                                         >
+                                            <Download size={16}/>
+                                         </button>
+                                         {isAdmin && (
+                                           <button
+                                              onClick={() => handleDeleteForm(f)}
+                                              className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
+                                              title="Delete Form"
+                                           >
+                                              <Trash2 size={16}/>
+                                           </button>
+                                         )}
+                                      </div>
+                                   </div>
+                                </div>
+                              </div>
+                             );
+                          })
                         )}
-                      </div>
                     </div>
-                  );
-                })
-              ) : (
-                <div className="col-span-full py-20 text-center bg-white rounded-3xl border border-dashed border-slate-200">
-                  <div className="bg-slate-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
-                    <FormInput size={32} />
                   </div>
-                  <h3 className="text-slate-900 font-bold">No Forms Yet</h3>
-                  <p className="text-slate-500 text-sm mt-1">Your agent hasn't shared any forms for this project.</p>
+
+                  {/* Closing Requirements */}
+                  <div className="space-y-4 pt-4">
+                    <div className="flex items-center gap-2 px-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Closing Requirements</span>
+                      <div className="h-[1px] flex-1 bg-slate-100"></div>
+                    </div>
+
+                    {visibleDocs.length === 0 ? (
+                        <div className="bg-slate-50 border border-dashed border-slate-200 rounded-3xl p-12 text-center">
+                          <FileText size={48} className="text-slate-300 mx-auto mb-4" />
+                          <h4 className="font-bold text-slate-900 mb-1">No Requirements Found</h4>
+                          <p className="text-slate-500 text-sm">There are no visible document requirements.</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 gap-4">
+                          {visibleDocs.map(rd => {
+                            const isPublicDoc = !rd.visibility || rd.visibility === 'public';
+                            const providedParticipants = rd.participants.filter((p: any) => p.isProvided && (p.url || p.fileId));
+                            const viewerDocs = providedParticipants
+                                .filter((p: any) => isAdmin || isPublicDoc || p.user?.id === user.id || p.user?.$id === user.id)
+                                .map((p: any) => ({
+                                fileId: p.fileId,
+                                url: p.url,
+                                documentType: p.documentType,
+                                title: `${p.role} - ${rd.title}`,
+                                role: p.role,
+                                name: p.name
+                            }));
+
+                            return (
+                            <div key={rd.$id} className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm hover:border-indigo-200 transition-all group">
+                               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                                  <div className="flex items-start gap-4 flex-1">
+                                     <div className="p-3 bg-slate-50 text-slate-600 rounded-2xl group-hover:scale-110 transition-transform">
+                                        <FileText size={24} />
+                                     </div>
+                                     <div className="min-w-0">
+                                        <h4 className="font-bold text-slate-900 text-lg truncate mb-1">{rd.title}</h4>
+                                        <p className="text-sm text-slate-500 line-clamp-1">Mandatory document for property transfer.</p>
+                                     </div>
+                                  </div>
+
+                                  <div className="flex flex-wrap gap-3 items-center">
+                                    {rd.participants.map((p: any) => (
+                                       <div key={p.role} className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all ${p.isProvided ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-slate-100'}`}>
+                                          <div className="relative shrink-0">
+                                            <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center overflow-hidden">
+                                              {p.user?.avatar ? <img src={p.user.avatar} className="w-full h-full object-cover" alt="avatar" /> : <UserIcon size={14} className="text-slate-400" />}
+                                            </div>
+                                            <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${p.isProvided ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
+                                          </div>
+
+                                          <div className="min-w-[80px]">
+                                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter leading-none mb-1">{p.role}</div>
+                                            <div className="text-xs font-bold text-slate-700 truncate max-w-[100px]">{p.user?.name || 'Pending...'}</div>
+                                          </div>
+
+                                          {p.isProvided && p.providedAt ? (
+                                            <div className="flex items-center gap-2">
+                                                <div className="text-[10px] font-bold text-emerald-600 bg-white px-1.5 py-0.5 rounded shadow-sm">
+                                                  {new Date(p.providedAt).toLocaleDateString('en-GB')}
+                                                </div>
+                                                {(isAdmin || p.user?.id === user.id || p.user?.$id === user.id) && (
+                                                    <button
+                                                         onClick={() => handleUndoRequirement(p.fileId)}
+                                                         className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-red-500 transition-colors"
+                                                         title="Delete Upload"
+                                                     >
+                                                         <X size={12} />
+                                                     </button>
+                                                )}
+                                            </div>
+                                          ) : (
+                                            <div className="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded shadow-sm">
+                                              Waiting
+                                            </div>
+                                          )}
+                                       </div>
+                                    ))}
+
+                                    {/* Actions */}
+                                    <div className="flex gap-2 ml-2 pl-2 border-l border-slate-100 transition-opacity">
+                                       {viewerDocs.length > 0 && (
+                                           <>
+                                              <button
+                                                onClick={() => handleOpenViewer(viewerDocs, rd.title)}
+                                                className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors border border-slate-200"
+                                                title="View Documents"
+                                              >
+                                                <Eye size={16} />
+                                              </button>
+
+                                              <button
+                                                 onClick={() => {
+                                                    if (viewerDocs[0]?.url) window.open(viewerDocs[0].url, '_blank');
+                                                 }}
+                                                 className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors border border-slate-200"
+                                                 title="Download Document"
+                                              >
+                                                <Download size={16} />
+                                              </button>
+
+                                              {isAdmin && (
+                                                <button
+                                                   onClick={() => handleDeleteRequirement(viewerDocs.map((d: any) => d.fileId))}
+                                                   className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
+                                                   title="Delete All Documents"
+                                                >
+                                                   <Trash2 size={16} />
+                                                </button>
+                                              )}
+                                           </>
+                                       )}
+                                    </div>
+                                  </div>
+                               </div>
+                            </div>
+                            );
+                          })}
+                        </div>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
-          </div>
         );
+
+
+
+
+
 
       case 'notifications':
         // Compile dynamic activity feed for the user
@@ -852,10 +1514,8 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-2">
         <div className="flex gap-2 overflow-x-auto">
           {[
-            { id: 'overview', label: 'Overview', icon: Home },
+            { id: 'documents', label: 'Overview', icon: Home },
             { id: 'details', label: 'Property Details', icon: Building2 },
-            { id: 'contracts', label: 'Contracts', icon: FileSignature },
-            { id: 'forms', label: 'Forms', icon: FormInput },
             { id: 'notifications', label: 'Notifications', icon: Bell },
             { id: 'timeline', label: 'Timeline', icon: Clock }
           ].map(tab => (
@@ -1007,6 +1667,32 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
       )}
 
       {/* Signature & Reading Modal */}
+      {/* Document Viewer Modal */}
+      {viewerDocs.length > 0 && (
+        <DocumentViewer
+          documents={viewerDocs}
+          onClose={() => setViewerDocs([])}
+          user={user}
+        />
+      )}
+
+
+      {/* Form Editor Modal (Admin Only) */}
+      {showFormEditor && isAdmin && (
+        <div className="fixed inset-0 z-50 bg-white animate-in slide-in-from-bottom-5 duration-300 flex items-center justify-center">
+           <div className="bg-white p-6 rounded-2xl shadow-xl border border-slate-100 max-w-sm w-full">
+               <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-bold text-lg">Manual Form Editor</h3>
+                  <button onClick={() => setShowFormEditor(false)} className="p-1 hover:bg-slate-50 rounded-full"><X size={18}/></button>
+               </div>
+               <p className="text-slate-500 text-sm mb-6">
+                  Creating new form definitions is only available in the Project Detail view for Managers.
+               </p>
+               <button onClick={() => setShowFormEditor(false)} className="w-full py-2 bg-slate-900 text-white rounded-xl font-bold">Close</button>
+           </div>
+        </div>
+      )}
+
       {signingContract && (
         <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl overflow-hidden w-full max-w-4xl max-h-[90vh] flex flex-col">
@@ -1062,13 +1748,29 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
             <div className="p-6 border-t border-slate-100 bg-white flex flex-col md:flex-row items-center justify-center gap-8">
               {!signingContract.signedBy?.includes((user.id || user.$id)!) ? (
                 <div className="w-full flex flex-col items-center gap-4">
-                  <div className="w-full max-w-lg">
-                    <p className="text-sm font-bold text-center text-slate-400 uppercase tracking-widest mb-4">Draw your signature below</p>
-                    <SignaturePad
-                      onSave={handleSignContract}
-                      onCancel={() => setSigningContract(null)}
-                    />
-                  </div>
+                  {!showSignaturePad ? (
+                    <div className="flex flex-col items-center gap-2 w-full">
+                       <button
+                         onClick={() => setShowSignaturePad(true)}
+                         className="w-full max-w-md bg-blue-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center gap-2"
+                       >
+                         <FileSignature size={20} />
+                         Sign Document
+                       </button>
+                       <p className="text-xs text-slate-400">By clicking above, you agree to sign this legal document.</p>
+                     </div>
+                  ) : (
+                    <div className="w-full max-w-lg animate-in fade-in slide-in-from-bottom-4 duration-300">
+                      <div className="flex items-center justify-between mb-4 px-2">
+                        <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Draw your signature below</p>
+                        <button onClick={() => setShowSignaturePad(false)} className="text-xs text-slate-400 hover:text-slate-600 font-bold">Cancel</button>
+                      </div>
+                      <SignaturePad
+                        onSave={handleSignContract}
+                        onCancel={() => setShowSignaturePad(false)}
+                      />
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-4 py-4">

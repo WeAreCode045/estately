@@ -1,4 +1,4 @@
-import https from 'https';
+const https = require('https');
 
 const config = {
     endpoint: 'https://appwrite.code045.nl/v1',
@@ -42,30 +42,15 @@ function request(method, path, data) {
 
 async function run() {
     console.log('Fetching attributes...');
-    const result = await request('GET', `/databases/${config.databaseId}/collections/${config.collectionId}/attributes`);
-
-    if (result.attributes) {
-        const existing = result.attributes.map(a => a.key);
-        console.log('Existing attributes:', existing);
-
-        const needed = [
-            { key: 'visibility', type: 'string', size: 50, required: false, default: 'public' }
-        ];
-
-        for (const attr of needed) {
-            if (!existing.includes(attr.key)) {
-                console.log(`Creating missing attribute: ${attr.key}`);
-                const typePath = attr.type === 'string' ? 'string' : 'boolean';
-                const payload = { ...attr };
-                delete payload.type;
-                const createRes = await request('POST', `/databases/${config.databaseId}/collections/${config.collectionId}/attributes/${typePath}`, payload);
-                console.log(`Result for ${attr.key}:`, createRes.key ? 'Created' : createRes.message);
-            } else {
-                console.log(`Attribute ${attr.key} already exists.`);
-            }
+    try {
+        const result = await request('GET', `/databases/${config.databaseId}/collections/${config.collectionId}/attributes`);
+        if (result.attributes) {
+            console.log('Existing attributes:', result.attributes.map(a => `${a.key} (${a.type}${a.array ? '[]' : ''})`));
+        } else {
+            console.log('Result:', result);
         }
-    } else {
-        console.error('Failed to fetch attributes:', result);
+    } catch (e) {
+        console.error('Error:', e);
     }
 }
 

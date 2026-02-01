@@ -4,15 +4,32 @@ import { BUCKETS, COLLECTIONS, DATABASE_ID, databases, profileService, projectSe
 
 export const documentService = {
   async listDefinitions() {
-    return await databases.listDocuments(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS);
+    const response = await databases.listDocuments(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS);
+    // Map 'name' back to 'title' for frontend compatibility
+    const documents = response.documents.map((doc: any) => ({
+      ...doc,
+      title: doc.name || doc.title
+    }));
+    return { ...response, documents };
   },
 
   async createDefinition(data: Partial<UserDocumentDefinition>) {
-    return await databases.createDocument(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS, ID.unique(), data);
+    // Key is used as the document ID, not an attribute
+    const { key, title, ...rest } = data;
+    // Map title to name
+    const payload = { ...rest, name: title };
+
+    const id = key ? key.toLowerCase().replace(/[^a-z0-9._-]/g, '_') : ID.unique();
+    return await databases.createDocument(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS, id, payload);
   },
 
   async updateDefinition(id: string, data: Partial<UserDocumentDefinition>) {
-    return await databases.updateDocument(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS, id, data);
+    // Key cannot be updated as it's the ID
+    const { key, title, ...rest } = data;
+    // Map title to name if present
+    const payload = title ? { ...rest, name: title } : rest;
+
+    return await databases.updateDocument(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS, id, payload);
   },
 
   async deleteDefinition(id: string) {

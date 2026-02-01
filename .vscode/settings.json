@@ -1,7 +1,7 @@
 {
   // Editor Configuration
   "editor.formatOnSave": true,
-  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.defaultFormatter": "vscode.typescript-language-features",
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "explicit",
     "source.organizeImports": "explicit"
@@ -142,5 +142,9 @@
   "reactSnippets.settings.importReactOnTop": false,
 
   // Auto Save
-  "files.autoSave": "onFocusChange"
+  "files.autoSave": "onFocusChange",
+  "git.enableSmartCommit": true,
+  "github.copilot.chat.languageContext.fix.typescript.enabled": true,
+  "npm.enableRunFromFolder": true,
+  "remoteHub.gitProtocol": "ssh"
 }
