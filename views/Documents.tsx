@@ -1,20 +1,20 @@
-import React, { useState, useRef } from 'react';
-import { 
-  FileText, 
-  Search, 
-  Download, 
-  Trash2, 
-  Eye, 
-  Loader2,
-  Inbox,
+import {
+  Download,
+  Eye,
+  FileText,
   Filter,
-  X,
-  Upload
+  Inbox,
+  Loader2,
+  Search,
+  Trash2,
+  Upload,
+  X
 } from 'lucide-react';
-import { User, Project, UploadedDocument } from '../types';
+import React, { useRef, useState } from 'react';
+import DocumentViewer from '../components/DocumentViewer';
 import { profileService } from '../services/appwrite';
 import { documentService } from '../services/documentService';
-import DocumentViewer from '../components/DocumentViewer3';
+import { Project, UploadedDocument, User } from '../types';
 
 interface DocumentsViewProps {
   user: User;
@@ -85,8 +85,8 @@ const Documents: React.FC<DocumentsViewProps> = ({ user, projects, onRefresh }) 
   };
 
   const documents = user.userDocuments || [];
-  
-  const filteredDocs = documents.filter(doc => 
+
+  const filteredDocs = documents.filter(doc =>
     (doc.documentType || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (doc.name || '').toLowerCase().includes(searchTerm.toLowerCase())
   ).sort((a, b) => {
@@ -122,23 +122,21 @@ const Documents: React.FC<DocumentsViewProps> = ({ user, projects, onRefresh }) 
     try {
       setLoading(true);
       await documentService.deleteDocument(doc.fileId);
-      
-      // Rollback task status if linked to a task
-      if (doc.documentRequirementId && doc.documentRequirementId !== 'general') {
-        const profile = await profileService.getByUserId(user.id);
-        if (profile) {
-          // Need to find the taskId associated with this requirement to update task status
-          const reqs = await documentService.listRequired();
-          const req = reqs.documents.find(r => r.$id === doc.documentRequirementId);
-            if (req?.taskId) {
-              const profileDoc = await profileService.getByUserId(user.id);
-              if (profileDoc) {
-                await profileService.updateTaskStatus(profileDoc.$id, req.taskId, 'PENDING');
-              }
-            }
+
+      // Rollback task status if linked to a definition
+      if (doc.userDocumentDefinitionId && doc.userDocumentDefinitionId !== 'general') {
+        const profileDoc = await profileService.getByUserId(user.id);
+        if (profileDoc) {
+          const matchTitle = `Upload Document: ${doc.documentType || ''}`;
+          const tasks = profileDoc.assignedTasks || [];
+          const taskToReset = tasks.find((t: any) => t.title === matchTitle && t.projectId === (doc.projectId || '') && t.status === 'COMPLETED');
+
+          if (taskToReset) {
+            await profileService.updateTaskStatus(profileDoc.$id, taskToReset.taskId, 'PENDING');
+          }
         }
       }
-      
+
       onRefresh();
       alert("Document deleted and task status updated if linked.");
     } catch (error: any) {
@@ -156,7 +154,7 @@ const Documents: React.FC<DocumentsViewProps> = ({ user, projects, onRefresh }) 
           <h1 className="text-2xl font-bold text-slate-900">Document Vault</h1>
           <p className="text-slate-500 mt-1">Access and manage all your uploaded documents in one place.</p>
         </div>
-        <button 
+        <button
           onClick={() => setIsUploadModalOpen(true)}
           className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-blue-700 transition-all shadow-md flex items-center gap-2"
         >
@@ -167,9 +165,9 @@ const Documents: React.FC<DocumentsViewProps> = ({ user, projects, onRefresh }) 
       <div className="flex flex-col md:flex-row gap-4 items-center">
         <div className="relative flex-1 group w-full">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18} />
-          <input 
-            type="text" 
-            placeholder="Search documents by name..." 
+          <input
+            type="text"
+            placeholder="Search documents by name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full bg-white border border-slate-200 rounded-2xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/5 transition-all shadow-sm"
@@ -185,7 +183,7 @@ const Documents: React.FC<DocumentsViewProps> = ({ user, projects, onRefresh }) 
           <h2 className="font-bold text-slate-900">Stored Documents</h2>
           <span className="text-[10px] font-bold text-slate-400 uppercase bg-slate-50 px-3 py-1 rounded-full">{filteredDocs.length} Total</span>
         </div>
-        
+
         <div className="divide-y divide-slate-50">
           {filteredDocs.map(doc => {
             return (
@@ -213,14 +211,14 @@ const Documents: React.FC<DocumentsViewProps> = ({ user, projects, onRefresh }) 
                    >
                       <Eye size={18} />
                    </button>
-                   <a 
-                     href={documentService.getFileDownload(doc.fileId)} 
+                   <a
+                     href={documentService.getFileDownload(doc.fileId)}
                      className="p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
                      title="Download"
                    >
                       <Download size={18} />
                    </a>
-                   <button 
+                   <button
                      onClick={() => handleDelete(doc)}
                      className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
                      title="Delete"
@@ -249,18 +247,18 @@ const Documents: React.FC<DocumentsViewProps> = ({ user, projects, onRefresh }) 
               <button onClick={() => setIsUploadModalOpen(false)}><X size={24} className="text-slate-400" /></button>
             </div>
             <form onSubmit={handleGeneralUpload} className="space-y-6">
-              <div 
+              <div
                 onClick={() => fileInputRef.current?.click()}
                 className={`border-2 border-dashed rounded-[2rem] p-10 text-center cursor-pointer transition-all ${selectedFile ? 'border-blue-200 bg-blue-50' : 'border-slate-200 hover:border-blue-300 bg-slate-50'}`}
               >
                  <Upload className={`mx-auto mb-3 ${selectedFile ? 'text-blue-500' : 'text-slate-300'}`} size={32} />
                  <p className="font-bold text-slate-700">{selectedFile ? selectedFile.name : 'Select or drop file'}</p>
                  <p className="text-xs text-slate-400 mt-1">PDF, JPG, PNG or DOCX (Max 10MB)</p>
-                 <input 
-                   type="file" 
-                   hidden 
-                   ref={fileInputRef} 
-                   onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} 
+                 <input
+                   type="file"
+                   hidden
+                   ref={fileInputRef}
+                   onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
                  />
               </div>
 
@@ -268,7 +266,7 @@ const Documents: React.FC<DocumentsViewProps> = ({ user, projects, onRefresh }) 
                 <div className="space-y-3">
                   <label className="text-sm font-bold text-slate-700 block">Where does this document belong?</label>
                   <div className="grid grid-cols-1 gap-2">
-                    <button 
+                    <button
                       type="button"
                       onClick={() => setTargetProjectId('global')}
                       className={`p-4 rounded-2xl border text-left transition-all ${targetProjectId === 'global' ? 'border-blue-600 bg-blue-50' : 'border-slate-100 hover:border-slate-200'}`}
@@ -277,7 +275,7 @@ const Documents: React.FC<DocumentsViewProps> = ({ user, projects, onRefresh }) 
                       <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Passport, ID, Tax documents</p>
                     </button>
                     {projects.map(p => (
-                      <button 
+                      <button
                         key={p.id}
                         type="button"
                         onClick={() => setTargetProjectId(p.id)}
@@ -302,13 +300,13 @@ const Documents: React.FC<DocumentsViewProps> = ({ user, projects, onRefresh }) 
         </div>
       )}
       {(viewerUrl || viewerError) && (
-        <DocumentViewer 
-          url={viewerUrl} 
+        <DocumentViewer
+          url={viewerUrl}
           downloadUrl={viewerDownloadUrl}
           documentType={viewerType}
-          error={viewerError || undefined} 
-          title={viewerTitle || undefined} 
-          onClose={handleCloseViewer} 
+          error={viewerError || undefined}
+          title={viewerTitle || undefined}
+          onClose={handleCloseViewer}
         />
       )}
     </div>

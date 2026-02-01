@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { X, Download, Save, Loader2, CheckCircle2, AlertCircle, Signature as SignatureIcon } from 'lucide-react';
-import type { FormSubmission, FormDefinition } from '../types';
-import { documentService } from '../services/documentService';
-import { projectFormsService } from '../services/appwrite';
-import { formDefinitionsService } from '../services/formDefinitionsService';
-import SignaturePad from './SignaturePad';
-import { User, UserRole, Project } from '../types';
+import { AlertCircle, CheckCircle2, Download, Loader2, Save, Signature as SignatureIcon, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { projectFormsService } from '../services/appwrite';
+import { documentService } from '../services/documentService';
+import { formDefinitionsService } from '../services/formDefinitionsService';
+import type { FormDefinition, FormSubmission } from '../types';
+import { Project, User, UserRole } from '../types';
 import { downloadFormPDF } from '../utils/pdfGenerator';
+import SignaturePad from './SignaturePad';
 
 interface Props {
   submission: FormSubmission;
@@ -22,7 +22,7 @@ interface Props {
 const FormRenderer: React.FC<Props> = ({ submission, onClose, onUpdate, readOnly = false, user: propUser, allUsers, project }) => {
   const { profile } = useAuth() || {};
   const user = propUser || profile;
-  
+
   // Robust meta parsing
   let meta: any = {};
   try {
@@ -72,7 +72,24 @@ const FormRenderer: React.FC<Props> = ({ submission, onClose, onUpdate, readOnly
     setSaving(true);
     try {
       const newSignatures = { ...signatures, [role]: dataUrl };
+
+      // Check if all required signatures are now present
+      let newStatus = submission.status;
+      const hasSeller = !!newSignatures.seller;
+      const hasBuyer = !!newSignatures.buyer;
+
+      const sellerReq = needsSellerSign;
+      const buyerReq = needsBuyerSign;
+
+      // If all required signatures are now present, mark as completed
+      const allRequiredPresent = (!sellerReq || hasSeller) && (!buyerReq || hasBuyer);
+
+      if (allRequiredPresent && submission.status !== 'closed') {
+        newStatus = 'completed';
+      }
+
       const updated = await projectFormsService.updateSubmission(submission.id, {
+        status: newStatus,
         meta: {
           ...meta,
           signatures: newSignatures
@@ -89,38 +106,50 @@ const FormRenderer: React.FC<Props> = ({ submission, onClose, onUpdate, readOnly
   };
 
   // Determine effective read-only state based on settings
-  const isSubmitted = submission.status === 'submitted' || submission.status === 'closed';
+  const isSubmitted = submission.status === 'submitted' || submission.status === 'completed' || submission.status === 'closed';
   const hasSignatures = signatures && Object.keys(signatures).length > 0;
-  
+
   // Match using profile.userId (link to account $id)
   const profileId = profile?.userId || profile?.$id || user?.$id;
   const isAssignee = profileId === submission.assignedToUserId;
   const isAdmin = user?.role === UserRole.ADMIN;
 
   const allowChanges = definition?.allowChanges || 'always';
-  
+
   let effectiveReadOnly = readOnly;
-  
+
   // Forms cannot be edited by non-assignees (Admins can view but not edit unless they are the assignee)
   if (!isAssignee && !isAdmin) effectiveReadOnly = true;
-  
+
   // Assignee can edit as long as the form is not signed
   // If there are any signatures, the form is locked to protect the integrity of the signed document
   if (isAssignee && hasSignatures) effectiveReadOnly = true;
-  
+
   // Respect submission status and template settings
   if (allowChanges === 'never') effectiveReadOnly = true;
   if (allowChanges === 'before_submission' && isSubmitted && !isAdmin) effectiveReadOnly = true;
-  
+
   // Even if submitted, if no one signed yet, allow the assignee to fix errors
   if (isSubmitted && hasSignatures && !isAdmin) effectiveReadOnly = true;
 
   const handleSave = async (isFinal = false) => {
     setSaving(true);
     try {
+      // If final submission, check if it should be 'completed' or 'submitted' (waiting for signatures)
+      let newStatus = submission.status;
+      if (isFinal) {
+        const hasSeller = !!signatures.seller;
+        const hasBuyer = !!signatures.buyer;
+        const sellerReq = needsSellerSign;
+        const buyerReq = needsBuyerSign;
+        const allRequiredPresent = (!sellerReq || hasSeller) && (!buyerReq || hasBuyer);
+
+        newStatus = allRequiredPresent ? 'completed' : 'submitted';
+      }
+
       const updated = await projectFormsService.updateSubmission(submission.id, {
         data: localData,
-        status: isFinal ? 'submitted' : submission.status,
+        status: newStatus,
         meta: {
             ...meta,
             signatures
@@ -145,8 +174,8 @@ const FormRenderer: React.FC<Props> = ({ submission, onClose, onUpdate, readOnly
                 Omschrijving
               </th>
               {options.map((opt, idx) => (
-                <th 
-                  key={opt.value} 
+                <th
+                  key={opt.value}
                   className={`py-3 px-4 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 border-b border-slate-100 ${idx === options.length - 1 ? 'rounded-tr-xl' : ''}`}
                 >
                   {opt.label}
@@ -286,14 +315,14 @@ const FormRenderer: React.FC<Props> = ({ submission, onClose, onUpdate, readOnly
       case 'section':
         const childFields = field.fields || field.children || [];
         const renderedChildren = [];
-        
+
         for (let i = 0; i < childFields.length; i++) {
           const f = childFields[i];
-          
+
           if (f.type === 'radio' && f.options && f.options.length > 0) {
             const group = [f];
             const optionsJson = JSON.stringify(f.options.map((o: any) => o.label));
-            
+
             while (i + 1 < childFields.length) {
               const next = childFields[i + 1];
               if (next.type === 'radio' && next.options && JSON.stringify(next.options.map((o: any) => o.label)) === optionsJson) {
@@ -472,16 +501,17 @@ const FormRenderer: React.FC<Props> = ({ submission, onClose, onUpdate, readOnly
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button 
-              onClick={() => downloadFormPDF(submission, definition, allUsers || [], project || null)}
-              className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
+            <button
+              onClick={() => definition && project && downloadFormPDF(submission, definition as FormDefinition, allUsers || [], project)}
+              disabled={!definition || !project}
+              className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               title="Download as PDF"
             >
               <Download size={20} />
             </button>
             {!readOnly && (
-               <button 
-                 onClick={() => handleSave(false)} 
+               <button
+                 onClick={() => handleSave(false)}
                  disabled={saving}
                  className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
                  title="Save Draft"
@@ -505,7 +535,7 @@ const FormRenderer: React.FC<Props> = ({ submission, onClose, onUpdate, readOnly
                 <span className="text-[10px] text-indigo-600 font-medium">{isSubmitted ? 'Official Submission' : 'Draft with Signatures'}</span>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-4 border-r border-indigo-100 pr-6">
                 {(needsSellerSign || signatures.seller) && (
@@ -540,7 +570,7 @@ const FormRenderer: React.FC<Props> = ({ submission, onClose, onUpdate, readOnly
 
                 if (canSignAsSeller || canSignAsBuyer || canSignAsAdmin) {
                   return (
-                    <button 
+                    <button
                       onClick={() => setShowSignModal(canSignAsSeller ? 'seller' : (canSignAsBuyer ? 'buyer' : (needsSellerSign && !signatures.seller ? 'seller' : 'buyer')))}
                       className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl hover:bg-emerald-700 transition-all shadow-sm shadow-emerald-200 animate-pulse"
                     >
@@ -602,7 +632,7 @@ const FormRenderer: React.FC<Props> = ({ submission, onClose, onUpdate, readOnly
               <AlertCircle size={48} className="mb-4 text-slate-300" />
               <p className="font-medium">No valid form schema found for "{submission.formKey}".</p>
               <p className="text-xs text-slate-400 mt-2">Make sure a template with key "{submission.formKey}" exists and has a valid schema defined.</p>
-              
+
               <div className="mt-8 p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left w-full max-w-2xl overflow-auto shadow-2xl">
                 <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-2">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Debug Information</span>
@@ -641,10 +671,10 @@ const FormRenderer: React.FC<Props> = ({ submission, onClose, onUpdate, readOnly
               <h4 className="text-sm font-bold text-slate-900 mb-4">Attachments</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {submission.attachments.map((fid) => (
-                  <a 
-                    key={fid} 
-                    href={documentService.getFileDownload(fid)} 
-                    target="_blank" 
+                  <a
+                    key={fid}
+                    href={documentService.getFileDownload(fid)}
+                    target="_blank"
                     rel="noreferrer"
                     className="flex items-center justify-between bg-slate-50 hover:bg-slate-100 p-4 rounded-2xl border border-slate-200 transition-all group"
                   >
@@ -664,8 +694,8 @@ const FormRenderer: React.FC<Props> = ({ submission, onClose, onUpdate, readOnly
              </p>
              <div className="flex gap-3">
                <button onClick={onClose} className="px-6 py-2.5 text-sm font-bold text-slate-600 hover:bg-white rounded-xl transition-all">Cancel</button>
-               <button 
-                 onClick={() => handleSave(true)} 
+               <button
+                 onClick={() => handleSave(true)}
                  disabled={saving}
                  className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all"
                >

@@ -1,6 +1,6 @@
 
-import React, { useRef, useEffect, useState } from 'react';
-import { Eraser, Check } from 'lucide-react';
+import { Check, Eraser } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
 
 interface SignaturePadProps {
   onSave: (dataUrl: string) => void;
@@ -26,11 +26,13 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, onCancel }) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
-    
+
     if ('touches' in e) {
+      const touch = e.touches[0];
+      if (!touch) return { x: 0, y: 0 };
       return {
-        x: e.touches[0].clientX - rect.left,
-        y: e.touches[0].clientY - rect.top
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top
       };
     } else {
       return {
@@ -88,7 +90,7 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, onCancel }) => {
         <h3 className="text-xl font-bold text-slate-900">Sign Document</h3>
         <p className="text-sm text-slate-500">Draw your signature in the area below.</p>
       </div>
-      
+
       <div className="relative bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl overflow-hidden mb-6 h-64 cursor-crosshair">
         <canvas
           ref={canvasRef}
@@ -106,20 +108,20 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, onCancel }) => {
       </div>
 
       <div className="flex items-center justify-between gap-4">
-        <button 
+        <button
           onClick={clear}
           className="flex items-center gap-2 px-4 py-2 text-slate-500 hover:text-slate-900 font-bold text-sm transition-colors"
         >
           <Eraser size={18} /> Clear
         </button>
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={onCancel}
             className="px-6 py-2 text-slate-500 font-bold text-sm hover:text-slate-900"
           >
             Cancel
           </button>
-          <button 
+          <button
             onClick={save}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-md transition-all"
           >

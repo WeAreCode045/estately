@@ -1,8 +1,8 @@
+import { ChevronLeft, Loader2, Save } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { projectFormsService, projectService } from '../services/appwrite';
-import type { FormSubmission, CreateSubmissionParams } from '../types';
-import { ChevronLeft, Save, Loader2 } from 'lucide-react';
+import type { CreateSubmissionParams } from '../types';
 
 const FormEditor: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -10,7 +10,7 @@ const FormEditor: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [projects, setProjects] = useState<any[]>([]);
-  
+
   const [formData, setFormData] = useState({
     projectId: '',
     title: '',
@@ -98,8 +98,8 @@ const FormEditor: React.FC = () => {
             {id === 'new' ? 'New Form Submission' : 'Edit Form Submission'}
           </h1>
         </div>
-        <button 
-          onClick={handleSave} 
+        <button
+          onClick={handleSave}
           disabled={saving}
           className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-blue-700 transition-colors disabled:opacity-50"
         >
@@ -112,8 +112,8 @@ const FormEditor: React.FC = () => {
         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
           <div>
             <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 px-1">Project</label>
-            <select 
-              value={formData.projectId} 
+            <select
+              value={formData.projectId}
               onChange={e => setFormData({ ...formData, projectId: e.target.value })}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
               disabled={id !== 'new'}
@@ -125,8 +125,8 @@ const FormEditor: React.FC = () => {
 
           <div>
             <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 px-1">Title</label>
-            <input 
-              value={formData.title} 
+            <input
+              value={formData.title}
               onChange={e => setFormData({ ...formData, title: e.target.value })}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
               placeholder="e.g., Lijst van Zaken"
@@ -136,8 +136,8 @@ const FormEditor: React.FC = () => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 px-1">Status</label>
-              <select 
-                value={formData.status} 
+              <select
+                value={formData.status}
                 onChange={e => setFormData({ ...formData, status: e.target.value as any })}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
               >
@@ -153,8 +153,8 @@ const FormEditor: React.FC = () => {
 
         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
           <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 px-1">JSON Content</label>
-          <textarea 
-            value={formData.data} 
+          <textarea
+            value={formData.data}
             onChange={e => setFormData({ ...formData, data: e.target.value })}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm h-96 font-mono focus:ring-2 focus:ring-blue-500 outline-none"
             placeholder='{ "key": "value" }'

@@ -1,111 +1,63 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  FileText, 
-  Plus, 
-  Trash2, 
-  Edit2, 
-  Loader2,
-  ShieldCheck,
-  Bell,
-  CheckCircle2,
-  Clock,
-  Settings,
-  X,
-  CheckSquare,
-  Users,
-  Search,
-  Filter as FilterIcon
-} from 'lucide-react';
-import { User, RequiredDocument, TaskTemplate, UserRole, Project } from '../types';
-import { databases, DATABASE_ID, COLLECTIONS, profileService, projectService } from '../services/appwrite';
 import { ID } from 'appwrite';
+import {
+    CheckCircle2,
+    CheckSquare,
+    Edit2,
+    FileText,
+    Plus,
+    Settings,
+    ShieldCheck,
+    Trash2,
+    X
+} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { COLLECTIONS, DATABASE_ID, databases } from '../services/appwrite';
+import { UserDocumentDefinition } from '../types';
 
 interface DocumentManagementProps {
-  user: User;
+  user: any;
 }
 
-const DocumentManagement: React.FC<DocumentManagementProps> = ({ user }) => {
-  const [requiredDocs, setRequiredDocs] = useState<RequiredDocument[]>([]);
-  const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>([]);
-  const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [allProjects, setAllProjects] = useState<Project[]>([]);
+const DocumentManagement: React.FC<DocumentManagementProps> = ({ user: _user }) => {
+  const [docDefinitions, setDocDefinitions] = useState<UserDocumentDefinition[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingDoc, setEditingDoc] = useState<RequiredDocument | null>(null);
+  const [editingDoc, setEditingDoc] = useState<UserDocumentDefinition | null>(null);
 
-  const [formData, setFormData] = useState<Partial<RequiredDocument>>({
-    name: '',
-    taskId: '',
+  const [formData, setFormData] = useState<Partial<UserDocumentDefinition>>({
+    key: '',
+    title: '',
+    description: '',
     allowedFileTypes: ['pdf', 'jpg', 'png'],
-    isGlobal: true,
-    status: 'ACTIVE'
+    overrideDocumentName: '',
+    status: 'ACTIVE',
+    autoCreateTaskForAssignee: true,
+    autoAssignTo: [],
+    autoAddToNewProjects: true
   });
 
   useEffect(() => {
-    fetchRequiredDocs();
-    fetchTaskTemplates();
-    fetchUsersAndProjects();
+    fetchDocDefinitions();
   }, []);
 
-  const fetchUsersAndProjects = async () => {
-    try {
-      const [usersRes, projectsRes] = await Promise.all([
-        profileService.listAll(),
-        projectService.list()
-      ]);
-      setAllUsers(usersRes.documents.map((d: any) => ({
-        id: d.$id,
-        name: d.name,
-        email: d.email,
-        role: d.role,
-        assignedTasks: d.assignedTasks ? (typeof d.assignedTasks === 'string' ? JSON.parse(d.assignedTasks) : d.assignedTasks) : [],
-        userDocuments: d.userDocuments ? (typeof d.userDocuments === 'string' ? JSON.parse(d.userDocuments) : d.userDocuments) : []
-      } as User)));
-      setAllProjects(projectsRes.documents.map((d: any) => ({
-        id: d.$id,
-        title: d.title,
-        status: d.status,
-        sellerId: d.sellerId,
-        buyerId: d.buyerId
-      } as Project)));
-    } catch (error) {
-      console.error('Error fetching users/projects:', error);
-    }
-  };
-
-  const fetchTaskTemplates = async () => {
-    try {
-      const response = await databases.listDocuments(DATABASE_ID, COLLECTIONS.TASK_TEMPLATES);
-      setTaskTemplates(response.documents.map((d: any) => ({
-        id: d.$id,
-        title: d.title,
-        description: d.description,
-        assigneeRoles: d.assigneeRoles || [],
-        deadlineType: d.deadlineType || 'RELATIVE',
-        deadlineDays: d.deadlineDays || 7,
-        sendReminders: d.sendReminders ?? true,
-        reminderIntervalDays: d.reminderIntervalDays || 3,
-        visibilityType: d.visibilityType || 'ALWAYS'
-      } as TaskTemplate)));
-    } catch (error) {
-      console.error('Error fetching task templates:', error);
-    }
-  };
-
-  const fetchRequiredDocs = async () => {
+  const fetchDocDefinitions = async () => {
     try {
       setLoading(true);
       const response = await databases.listDocuments(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS);
-      setRequiredDocs(response.documents.map((doc: any) => ({
+      setDocDefinitions(response.documents.map((doc: any) => ({
         id: doc.$id,
-        name: doc.name,
-        taskId: doc.taskId,
+        key: doc.key,
+        title: doc.title || doc.name,
+        description: doc.description,
         allowedFileTypes: doc.allowedFileTypes || [],
-        isGlobal: doc.isGlobal ?? true,
-        status: doc.status
-      } as RequiredDocument)));
+        overrideDocumentName: doc.overrideDocumentName || '',
+        status: doc.status || 'ACTIVE',
+        autoCreateTaskForAssignee: doc.autoCreateTaskForAssignee ?? true,
+        autoAssignTo: doc.autoAssignTo || [],
+        autoAddToNewProjects: doc.autoAddToNewProjects ?? true
+      } as UserDocumentDefinition)));
     } catch (error) {
-      console.error('Error fetching required docs:', error);
+      console.error('Error fetching doc definitions:', error);
     } finally {
       setLoading(false);
     }
@@ -115,20 +67,17 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ user }) => {
     e.preventDefault();
     try {
       setLoading(true);
-      
-      const linkedTask = taskTemplates.find(t => t.id === formData.taskId);
-      if (!linkedTask) {
-        alert("Please select a task.");
-        return;
-      }
 
-      // Ensure we send ONLY required fields. Others are derived from the task template.
       const payload = {
-        name: formData.name || linkedTask.title,
+        key: formData.key,
+        title: formData.title,
+        description: formData.description,
         status: formData.status || 'ACTIVE',
-        taskId: formData.taskId,
         allowedFileTypes: formData.allowedFileTypes,
-        isGlobal: formData.isGlobal
+        overrideDocumentName: formData.overrideDocumentName,
+        autoCreateTaskForAssignee: formData.autoCreateTaskForAssignee,
+        autoAssignTo: formData.autoAssignTo,
+        autoAddToNewProjects: formData.autoAddToNewProjects
       };
 
       if (editingDoc) {
@@ -138,108 +87,109 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ user }) => {
       }
       setIsModalOpen(false);
       setEditingDoc(null);
-      fetchRequiredDocs();
+      fetchDocDefinitions();
     } catch (error: any) {
-      console.error('Error saving document req:', error);
+      console.error('Error saving document definition:', error);
       alert(`Failed to save: ${error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const deleteReq = async (id: string) => {
-    if (!window.confirm('Delete this requirement definition?')) return;
+  const deleteDef = async (id: string) => {
+    if (!window.confirm('Delete this user document definition?')) return;
     try {
       await databases.deleteDocument(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS, id);
-      fetchRequiredDocs();
+      fetchDocDefinitions();
     } catch (error) {
-      console.error('Error deleting doc req:', error);
+      console.error('Error deleting doc definition:', error);
     }
   };
-
-  const someOtherFunc = () => {}; // Temporary placeholder if needed, but I'll just remove the whole block.
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Document Requirements</h1>
-          <p className="text-slate-500 mt-1">Standardized document requirements that trigger automatically per project.</p>
+          <h1 className="text-2xl font-bold text-slate-900">User Documents</h1>
+          <p className="text-slate-500 mt-1">Define documents that participants must upload.</p>
         </div>
-        <button 
+        <button
           onClick={() => {
             setEditingDoc(null);
             setFormData({
-              name: '',
+              key: '',
+              title: '',
+              description: '',
               allowedFileTypes: ['pdf', 'jpg', 'png'],
-              taskId: '',
-              isGlobal: true,
-              status: 'ACTIVE'
+              overrideDocumentName: '',
+              status: 'ACTIVE',
+              autoCreateTaskForAssignee: true,
+              autoAssignTo: [],
+              autoAddToNewProjects: true
             });
             setIsModalOpen(true);
           }}
           className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-slate-800 transition-all shadow-md flex items-center gap-2"
         >
-          <Plus size={18} /> New Requirement
+          <Plus size={18} /> New User Document
         </button>
       </div>
 
       <div className="grid grid-cols-1 gap-4">
-        {requiredDocs.length === 0 && !loading ? (
+        {docDefinitions.length === 0 && !loading ? (
           <div className="bg-white border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center">
             <div className="bg-slate-50 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 text-slate-400">
               <FileText size={32} />
             </div>
-            <h3 className="text-lg font-bold text-slate-900">No Document Requirements</h3>
-            <p className="text-slate-500 max-w-xs mx-auto mt-2">Create document requirements and link them to user tasks.</p>
+            <h3 className="text-lg font-bold text-slate-900">No User Documents Defined</h3>
+            <p className="text-slate-500 max-w-xs mx-auto mt-2">Create document templates that trigger automatically per project.</p>
           </div>
         ) : (
-          requiredDocs.map(doc => {
-            const linkedTask = taskTemplates.find(t => t.id === doc.taskId);
+          docDefinitions.map(def => {
             return (
-              <div key={doc.id} className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all group">
+              <div key={def.id} className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all group">
                 <div className="flex items-start justify-between">
                   <div className="flex gap-4">
-                    <div className="bg-blue-50 text-blue-600 p-3 rounded-2xl">
+                    <div className="bg-emerald-50 text-emerald-600 p-3 rounded-2xl">
                       <ShieldCheck size={24} />
                     </div>
                     <div>
                       <h3 className="font-bold text-slate-900 flex items-center gap-2 text-lg">
-                        {doc.name || linkedTask?.title}
+                        {def.title} <span className="text-xs font-normal text-slate-400">({def.key})</span>
                       </h3>
                       <p className="text-slate-500 text-sm mt-1">
-                        {linkedTask?.description || 'No description provided.'}
+                        {def.description || 'No description provided.'}
                       </p>
-                      
+
                       <div className="flex flex-wrap gap-4 mt-4">
                         <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded-full">
                           <CheckSquare size={14} className="text-slate-400" />
-                          <span>Trigger: <strong>{linkedTask?.visibilityType === 'ALWAYS' ? 'PROJECT_START' : (linkedTask?.visibilityType === 'AFTER_TASK' ? 'OFFER_ACCEPTED' : 'OTHER')}</strong></span>
+                          <span>Provider: <strong>{def.autoAssignTo?.join(', ') || 'Not set'}</strong></span>
                         </div>
                         <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded-full">
                           <Settings size={14} className="text-slate-400" />
-                          <span>Provider: <strong>{linkedTask?.assigneeRoles?.join(', ') || 'Not set'}</strong></span>
+                          <span>Auto-Task: <strong>{def.autoCreateTaskForAssignee ? 'Yes' : 'No'}</strong></span>
                         </div>
-                        <div className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full ${doc.isGlobal ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'}`}>
+                        <div className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full ${def.autoAddToNewProjects ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-500'}`}>
                           <CheckCircle2 size={14} />
-                          <span>Scope: <strong>{doc.isGlobal ? 'Global' : 'Project-Specific'}</strong></span>
+                          <span>Auto-Add: <strong>{def.autoAddToNewProjects ? 'Enabled' : 'Disabled'}</strong></span>
                         </div>
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button 
+                    <button
                       onClick={() => {
-                        setEditingDoc(doc);
-                        setFormData(doc);
+                        setEditingDoc(def);
+                        setFormData(def);
                         setIsModalOpen(true);
                       }}
                       className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-blue-600 transition-colors"
                     >
                       <Edit2 size={18} />
                     </button>
-                    <button 
-                      onClick={() => deleteReq(doc.id)}
+                    <button
+                      onClick={() => deleteDef(def.id)}
                       className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-red-600 transition-colors"
                     >
                       <Trash2 size={18} />
@@ -258,10 +208,10 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ user }) => {
             <div className="p-8">
               <div className="flex items-center justify-between mb-8">
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-900">{editingDoc ? 'Edit Requirement' : 'New Document Requirement'}</h2>
+                  <h2 className="text-2xl font-bold text-slate-900">{editingDoc ? 'Edit Document' : 'New User Document'}</h2>
                   <p className="text-slate-500 mt-1">Define how this document should be collected.</p>
                 </div>
-                <button 
+                <button
                   onClick={() => setIsModalOpen(false)}
                   className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors"
                 >
@@ -271,46 +221,100 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ user }) => {
 
               <form onSubmit={handleSave} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-bold text-slate-700">Linked Task Template</label>
-                    <select 
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">Display Title</label>
+                    <input
+                      type="text"
                       required
-                      value={formData.taskId}
-                      onChange={e => setFormData({...formData, taskId: e.target.value})}
+                      value={formData.title}
+                      onChange={e => setFormData({...formData, title: e.target.value})}
+                      placeholder="e.g. Passport Copy"
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                    >
-                      <option value="">Select a Task to fulfill</option>
-                      {taskTemplates.map(t => (
-                        <option key={t.id} value={t.id}>{t.title} ({t.assigneeRoles?.join(', ')})</option>
-                      ))}
-                    </select>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest px-1">
-                      The document name, description, and provider will be pulled from this task.
-                    </p>
+                    />
                   </div>
 
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-bold text-slate-700">Override Document Name (Optional)</label>
-                    <input 
-                      type="text" 
-                      value={formData.name}
-                      onChange={e => setFormData({...formData, name: e.target.value})}
-                      placeholder="e.g. Passport Copy (leave empty to use task title)"
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">Internal Key</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.key}
+                      onChange={e => setFormData({...formData, key: e.target.value.toLowerCase().replace(/\s+/g, '_')})}
+                      placeholder="e.g. passport_copy"
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                   </div>
 
                   <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-bold text-slate-700">Description</label>
+                    <textarea
+                      value={formData.description}
+                      onChange={e => setFormData({...formData, description: e.target.value})}
+                      placeholder="Instructions for the user..."
+                      rows={2}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-bold text-slate-700">Override Storage Filename</label>
+                    <input
+                      type="text"
+                      value={formData.overrideDocumentName}
+                      onChange={e => setFormData({...formData, overrideDocumentName: e.target.value})}
+                      placeholder="e.g. IdentityDocument"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    />
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest px-1">
+                      Final filename will be: [Name]_[UserId].[ext]
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-bold text-slate-700">Auto-Assign To</label>
+                    <div className="flex gap-4">
+                      {['SELLER', 'BUYER'].map(role => (
+                        <label key={role} className="flex items-center gap-2 cursor-pointer bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200 hover:border-blue-300 transition-all">
+                          <input
+                            type="checkbox"
+                            checked={formData.autoAssignTo?.includes(role)}
+                            onChange={e => {
+                              const current = formData.autoAssignTo || [];
+                              if (e.target.checked) setFormData({...formData, autoAssignTo: [...current, role]});
+                              else setFormData({...formData, autoAssignTo: current.filter(c => c !== role)});
+                            }}
+                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-xs font-bold text-slate-600 tracking-wider">INVITE {role}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 md:col-span-2">
                     <label className="flex items-center gap-3 cursor-pointer bg-slate-50 p-4 rounded-2xl border border-slate-200 hover:border-blue-300 transition-all">
-                      <input 
+                      <input
                         type="checkbox"
-                        checked={formData.isGlobal}
-                        onChange={e => setFormData({...formData, isGlobal: e.target.checked})}
+                        checked={formData.autoCreateTaskForAssignee}
+                        onChange={e => setFormData({...formData, autoCreateTaskForAssignee: e.target.checked})}
                         className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                       />
                       <div>
-                        <p className="text-sm font-bold text-slate-700">Global Requirement</p>
-                        <p className="text-xs text-slate-500">If enabled, one upload fulfills the task across all user's projects (e.g. Passport).</p>
+                        <p className="text-sm font-bold text-slate-700">Create Task Automagically</p>
+                        <p className="text-xs text-slate-500">Creates a "Please upload [Title]" task for assigned users.</p>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-3 cursor-pointer bg-slate-50 p-4 rounded-2xl border border-slate-200 hover:border-blue-300 transition-all">
+                      <input
+                        type="checkbox"
+                        checked={formData.autoAddToNewProjects}
+                        onChange={e => setFormData({...formData, autoAddToNewProjects: e.target.checked})}
+                        className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div>
+                        <p className="text-sm font-bold text-slate-700">Add to all projects</p>
+                        <p className="text-xs text-slate-500">Automatically include this requirement in every new project.</p>
                       </div>
                     </label>
                   </div>
@@ -320,7 +324,7 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ user }) => {
                     <div className="flex flex-wrap gap-3">
                       {['pdf', 'jpg', 'png', 'docx'].map(ext => (
                         <label key={ext} className="flex items-center gap-2 cursor-pointer bg-slate-50 px-4 py-2 rounded-xl border border-slate-200 hover:border-blue-300 transition-all">
-                          <input 
+                          <input
                             type="checkbox"
                             checked={formData.allowedFileTypes?.includes(ext)}
                             onChange={e => {
@@ -338,18 +342,18 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ user }) => {
                 </div>
 
                 <div className="flex gap-4 pt-6">
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setIsModalOpen(false)}
                     className="flex-1 bg-slate-100 text-slate-600 font-bold py-4 rounded-2xl hover:bg-slate-200 transition-all"
                   >
                     Cancel
                   </button>
-                  <button 
+                  <button
                     type="submit"
                     className="flex-[3] bg-blue-600 text-white font-bold py-4 rounded-2xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2"
                   >
-                    {editingDoc ? 'Update Requirement' : 'Create Requirement'}
+                    {editingDoc ? 'Update Definition' : 'Create Definition'}
                   </button>
                 </div>
               </form>

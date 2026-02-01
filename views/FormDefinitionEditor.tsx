@@ -1,24 +1,24 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { ChevronLeft, Eye, FileText, Loader2, Save, Settings2, Sparkles } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { formDefinitionsService } from '../services/formDefinitionsService';
 import projectFormsService from '../services/projectFormsService';
 import type { FormDefinition } from '../types';
-import { ChevronLeft, Save, Loader2, Sparkles, FileText, Eye, Settings2 } from 'lucide-react';
 
-import { FormSchema, FieldType, FormField } from '../components/form-builder/types';
-import { INITIAL_SCHEMA } from '../components/form-builder/constants';
-import ComponentLibrary from '../components/form-builder/ComponentLibrary';
-import Canvas from '../components/form-builder/Canvas';
-import PropertiesPanel from '../components/form-builder/PropertiesPanel';
 import AIGeneratorModal from '../components/form-builder/AIGeneratorModal';
+import Canvas from '../components/form-builder/Canvas';
+import ComponentLibrary from '../components/form-builder/ComponentLibrary';
+import { INITIAL_SCHEMA } from '../components/form-builder/constants';
 import PDFReaderModal from '../components/form-builder/PDFReaderModal';
+import PropertiesPanel from '../components/form-builder/PropertiesPanel';
+import { FieldType, FormField, FormSchema } from '../components/form-builder/types';
 
 const FormDefinitionEditor: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     key: '',
     title: '',
@@ -161,7 +161,7 @@ const FormDefinitionEditor: React.FC = () => {
       label: `${field.label} (Copy)`,
       children: field.children ? field.children.map(c => ({ ...c, id: `field_${Date.now()}_${Math.random()}` })) : undefined
     };
-    
+
     setFormData(prev => ({
       ...prev,
       schema: {
@@ -177,13 +177,21 @@ const FormDefinitionEditor: React.FC = () => {
       const fields = [...prev.schema.fields];
       const targetIndex = direction === 'up' ? index - 1 : index + 1;
       if (targetIndex < 0 || targetIndex >= fields.length) return prev;
-      [fields[index], fields[targetIndex]] = [fields[targetIndex], fields[index]];
+
+      // Guard against undefined elements and perform safe swap
+      const a = fields[index];
+      const b = fields[targetIndex];
+      if (!a || !b) return prev;
+
+      fields[index] = b;
+      fields[targetIndex] = a;
+
       return { ...prev, schema: { ...prev.schema, fields } };
     });
   }, []);
 
-  const findFieldById = (fields: FormField[], fieldId: string | null): FormField | null => {
-    if (!fieldId) return null;
+  const findFieldById = (fields: FormField[], fieldId: string | null): FormField | undefined => {
+    if (!fieldId) return undefined;
     for (const f of fields) {
       if (f.id === fieldId) return f;
       if (f.children) {
@@ -191,7 +199,7 @@ const FormDefinitionEditor: React.FC = () => {
         if (found) return found;
       }
     }
-    return null;
+    return undefined;
   };
 
   const selectedField = findFieldById(formData.schema.fields, selectedFieldId);
@@ -200,7 +208,7 @@ const FormDefinitionEditor: React.FC = () => {
     setSaving(true);
     try {
       const parsedDefault = JSON.parse(formData.defaultData);
-      
+
       const payload: Omit<FormDefinition, 'id'> = {
         key: formData.key,
         title: formData.title,
@@ -223,7 +231,7 @@ const FormDefinitionEditor: React.FC = () => {
       }
 
       if (backfillExisting && (payload.autoAssignTo?.length || payload.autoAddToNewProjects)) {
-        // Trigger backfill in background or wait for it? 
+        // Trigger backfill in background or wait for it?
         // Better to wait or show progress if it can take time.
         // For now, call it and then navigate.
         await projectFormsService.backfillFormToProjects(savedDef);
@@ -236,6 +244,15 @@ const FormDefinitionEditor: React.FC = () => {
       setSaving(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full bg-white gap-4">
+        <Loader2 className="animate-spin text-blue-600" size={40} />
+        <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Loading Template...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
@@ -269,7 +286,7 @@ const FormDefinitionEditor: React.FC = () => {
               <Eye className="w-4 h-4" /> Preview
             </button>
           </div>
-          <button 
+          <button
             onClick={handleSave}
             disabled={saving}
             className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50 ml-2"
@@ -284,13 +301,13 @@ const FormDefinitionEditor: React.FC = () => {
       <div className="bg-white border-b border-slate-200 px-4 py-2 flex items-center gap-4 overflow-x-auto no-scrollbar shrink-0">
         <div className="flex items-center gap-2 min-w-fit">
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Title</label>
-          <input 
-            type="text" 
+          <input
+            type="text"
             className="px-2 py-1 bg-slate-50 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-blue-500 outline-none w-40"
             value={formData.title}
             onChange={e => {
               const newTitle = e.target.value;
-              const newKey = id === 'new' 
+              const newKey = id === 'new'
                 ? newTitle.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
                 : formData.key;
               setFormData(f => ({ ...f, title: newTitle, key: newKey }));
@@ -303,7 +320,7 @@ const FormDefinitionEditor: React.FC = () => {
 
         <div className="flex items-center gap-2 min-w-fit">
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Changes</label>
-          <select 
+          <select
             className="px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-1 focus:ring-blue-500 outline-none"
             value={formData.allowChanges}
             onChange={e => setFormData(f => ({ ...f, allowChanges: e.target.value as any }))}
@@ -324,25 +341,25 @@ const FormDefinitionEditor: React.FC = () => {
         </div>
 
         <div className="w-[1px] h-4 bg-slate-100" />
-        
+
         <div className="flex items-center gap-2 min-w-fit">
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Assign</label>
           <div className="flex items-center gap-2">
             {['seller', 'buyer', 'admin'].map(role => (
               <label key={role} className="flex items-center gap-1 text-xs text-slate-500 cursor-pointer border px-1.5 py-0.5 rounded bg-slate-50/50 hover:bg-white hover:text-blue-600 transition-colors">
-                <input 
-                  type="checkbox" 
+                <input
+                  type="checkbox"
                   className="rounded-sm"
-                  checked={formData.autoAssignTo.includes(role)} 
+                  checked={formData.autoAssignTo.includes(role)}
                   onChange={e => {
                     const checked = e.target.checked;
                     setFormData(f => ({
                       ...f,
-                      autoAssignTo: checked 
+                      autoAssignTo: checked
                         ? [...f.autoAssignTo, role]
                         : f.autoAssignTo.filter(r => r !== role)
                     }));
-                  }} 
+                  }}
                 />
                 <span className="capitalize">{role}</span>
               </label>
@@ -351,25 +368,25 @@ const FormDefinitionEditor: React.FC = () => {
         </div>
 
         <div className="w-[1px] h-4 bg-slate-100" />
-        
+
         <div className="flex items-center gap-2 min-w-fit">
           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Need Sign</label>
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 cursor-pointer">
-              <input 
-                type="checkbox" 
-                className="rounded-sm" 
-                checked={formData.needSignatureFromSeller} 
-                onChange={e => setFormData(f => ({ ...f, needSignatureFromSeller: e.target.checked }))} 
+              <input
+                type="checkbox"
+                className="rounded-sm"
+                checked={formData.needSignatureFromSeller}
+                onChange={e => setFormData(f => ({ ...f, needSignatureFromSeller: e.target.checked }))}
               />
               Seller
             </label>
             <label className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 cursor-pointer">
-              <input 
-                type="checkbox" 
-                className="rounded-sm" 
-                checked={formData.needSignatureFromBuyer} 
-                onChange={e => setFormData(f => ({ ...f, needSignatureFromBuyer: e.target.checked }))} 
+              <input
+                type="checkbox"
+                className="rounded-sm"
+                checked={formData.needSignatureFromBuyer}
+                onChange={e => setFormData(f => ({ ...f, needSignatureFromBuyer: e.target.checked }))}
               />
               Buyer
             </label>
@@ -380,9 +397,9 @@ const FormDefinitionEditor: React.FC = () => {
 
         <div className="flex items-center gap-2 min-w-fit ml-auto">
           <label className="flex items-center gap-1.5 text-xs font-bold text-amber-600 cursor-pointer opacity-80 hover:opacity-100">
-            <input 
-              type="checkbox" 
-              checked={backfillExisting} 
+            <input
+              type="checkbox"
+              checked={backfillExisting}
               onChange={e => setBackfillExisting(e.target.checked)}
               className="rounded-sm"
             />
@@ -396,7 +413,7 @@ const FormDefinitionEditor: React.FC = () => {
           <ComponentLibrary onAddField={addField} />
         </aside>
 
-        <Canvas 
+        <Canvas
           schema={formData.schema}
           selectedFieldId={selectedFieldId}
           isPreview={isPreview}
@@ -409,7 +426,7 @@ const FormDefinitionEditor: React.FC = () => {
         />
 
         <aside className={`w-80 shrink-0 h-full border-l border-slate-200 bg-white transition-transform duration-300 ${isPreview ? 'translate-x-full absolute right-0 z-10' : 'translate-x-0 relative'}`}>
-          <PropertiesPanel 
+          <PropertiesPanel
             field={selectedField}
             onUpdate={updateField}
             onDelete={deleteField}

@@ -1,6 +1,6 @@
+import { Home, Loader2, Lock, Mail, User } from 'lucide-react';
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Home, Mail, Lock, User, Loader2, ArrowRight } from 'lucide-react';
 
 interface RegisterProps {
     onSwitchToLogin: () => void;
@@ -47,7 +47,7 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
                                 {error}
                             </div>
                         )}
-                        
+
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1.5">Full Name</label>
                             <div className="relative">
@@ -103,8 +103,8 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
 
                         <p className="text-center text-sm text-slate-500">
                             Already have an account?{' '}
-                            <button 
-                                type="button" 
+                            <button
+                                type="button"
                                 onClick={onSwitchToLogin}
                                 className="text-blue-600 font-bold hover:underline"
                             >

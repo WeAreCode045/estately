@@ -1,6 +1,6 @@
-import { databases, DATABASE_ID, COLLECTIONS, storage, Query, BUCKETS, profileService, projectService } from './appwrite';
 import { ID } from 'appwrite';
-import type { CreateSubmissionParams, FormSubmission, FormSubmissionPatch, FormStatus, FormDefinition, ProjectTask } from '../types';
+import type { CreateSubmissionParams, FormDefinition, FormStatus, FormSubmission, FormSubmissionPatch, ProjectTask } from '../types';
+import { BUCKETS, COLLECTIONS, DATABASE_ID, databases, profileService, projectService, Query, storage } from './appwrite';
 import { formDefinitionsService } from './formDefinitionsService';
 
 function parseSubmissionDoc(doc: any): FormSubmission {
@@ -40,11 +40,11 @@ export const projectFormsService = {
 
   async listByProject(projectId: string, options?: { limit?: number; offset?: number; status?: FormStatus | FormStatus[]; assignedTo?: string }) {
     const queries: string[] = [Query.equal('projectId', projectId)];
-    
+
     if (options?.status && !Array.isArray(options.status)) {
       queries.push(Query.equal('status', options.status));
     }
-    
+
     if (options?.assignedTo) {
       queries.push(Query.equal('assignedToUserId', options.assignedTo));
     }
@@ -57,7 +57,7 @@ export const projectFormsService = {
       COLLECTIONS.PROJECT_FORMS,
       queries
     );
-    
+
     let items = response.documents.map((d: any) => parseSubmissionDoc(d));
 
     if (options?.status && Array.isArray(options.status)) {
@@ -88,7 +88,7 @@ export const projectFormsService = {
   async deleteSubmission(id: string) {
     const doc = await databases.getDocument(DATABASE_ID, COLLECTIONS.PROJECT_FORMS, id);
     const attachments = doc.attachments ? (typeof doc.attachments === 'string' ? JSON.parse(doc.attachments) : doc.attachments) : [];
-    
+
     for (const fileId of attachments) {
       try {
         await storage.deleteFile(BUCKETS.DOCUMENTS, fileId);
@@ -105,7 +105,7 @@ export const projectFormsService = {
     await this.createSubmission({
       projectId: projectId,
       formKey: def.key,
-      title: def.title,
+      title: def.title || '',
       data: def.defaultData || {},
       assignedToUserId: targetProfileId,
       status: 'assigned',
@@ -117,12 +117,16 @@ export const projectFormsService = {
 
     // 2. Handle Auto-Task Creation if enabled
     if (def.autoCreateTaskForAssignee) {
+      const dueDateIso = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10); // YYYY-MM-DD, guaranteed string
+
       const newTask: ProjectTask = {
         id: ID.unique(),
         title: `Fill out form: ${def.title}`,
         description: `Please complete the ${def.title} form as requested.`,
         category: 'Legal',
-        dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Default 3 days
+        dueDate: dueDateIso, // Default 3 days
         completed: false,
         notifyAssignee: true,
         notifyAgentOnComplete: true
@@ -132,14 +136,14 @@ export const projectFormsService = {
       const project = await projectService.get(projectId);
       const currentTasks = project.tasks ? (typeof project.tasks === 'string' ? JSON.parse(project.tasks) : project.tasks) : [];
       const updatedTasks = [...currentTasks, newTask];
-      
+
       await projectService.update(projectId, { tasks: JSON.stringify(updatedTasks) });
-      
+
       // Also assign to profile for "My Tasks" view
       await profileService.assignTask(targetProfileId, newTask.id, {
         title: newTask.title,
         description: newTask.description,
-        dueDate: newTask.dueDate,
+        dueDate: dueDateIso,
         projectId: projectId,
         status: 'PENDING'
       });
@@ -185,7 +189,7 @@ export const projectFormsService = {
 
   async listByUser(userId: string, options?: { limit?: number; offset?: number; projectId?: string }) {
     const queries: string[] = [Query.equal('submittedByUserId', userId)];
-    
+
     if (options?.projectId) queries.push(Query.equal('projectId', options.projectId));
     if (options?.limit !== undefined) queries.push(Query.limit(options.limit));
     if (options?.offset !== undefined) queries.push(Query.offset(options.offset));
@@ -201,7 +205,7 @@ export const projectFormsService = {
 
   async listAll(options?: { limit?: number; offset?: number; projectId?: string; status?: string | string[]; assignedTo?: string; search?: string }) {
     const queries: string[] = [];
-    
+
     if (options?.projectId) queries.push(Query.equal('projectId', options.projectId));
     if (options?.status && !Array.isArray(options.status)) {
       queries.push(Query.equal('status', options.status));
@@ -215,7 +219,7 @@ export const projectFormsService = {
       COLLECTIONS.PROJECT_FORMS,
       queries
     );
-    
+
     let items = response.documents.map((d: any) => parseSubmissionDoc(d));
 
     if (options?.status && Array.isArray(options.status)) {
@@ -254,13 +258,13 @@ export const projectFormsService = {
               }
             }
           } else if (def.autoAddToNewProjects) {
-            await this.createSubmission({
-              projectId: project.$id,
-              formKey: def.key,
-              title: def.title,
-              data: def.defaultData || {},
-              status: 'draft'
-            });
+          await this.createSubmission({
+            projectId: project.$id,
+            formKey: def.key,
+            title: def.title || '',
+            data: def.defaultData || {},
+            status: 'draft'
+          });
           }
         }
       }

@@ -1,4 +1,4 @@
-import { Client, Account, Databases, Storage, Teams, ID, Query, ImageGravity, ImageFormat } from 'appwrite';
+import { Account, Client, Databases, ID, ImageFormat, Query, Storage, Teams } from 'appwrite';
 
 const client = new Client();
 
@@ -10,7 +10,7 @@ export const account = new Account(client);
 export const databases = new Databases(client);
 export const storage = new Storage(client);
 export const teams = new Teams(client);
-export { client, Query };
+export { client, ID, Query };
 
 export const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
 
@@ -29,6 +29,7 @@ export const COLLECTIONS = {
     FILE_TEMPLATES: 'file_templates',
     FORM_DEFINITIONS: 'form_definitions',
     PROJECT_FORMS: import.meta.env.VITE_APPWRITE_COLLECTION_PROJECT_FORMS || 'project_forms',
+    AGENCY: 'agency',
 };
 
 export const BUCKETS = {
@@ -61,13 +62,13 @@ export const configService = {
 export const inviteService = {
     async create(data: { email: string, role: string, name?: string, projectId?: string, invitedBy: string }) {
         // Create the invitation document.
-        // To send an automated email, you should configure an Appwrite Function 
+        // To send an automated email, you should configure an Appwrite Function
         // triggered by the 'databases.*.collections.invites.documents.*.create' event.
         // The Web SDK does not support sending administrative emails directly for security reasons.
         return await databases.createDocument(
-            DATABASE_ID, 
-            COLLECTIONS.INVITES, 
-            ID.unique(), 
+            DATABASE_ID,
+            COLLECTIONS.INVITES,
+            ID.unique(),
             {
                 ...data,
                 status: 'PENDING'
@@ -127,11 +128,11 @@ export const profileService = {
             const response = await databases.listDocuments(DATABASE_ID, COLLECTIONS.PROFILES, [
                 Query.equal('userId', userId)
             ]);
-            
+
             if (response.documents.length > 0) {
                 return response.documents[0];
             }
-            
+
             // Fallback: search all (if small collection) or log
             const allProfiles = await databases.listDocuments(DATABASE_ID, COLLECTIONS.PROFILES);
             const found = allProfiles.documents.find((doc: any) => doc.userId === userId);
@@ -154,9 +155,26 @@ export const profileService = {
         return await databases.deleteDocument(DATABASE_ID, COLLECTIONS.PROFILES, id);
     },
     async assignTask(profileId: string, taskId: string, extra?: { status?: 'PENDING' | 'COMPLETED', completedAt?: string, projectId?: string, title?: string, description?: string, dueDate?: string }) {
-        const profile = await databases.getDocument(DATABASE_ID, COLLECTIONS.PROFILES, profileId);
+        let profile: any;
+        let actualProfileId = profileId;
+
+        try {
+            profile = await databases.getDocument(DATABASE_ID, COLLECTIONS.PROFILES, profileId);
+        } catch (e) {
+            // Fallback: try to find by userId if the ID provided was a userId
+            const res = await databases.listDocuments(DATABASE_ID, COLLECTIONS.PROFILES, [
+                Query.equal('userId', profileId)
+            ]);
+            if (res.documents.length > 0) {
+                profile = res.documents[0];
+                actualProfileId = profile.$id;
+            } else {
+                throw e;
+            }
+        }
+
         const tasks = profile.assignedTasks ? (typeof profile.assignedTasks === 'string' ? JSON.parse(profile.assignedTasks) : profile.assignedTasks) : [];
-        
+
         const isAlreadyAssigned = tasks.some((t: any) => t.taskId === taskId && t.projectId === extra?.projectId);
         if (isAlreadyAssigned) return;
 
@@ -167,14 +185,30 @@ export const profileService = {
             projectId: extra?.projectId || 'personal',
             ...extra
         });
-        return await databases.updateDocument(DATABASE_ID, COLLECTIONS.PROFILES, profileId, {
+        return await databases.updateDocument(DATABASE_ID, COLLECTIONS.PROFILES, actualProfileId, {
             assignedTasks: JSON.stringify(tasks)
         });
     },
     async updateTaskStatus(profileId: string, taskId: string, status: 'PENDING' | 'COMPLETED') {
-        const profile = await databases.getDocument(DATABASE_ID, COLLECTIONS.PROFILES, profileId);
+        let profile: any;
+        let actualProfileId = profileId;
+
+        try {
+            profile = await databases.getDocument(DATABASE_ID, COLLECTIONS.PROFILES, profileId);
+        } catch (e) {
+            const res = await databases.listDocuments(DATABASE_ID, COLLECTIONS.PROFILES, [
+                Query.equal('userId', profileId)
+            ]);
+            if (res.documents.length > 0) {
+                profile = res.documents[0];
+                actualProfileId = profile.$id;
+            } else {
+                throw e;
+            }
+        }
+
         let tasks = profile.assignedTasks ? (typeof profile.assignedTasks === 'string' ? JSON.parse(profile.assignedTasks) : profile.assignedTasks) : [];
-        
+
         tasks = tasks.map((t: any) => {
             if (t.taskId === taskId) {
                 return {
@@ -185,44 +219,122 @@ export const profileService = {
             }
             return t;
         });
-        
-        return await databases.updateDocument(DATABASE_ID, COLLECTIONS.PROFILES, profileId, {
+
+        return await databases.updateDocument(DATABASE_ID, COLLECTIONS.PROFILES, actualProfileId, {
             assignedTasks: JSON.stringify(tasks)
         });
     },
-    async addDocument(profileId: string, metadata: { fileId: string, name: string, documentRequirementId: string, documentType: string, projectId: string, url: string }) {
-        const profile = await databases.getDocument(DATABASE_ID, COLLECTIONS.PROFILES, profileId);
+    async addDocument(profileId: string, metadata: { fileId: string, name: string, userDocumentDefinitionId: string, documentType: string, projectId: string, url: string }) {
+        let profile: any;
+        let actualProfileId = profileId;
+
+        try {
+            profile = await databases.getDocument(DATABASE_ID, COLLECTIONS.PROFILES, profileId);
+        } catch (e) {
+            const res = await databases.listDocuments(DATABASE_ID, COLLECTIONS.PROFILES, [
+                Query.equal('userId', profileId)
+            ]);
+            if (res.documents.length > 0) {
+                profile = res.documents[0];
+                actualProfileId = profile.$id;
+            } else {
+                throw e;
+            }
+        }
+
         const docs = profile.userDocuments ? (typeof profile.userDocuments === 'string' ? JSON.parse(profile.userDocuments) : profile.userDocuments) : [];
-        
+
         docs.push({
             ...metadata,
             uploadedAt: new Date().toISOString(),
         });
-        
-        return await databases.updateDocument(DATABASE_ID, COLLECTIONS.PROFILES, profileId, {
+
+        return await databases.updateDocument(DATABASE_ID, COLLECTIONS.PROFILES, actualProfileId, {
             userDocuments: JSON.stringify(docs)
         });
     },
     async deleteDocumentReference(profileId: string, fileId: string) {
-        const profile = await databases.getDocument(DATABASE_ID, COLLECTIONS.PROFILES, profileId);
+        let profile: any;
+        let actualProfileId = profileId;
+
+        try {
+            profile = await databases.getDocument(DATABASE_ID, COLLECTIONS.PROFILES, profileId);
+        } catch (e) {
+            const res = await databases.listDocuments(DATABASE_ID, COLLECTIONS.PROFILES, [
+                Query.equal('userId', profileId)
+            ]);
+            if (res.documents.length > 0) {
+                profile = res.documents[0];
+                actualProfileId = profile.$id;
+            } else {
+                throw e;
+            }
+        }
+
         let docs = profile.userDocuments ? (typeof profile.userDocuments === 'string' ? JSON.parse(profile.userDocuments) : profile.userDocuments) : [];
-        
+
         docs = docs.filter((d: any) => d.fileId !== fileId);
-        
-        return await databases.updateDocument(DATABASE_ID, COLLECTIONS.PROFILES, profileId, {
+
+        return await databases.updateDocument(DATABASE_ID, COLLECTIONS.PROFILES, actualProfileId, {
             userDocuments: JSON.stringify(docs)
         });
     }
 };
 
+const parseContractDoc = (doc: any) => {
+    let signatureData = {};
+    if (typeof doc.signatureData === 'string' && doc.signatureData.trim() !== '') {
+        try {
+            signatureData = JSON.parse(doc.signatureData);
+        } catch (e) {
+            signatureData = {};
+        }
+    } else if (typeof doc.signatureData === 'object' && doc.signatureData !== null) {
+        signatureData = doc.signatureData;
+    }
+
+    return {
+        ...doc,
+        id: doc.$id,
+        signatureData
+    };
+};
+
 export const contractService = {
     async listByProject(projectId: string) {
-        return await databases.listDocuments(DATABASE_ID, COLLECTIONS.CONTRACTS, [
+        const response = await databases.listDocuments(DATABASE_ID, COLLECTIONS.CONTRACTS, [
             Query.equal('projectId', projectId)
         ]);
+
+        response.documents = response.documents.map(parseContractDoc);
+        return response;
     },
     async create(data: any) {
-        return await databases.createDocument(DATABASE_ID, COLLECTIONS.CONTRACTS, ID.unique(), data);
+        const payload = { ...data };
+        if (payload.signatureData && typeof payload.signatureData === 'object') {
+            payload.signatureData = JSON.stringify(payload.signatureData);
+        }
+        return await databases.createDocument(DATABASE_ID, COLLECTIONS.CONTRACTS, ID.unique(), payload);
+    },
+    async sign(contractId: string, userId: string, signatureData: string) {
+        // Fetch current document
+        const currentDoc = await databases.getDocument(DATABASE_ID, COLLECTIONS.CONTRACTS, contractId);
+        const current = parseContractDoc(currentDoc);
+
+        const signedBy = Array.from(new Set([...(current.signedBy || []), userId]));
+        const allSignatureData = { ...(current.signatureData || {}), [userId]: signatureData };
+
+        // Determine if all assignees have signed
+        const assignees = current.assignees || [];
+        const isAllSigned = assignees.length > 0 && assignees.every((id: string) => signedBy.includes(id));
+
+        const updateData: any = {
+            signedBy,
+            signatureData: JSON.stringify(allSignatureData),
+            status: isAllSigned ? 'SIGNED' : current.status
+        };
+
+        return await databases.updateDocument(DATABASE_ID, COLLECTIONS.CONTRACTS, contractId, updateData);
     }
 };
 

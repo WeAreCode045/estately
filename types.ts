@@ -35,9 +35,9 @@ export interface AssignedTask {
 export interface UploadedDocument {
   fileId: string;
   name: string; // Filename
-  documentRequirementId: string; // Linking to RequiredDocument's ID
+  userDocumentDefinitionId: string; // Linking to UserDocumentDefinition's ID
   documentType: string; // e.g., "Passport", "Contract", or "Personal"
-  projectId: string; // "global" or specific projectId
+  projectId: string;
   url: string;
   uploadedAt: string;
 }
@@ -45,18 +45,42 @@ export interface UploadedDocument {
 export interface User {
   id: string;
   userId?: string;
+  $id?: string;
   name: string;
   email: string;
   role: UserRole;
   phone?: string;
   address?: string;
   avatar?: string;
-  bio?: string;
   notificationPreference?: 'EMAIL' | 'APP' | 'BOTH';
   assignedTasks?: AssignedTask[]; // JSON Array in Profile
   userDocuments?: UploadedDocument[]; // JSON Array in Profile (renamed from assignedDocuments for consistency)
   status?: 'ACTIVE' | 'PENDING_INVITE';
   projectId?: string;
+
+  // Commercial & Legal Profile (New)
+  firstName?: string;
+  lastName?: string;
+  city?: string;
+  postalCode?: string;
+  country?: string;
+  birthday?: string;
+  birthPlace?: string;
+  idNumber?: string;
+  vatNumber?: string;
+  bankAccount?: string;
+  roleData?: string; // Original role string from profile
+}
+
+export interface Agency {
+  id: string;
+  $id?: string;
+  name: string;
+  logo?: string;
+  address: string;
+  bankAccount: string;
+  vatCode: string;
+  agentIds: string[];
 }
 
 export interface TaskTemplate {
@@ -64,7 +88,7 @@ export interface TaskTemplate {
   title: string;
   description?: string;
   category: 'Legal' | 'Financial' | 'Inspection' | 'General';
-  assigneeRoles: UserRole[]; 
+  assigneeRoles: UserRole[];
   showTaskToUser: boolean;
   sendReminders: boolean;
   notifyAssignee: boolean;
@@ -79,26 +103,34 @@ export interface TaskTemplate {
   visibilityTaskId?: string;
 }
 
-export interface RequiredDocument {
+export interface UserDocumentDefinition {
   id: string;
-  name: string;
-  taskId: string; 
+  $id?: string;
+  key: string;
+  title: string;
+  description?: string;
   allowedFileTypes?: string[];
-  isGlobal?: boolean;
+  overrideDocumentName?: string;
   status: 'ACTIVE' | 'ARCHIVED';
+
+  // Settings
+  autoCreateTaskForAssignee?: boolean;
+  autoAssignTo?: string[];
+  autoAddToNewProjects?: boolean;
 }
 
-export interface ProjectDocument {
-  id: string;
-  projectId: string;
-  requiredDocumentId?: string;
+export interface UserDocument {
+  id?: string;
+  fileId: string;
   name: string;
-  description: string;
-  providedBy: UserRole;
-  status: 'PENDING' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
-  fileId?: string;
-  fileUrl?: string;
-  uploadedAt?: string;
+  url: string;
+  documentType: string;
+  userDocumentDefinitionId: string;
+  projectId: string;
+  uploadedAt: string;
+  status?: 'PENDING' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+  description?: string;
+  providedBy?: UserRole;
   deadline?: string;
   remindersSent?: number;
 }
@@ -110,6 +142,9 @@ export interface PropertyDetails {
   bedrooms: number;
   bathrooms: number;
   sqft: number;
+  buildYear?: number;
+  livingArea?: number;
+  garages?: number;
   images: string[];
 }
 
@@ -143,7 +178,16 @@ export interface AgendaEvent {
 export interface ContractTemplate {
   id: string;
   name: string;
-  content: string; 
+  content: string;
+  description?: string;
+
+  // Settings (Same as forms)
+  needSignatureFromSeller?: boolean;
+  needSignatureFromBuyer?: boolean;
+  autoCreateTaskForAssignee?: boolean;
+  autoAssignTo?: string[];
+  autoAddToNewProjects?: boolean;
+  allowChanges?: 'always' | 'before_submission' | 'never';
 }
 
 export interface Message {
@@ -159,10 +203,10 @@ export interface Contract {
   title: string;
   content: string;
   status: ContractStatus;
-  assignees: string[]; 
-  signedBy: string[]; 
+  assignees: string[];
+  signedBy: string[];
   createdAt: string;
-  signatureData?: Record<string, string>; 
+  signatureData?: Record<string, string>;
 }
 
 export interface Project {
@@ -179,13 +223,16 @@ export interface Project {
   contractIds: string[];
   messages: Message[];
   coverImageId?: string;
+  handover_date?: string;
+  referenceNumber?: string;
+  createdAt?: string;
 }
 
 // ----------------------------
 // Project Forms types
 // ----------------------------
 
-export type FormStatus = 'draft' | 'submitted' | 'assigned' | 'closed' | 'rejected';
+export type FormStatus = 'draft' | 'submitted' | 'assigned' | 'completed' | 'closed' | 'rejected';
 
 export interface ProjectForm {
   id: string; // document $id
@@ -205,7 +252,7 @@ export interface FormDefinition {
   schema?: Record<string, any>; // JSON schema or UI schema
   defaultData?: Record<string, any>;
   role?: UserRole; // Who usually fills this in
-  
+
   // Settings
   needSignatureFromSeller?: boolean;
   needSignatureFromBuyer?: boolean;

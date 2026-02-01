@@ -1,32 +1,60 @@
-import { databases, storage, DATABASE_ID, COLLECTIONS, Query, profileService, BUCKETS } from './appwrite';
 import { ID } from 'appwrite';
-import { RequiredDocument, UserRole } from '../types';
+import { ProjectTask, UserDocumentDefinition } from '../types';
+import { BUCKETS, COLLECTIONS, DATABASE_ID, databases, profileService, projectService, storage } from './appwrite';
 
 export const documentService = {
-  async listRequired() {
+  async listDefinitions() {
     return await databases.listDocuments(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS);
   },
 
-  async createRequired(data: Partial<RequiredDocument>) {
-    const { id, createTask, showTaskInProject, linkedTaskTemplateId, ...coreData } = data as any;
-    const dataToSave = {
-      ...coreData,
-      taskCreationMoment: showTaskInProject || (data as any).taskCreationMoment || 'PROJECT_CREATION'
-    };
-    return await databases.createDocument(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS, ID.unique(), dataToSave);
+  async createDefinition(data: Partial<UserDocumentDefinition>) {
+    return await databases.createDocument(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS, ID.unique(), data);
   },
 
-  async updateRequired(id: string, data: Partial<RequiredDocument>) {
-    const { id: dummy, createTask, showTaskInProject, linkedTaskTemplateId, ...coreData } = data as any;
-    const dataToSave = {
-      ...coreData,
-      taskCreationMoment: showTaskInProject || (data as any).taskCreationMoment || 'PROJECT_CREATION'
-    };
-    return await databases.updateDocument(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS, id, dataToSave);
+  async updateDefinition(id: string, data: Partial<UserDocumentDefinition>) {
+    return await databases.updateDocument(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS, id, data);
   },
 
-  async deleteRequired(id: string) {
+  async deleteDefinition(id: string) {
     return await databases.deleteDocument(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS, id);
+  },
+
+  async executeAssignment(def: UserDocumentDefinition, projectId: string, targetUserId: string) {
+    try {
+      // 1. Create a task for the user
+      if (def.autoCreateTaskForAssignee) {
+        const taskId = ID.unique();
+        const newTask: ProjectTask = {
+          id: taskId,
+          title: `Upload Document: ${def.title}`,
+          description: def.description || `Please upload your ${def.title}.`,
+          category: 'Legal',
+          dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+          completed: false,
+          notifyAssignee: true,
+          notifyAgentOnComplete: true
+        };
+
+        // Update project tasks
+        const project = await projectService.get(projectId);
+        if (project) {
+          const updatedTasks = [...project.tasks, newTask];
+          await projectService.update(projectId, { tasks: JSON.stringify(updatedTasks) });
+        }
+
+        // Assign to profile
+        await profileService.assignTask(targetUserId, taskId, {
+          title: newTask.title,
+          description: newTask.description,
+          dueDate: newTask.dueDate,
+          projectId: projectId,
+          status: 'PENDING'
+        });
+      }
+    } catch (error) {
+      console.error('Error during document assignment:', error);
+      throw error;
+    }
   },
 
   getFileView(fileId: string) {
@@ -61,7 +89,7 @@ export const documentService = {
       // 1. Get file metadata to determine type
       const file = await this.getFile(fileId);
       const isImage = file.mimeType.startsWith('image/');
-      
+
       // 2. Return preview for images, view for others
       if (isImage) {
         return this.getFilePreview(fileId);
@@ -96,103 +124,78 @@ export const documentService = {
     }
   },
 
-  async syncProjectRequirements(projectId: string, trigger: 'PROJECT_CREATION' | 'MANUAL') {
-    // 1. Get project details to identify Seller/Buyer
-    let projectDoc: any;
+  async autoProvisionDocuments(projectId: string, project: any) {
     try {
-      projectDoc = await databases.getDocument(DATABASE_ID, COLLECTIONS.PROJECTS, projectId);
-    } catch (e) {
-      console.error('Project not found during sync:', e);
-      return [];
-    }
+      const defRes = await this.listDefinitions();
+      const defs = defRes.documents as any[] as UserDocumentDefinition[];
+      const autoAddDefs = defs.filter(d => d.autoAddToNewProjects);
 
-    // 2. Get all active requirements
-    const requirementsRes = await this.listRequired();
-    const requirements = requirementsRes.documents as any[];
+      for (const def of autoAddDefs) {
+        if (def.autoAssignTo && def.autoAssignTo.length > 0) {
+          for (const role of def.autoAssignTo) {
+            let targetUserId = '';
+            // Match role to project participants
+            if (role === 'seller') targetUserId = project.sellerId;
+            else if (role === 'buyer') targetUserId = project.buyerId || '';
+            else if (role === 'admin') targetUserId = project.managerId;
 
-    // 3. We also need task template details to check user roles
-    const tasksRes = await databases.listDocuments(DATABASE_ID, COLLECTIONS.TASK_TEMPLATES);
-    const taskTemplates = tasksRes.documents as any[];
-
-    const results = [];
-    for (const req of requirements) {
-      const template = taskTemplates.find(t => t.$id === req.taskId);
-      if (!template) continue;
-
-      const roles = template.assigneeRoles || [];
-      
-      for (const role of roles) {
-        const userId = role === 'SELLER' ? projectDoc.sellerId : (role === 'BUYER' ? projectDoc.buyerId : null);
-        if (!userId) continue;
-
-        try {
-          const profile = await profileService.getByUserId(userId);
-          if (profile) {
-            const userDocs = profile.userDocuments ? (typeof profile.userDocuments === 'string' ? JSON.parse(profile.userDocuments) : profile.userDocuments) : [];
-            
-            const alreadyHasDoc = userDocs.some((d: any) => {
-              if (d.documentRequirementId !== req.$id) return false;
-              if (req.isGlobal) return true;
-              return d.projectId === projectId;
-            });
-            
-            await profileService.assignTask(profile.$id, req.taskId, {
-              status: alreadyHasDoc ? 'COMPLETED' : 'PENDING'
-            });
-            results.push({ userId, taskId: req.taskId, status: 'PROCESSED' });
+            if (targetUserId) {
+              await this.executeAssignment(def, projectId, targetUserId);
+            }
           }
-        } catch (profileError) {
-          console.error('Error syncing requirement for profile:', profileError);
         }
       }
+    } catch (err) {
+      console.error('Error auto-provisioning documents:', err);
     }
-
-    return results;
   },
 
-  async uploadDocument(userId: string, requiredDocId: string, projectId: string, file: File) {
+  async uploadDocument(userId: string, definitionId: string, projectId: string, file: File) {
     const profile = await profileService.getByUserId(userId);
     if (!profile) throw new Error('User profile not found');
 
     let documentType = 'Personal';
-    let taskId = null;
-    let isGlobal = false;
+    let overrideName = '';
 
-    if (requiredDocId !== 'general') {
+    if (definitionId !== 'general') {
       try {
-        const reqDoc = await databases.getDocument(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS, requiredDocId);
-        documentType = reqDoc.documentType || 'Personal';
-        taskId = reqDoc.taskId;
-        isGlobal = reqDoc.isGlobal;
+        const def = await databases.getDocument(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS, definitionId);
+        documentType = def.title || 'Personal';
+        overrideName = def.overrideDocumentName || '';
       } catch (e) {
-        console.warn('Could not find required document definition:', e);
+        console.warn('Could not find document definition:', e);
       }
     }
 
-    // 1. Upload to storage
-    const uploadedFile = await storage.createFile(BUCKETS.DOCUMENTS, ID.unique(), file);
-    
-    // 2. Get the file URL (with mode=admin suffix)
+    // 1. Rename file for storage: [OverrideDocumentName]_[userId].[ext]
+    const extension = file.name.split('.').pop();
+    const storageName = overrideName ? `${overrideName}_${userId}.${extension}` : file.name;
+    const renamedFile = new File([file], storageName, { type: file.type });
+
+    // 2. Upload to storage
+    const uploadedFile = await storage.createFile(BUCKETS.DOCUMENTS, ID.unique(), renamedFile);
+
+    // 3. Get the file URL
     const fileUrl = this.getFileView(uploadedFile.$id);
 
-    // 3. Update User Profile
+    // 4. Update User Profile
     try {
       await profileService.addDocument(profile.$id, {
           fileId: uploadedFile.$id,
-          name: file.name,
-          documentRequirementId: requiredDocId,
+          name: storageName,
+          userDocumentDefinitionId: definitionId,
           documentType,
-          projectId: isGlobal ? 'global' : projectId,
+          projectId: projectId,
           url: fileUrl
       });
-      
-      // 4. Mark linked task as COMPLETED if it exists
-      if (taskId) {
-          // If global, we may want to update across all projects. 
-          // profileService.updateTaskStatus currently takes profileId and taskId.
-          // In the current logic, AssignedTask is in the profile but doesn't have a projectId.
-          // So updateTaskStatus(profileId, taskId, 'COMPLETED') ALREADY updates it globally for that user.
-          await profileService.updateTaskStatus(profile.$id, taskId, 'COMPLETED');
+
+      // 5. Try to find and complete the associated task
+      const matchTitle = `Upload Document: ${documentType}`;
+      const tasks = profile.assignedTasks || [];
+      const taskToComplete = tasks.find((t: any) => t.title === matchTitle && t.projectId === projectId && t.status === 'PENDING');
+
+      if (taskToComplete) {
+          await profileService.updateTaskStatus(profile.$id, taskToComplete.taskId, 'COMPLETED');
       }
     } catch (profileError) {
       console.error('Could not log document in user profile:', profileError);

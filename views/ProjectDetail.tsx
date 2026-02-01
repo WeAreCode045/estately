@@ -1,56 +1,66 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { 
-  ArrowLeft, 
-  MapPin, 
-  Bed, 
-  Bath, 
-  Maximize, 
-  Calendar as CalendarIcon, 
-  CheckCircle, 
-  Circle, 
-  Plus, 
+import { ID } from 'appwrite';
+import {
+  ArrowLeft,
+  Bath,
+  Bed,
   Bot,
-  FileText,
-  User as UserIcon,
-  MessageSquare,
-  Sparkles,
-  ClipboardList,
-  History,
-  Signature as SignatureIcon,
+  Calendar,
+  Car,
+  Check,
+  CheckCircle,
   CheckCircle2,
-  Clock,
-  X,
-  AlertCircle,
-  Eye,
-  ExternalLink,
-  Map as MapIcon,
-  Loader2,
-  Download,
-  Library,
+  CheckSquare,
+  ChevronLeft,
   ChevronRight,
-  Send,
+  Circle,
+  ClipboardList,
+  Clock,
+  Download,
+  Edit2,
+  Eye,
+  FileText,
+  History,
+  Home,
+  Image as ImageIcon,
+  Library,
+  Loader2,
+  Map as MapIcon,
+  MapPin,
+  Maximize2,
+  MessageSquare,
+  Phone,
+  Plus,
+  Signature as SignatureIcon,
+  Sparkles,
+  Square,
+  User as UserIcon,
   UserPlus,
   Users as UsersGroupIcon,
-  Edit2,
-  Image as ImageIcon
+  X,
+  Zap
 } from 'lucide-react';
-import { Project, User, UserRole, Contract, ContractStatus, ContractTemplate, Message, TaskTemplate, ProjectTask, RequiredDocument } from '../types';
-import { documentService } from '../services/documentService';
-import { GeminiService, GroundingLink } from '../services/geminiService';
-import { MOCK_USERS } from '../constants';
-import SignaturePad from '../components/SignaturePad';
-import DocumentViewer from '../components/DocumentViewer3';
-import FormListItem from '../components/FormListItem';
-import FormEditor from '../components/FormEditor';
-import FormRenderer from '../components/FormRenderer';
-import { downloadContractPDF } from '../utils/pdfGenerator';
-import { projectService, databases, DATABASE_ID, COLLECTIONS, client, inviteService, projectFormsService, profileService } from '../services/appwrite';
-import { formDefinitionsService } from '../services/formDefinitionsService';
-import { ID, Query } from 'appwrite';
-import { useSettings } from '../utils/useSettings';
-import type { FormSubmission, FormDefinition } from '../types';
+import React, { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import AddressAutocomplete from '../components/AddressAutocomplete';
+import DocumentViewer from '../components/DocumentViewer';
+import FormEditor from '../components/FormEditor';
+import FormListItem from '../components/FormListItem';
+import FormRenderer from '../components/FormRenderer';
+import SignaturePad from '../components/SignaturePad';
+import { COLLECTIONS, DATABASE_ID, client, databases, inviteService, profileService, projectFormsService, projectService } from '../services/appwrite';
+import { documentService } from '../services/documentService';
+import { formDefinitionsService } from '../services/formDefinitionsService';
+import { GeminiService, GroundingLink } from '../services/geminiService';
+import type { FormDefinition, FormSubmission } from '../types';
+import { Contract, ContractStatus, ContractTemplate, Project, ProjectTask, TaskTemplate, User, UserDocumentDefinition, UserRole } from '../types';
+import { downloadContractPDF } from '../utils/pdfGenerator';
+import { useSettings } from '../utils/useSettings';
+
+const TabButton: React.FC<{ active: boolean, onClick: () => void, icon: React.ReactNode, label: string }> = ({ active, onClick, icon, label }) => (
+  <button onClick={onClick} className={`flex items-center gap-2 px-8 py-5 text-sm font-bold border-b-2 transition-all shrink-0 ${active ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+    {icon} {label}
+  </button>
+);
 
 interface ProjectDetailProps {
   projects: Project[];
@@ -70,41 +80,58 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
   const project = projects.find(p => p.id === id);
   const projectContracts = contracts.filter(c => c.projectId === id);
   const isAdmin = user.role === UserRole.ADMIN;
-  
-    const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'contracts' | 'messages' | 'team' | 'documents' | 'forms'>('overview');
+
+    const [activeTab, setActiveTab] = useState<'overview' | 'team' | 'documents' | 'property'>('overview');
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+    const nextImage = () => {
+      if (project?.property?.images && project.property.images.length > 0) {
+        setCurrentImageIndex((prev) => (prev + 1) % (project?.property?.images?.length || 1));
+      }
+    };
+
+    const prevImage = () => {
+      if (project?.property?.images && project.property.images.length > 0) {
+        const len = project.property.images.length;
+        setCurrentImageIndex((prev) => (prev - 1 + len) % len);
+      }
+    };
   const [isGenerating, setIsGenerating] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [aiInsight, setAiInsight] = useState<string | null>(null);
+  const [showAIModal, setShowAIModal] = useState(false);
   const [locationInsights, setLocationInsights] = useState<{ text: string, links: GroundingLink[] } | null>(null);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [signingContractId, setSigningContractId] = useState<string | null>(null);
-  const [newMessage, setNewMessage] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isSending, setIsSending] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteRole, setInviteRole] = useState<'BUYER' | 'SELLER'>('BUYER');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteName, setInviteName] = useState('');
-  
+  const [isSending, setIsSending] = useState(false);
+
   const { googleApiKey, defaultAgentId } = useSettings();
-  const [isEditing, setIsEditing] = useState(false);
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<any>(null);
+  const [showBulkSpecsModal, setShowBulkSpecsModal] = useState(false);
+  const [showGeneralInfoModal, setShowGeneralInfoModal] = useState(false);
+  const [tempAddress, setTempAddress] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [projectAddress, setProjectAddress] = useState(project?.property?.address || '');
-  const [coverImage, setCoverImage] = useState<File | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [projectDocs, setProjectDocs] = useState<any[]>([]);
-    const [forms, setForms] = useState<any[]>([]);
-    const [isLoadingForms, setIsLoadingForms] = useState(false);
-    const [formDefinitions, setFormDefinitions] = useState<FormDefinition[]>([]);
-    const [selectedTemplate, setSelectedTemplate] = useState<FormDefinition | null>(null);
-    const [isAssigningForm, setIsAssigningForm] = useState(false);
-    const [showFormEditor, setShowFormEditor] = useState(false);
+
+
+  const [forms, setForms] = useState<any[]>([]);
+  const [isLoadingForms, setIsLoadingForms] = useState(false);
+  const [formDefinitions, setFormDefinitions] = useState<FormDefinition[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<FormDefinition | null>(null);
+  const [isAssigningForm, setIsAssigningForm] = useState(false);
+  const [showFormEditor, setShowFormEditor] = useState(false);
+  const [showActionMenu, setShowActionMenu] = useState(false);
+  const [showFormTemplatePicker, setShowFormTemplatePicker] = useState(false);
   const [selectedSubmission, setSelectedSubmission] = useState<any | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
   const [uploadingForUserId, setUploadingForUserId] = useState<string | null>(null);
   const docFileInputRef = useRef<HTMLInputElement>(null);
-  const [requiredDocs, setRequiredDocs] = useState<RequiredDocument[]>([]);
+  const [requiredDocs, setRequiredDocs] = useState<UserDocumentDefinition[]>([]);
 
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const [viewerTitle, setViewerTitle] = useState<string | null>(null);
@@ -117,7 +144,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
       let fileId = provided?.fileId;
       let documentType = provided?.documentType;
       let url = null;
-      
+
       if (fileId) {
         url = await documentService.getFileUrl(fileId);
         if (!documentType) {
@@ -131,7 +158,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
       } else {
         url = provided?.url;
       }
-      
+
       if (!url) throw new Error('No URL available');
 
       // Generate normalized download URL if we have a fileId
@@ -166,8 +193,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
   const [newTaskData, setNewTaskData] = useState<Partial<ProjectTask>>({
     title: '',
     description: '',
-    category: 'GENERAL',
-    dueDate: new Date().toISOString().split('T')[0],
+    category: 'General',
+    dueDate: new Date().toISOString().slice(0, 10),
     notifyAssignee: true,
     notifyAgentOnComplete: true
   });
@@ -181,16 +208,41 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
         description: doc.description,
         category: doc.category,
         assigneeRoles: doc.assigneeRoles || [],
-        notifyAssignee: doc.notifyAssignee,
-        notifyAgentOnComplete: doc.notifyAgentOnComplete
+        // New/required fields to satisfy TaskTemplate type
+        showTaskToUser: doc.showTaskToUser ?? true,
+        sendReminders: doc.sendReminders ?? false,
+        deadlineType: doc.deadlineType || 'RELATIVE',
+        deadlineDays: doc.deadlineDays ?? 7,
+        deadlineDate: doc.deadlineDate,
+        reminderIntervalDays: doc.reminderIntervalDays ?? 3,
+        visibilityType: doc.visibilityType || 'ALWAYS',
+        visibilityDate: doc.visibilityDate,
+        visibilityDays: doc.visibilityDays,
+        visibilityTaskId: doc.visibilityTaskId,
+        // keep existing notification flags for backward compatibility
+        notifyAssignee: doc.notifyAssignee ?? true,
+        notifyAgentOnComplete: doc.notifyAgentOnComplete ?? true
       })));
     } catch (error) {
       console.error('Error fetching task templates:', error);
     }
   };
 
+  const fetchFormDefinitions = async () => {
+    try {
+      setIsLoadingForms(true);
+      const defs = await formDefinitionsService.list();
+      setFormDefinitions(defs);
+    } catch (e) {
+      console.error('Error fetching form definitions:', e);
+    } finally {
+      setIsLoadingForms(false);
+    }
+  };
+
   useEffect(() => {
     if (isAdmin) {
+      fetchFormDefinitions();
       fetchTaskTemplates();
       fetchGlobalRequirements();
     }
@@ -198,7 +250,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
 
   const fetchGlobalRequirements = async () => {
     try {
-      const res = await documentService.listRequired();
+      const res = await documentService.listDefinitions();
       setRequiredDocs(res.documents as any);
     } catch (e) {
       console.error('Error fetching global requirements:', e);
@@ -207,7 +259,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
 
   const projectStatusData = React.useMemo(() => {
     if (!project) return { tasks: [], docs: [] };
-    
+
     const participants = [
       { role: 'SELLER' as UserRole, id: project.sellerId },
       { role: 'BUYER' as UserRole, id: project.buyerId }
@@ -224,12 +276,12 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
         // Show tasks that match this project OR have no projectId (fallback for legacy)
         pTasks.filter(t => t.projectId === id || !t.projectId).forEach(t => {
           const template = taskTemplates.find(tpl => tpl.id === t.taskId);
-          tasks.push({ 
-            ...t, 
+          tasks.push({
+            ...t,
             id: t.taskId, // Use taskId as key
-            title: template?.title || t.taskId, 
+            title: template?.title || t.taskId,
             description: template?.description,
-            role: p.role, 
+            role: p.role,
             user: profile,
             userName: profile.name // Add name for the UI
           });
@@ -244,34 +296,35 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
 
     const combinedDocs = requiredDocs
       .map(rd => {
-        const template = taskTemplates.find(tpl => tpl.id === rd.taskId);
-        const roles = template?.assigneeRoles || [];
-        
-        const participantsData = roles.map(role => {
-          const u = allUsers.find(user => 
-            (role === UserRole.SELLER && user.id === project.sellerId) || 
-            (role === UserRole.BUYER && user.id === project.buyerId)
+        const roles = rd.autoAssignTo || [];
+
+        const participantsData = roles.map((role: string) => {
+          const u = allUsers.find(user =>
+            (role.toLowerCase() === 'seller' && user.id === project.sellerId) ||
+            (role.toLowerCase() === 'buyer' && user.id === project.buyerId)
           );
-          // Fix: Use $id, and check for project scope or global scope
-          const log = docsFound.find(df => 
-            df.documentRequirementId === (rd as any).$id && 
+          // Match by definition ID and project scope
+          const log = docsFound.find(df =>
+            df.userDocumentDefinitionId === (rd as any).$id &&
             df.user.id === u?.id &&
-            (rd.isGlobal || df.projectId === id)
+            (df.projectId === id)
           );
           return { role, user: u, isProvided: !!log, url: log?.url, providedAt: log?.uploadedAt };
         });
         return { ...rd, participants: participantsData };
       });
 
-    return { tasks, docs: combinedDocs };
+    return { tasks, docs: combinedDocs, vault: docsFound };
   }, [allUsers, project, id, isAdmin, requiredDocs, taskTemplates]);
 
   const handleSyncDocs = async () => {
     setIsSyncing(true);
     try {
-      await documentService.syncProjectRequirements(id!, 'MANUAL');
-      onRefresh?.();
-      alert('Missing document requirements synced successfully.');
+      if (project) {
+        await documentService.autoProvisionDocuments(id!, project);
+        onRefresh?.();
+        alert('Missing document assignments synced successfully.');
+      }
     } catch (error) {
       console.error('Error syncing documents:', error);
       alert('Failed to sync document requirements');
@@ -324,86 +377,105 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
     }
   };
 
-  const handleUpdateProject = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+
+  const handleSaveInlineField = async (field: string, value: any) => {
     if (!project) return;
     setIsProcessing(true);
-    const formData = new FormData(e.currentTarget);
-    const priceValue = formData.get('price') as string;
-
     try {
-      let coverImageId = project.coverImageId || '';
-      if (coverImage) {
-        const upload = await projectService.uploadImage(coverImage);
-        coverImageId = upload.$id;
-      }
+      const updates: any = {};
 
-      const updates = {
-        title: formData.get('title') as string,
-        address: projectAddress,
-        price: priceValue ? parseFloat(priceValue) : project.property.price,
-        description: (formData.get('description') as string) || project.property.description,
-        coverImageId: coverImageId,
-        bedrooms: project.property.bedrooms,
-        bathrooms: project.property.bathrooms,
-        sqft: project.property.sqft,
-      };
+      if (field === 'address') updates.address = value;
+      else if (field === 'price') updates.price = parseFloat(value);
+      else if (field === 'description') updates.description = value;
+      else if (field === 'title') updates.title = value;
+      else if (field === 'handover_date') updates.handover_date = value || null;
+      else if (field === 'referenceNumber') updates.referenceNumber = value;
+      else if (field === 'bedrooms') updates.bedrooms = parseInt(value);
+      else if (field === 'bathrooms') updates.bathrooms = parseFloat(value);
+      else if (field === 'sqft') updates.sqft = parseInt(value);
 
       await projectService.update(project.id, updates);
-      setIsEditing(false);
-      setCoverImage(null);
-      alert('Project updated successfully!');
-      window.location.reload();
+      setEditingField(null);
+      setEditValue(null);
+      onRefresh?.();
     } catch (error: any) {
-      console.error('Error updating project:', error);
-      alert(`Failed to update project: ${error.message || 'Unknown error'}`);
+      console.error('Error updating project field:', error);
+      alert(`Failed to update: ${error.message || 'Unknown error'}`);
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const handleSaveBulkSpecs = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!project) return;
+    setIsProcessing(true);
+    const formData = new FormData(e.currentTarget);
+
+    try {
+      const updates: any = {
+        bedrooms: parseInt(formData.get('bedrooms') as string) || 0,
+        bathrooms: parseFloat(formData.get('bathrooms') as string) || 0,
+        sqft: parseInt(formData.get('sqft') as string) || 0,
+        buildYear: parseInt(formData.get('buildYear') as string) || null,
+        livingArea: parseInt(formData.get('livingArea') as string) || 0,
+        garages: parseInt(formData.get('garages') as string) || 0,
+      };
+
+      await projectService.update(project.id, updates);
+      setShowBulkSpecsModal(false);
+      onRefresh?.();
+    } catch (error: any) {
+      console.error('Error updating bulk specs:', error);
+      alert(`Failed to update specs: ${error.message || 'Unknown error'}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleSaveGeneralInfo = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!project) return;
+    setIsProcessing(true);
+    const formData = new FormData(e.currentTarget);
+
+    try {
+      const updates: any = {
+        title: formData.get('title') as string,
+        address: googleApiKey ? tempAddress : (formData.get('address') as string),
+        price: parseFloat(formData.get('price') as string) || 0,
+        referenceNumber: formData.get('referenceNumber') as string,
+      };
+
+      await projectService.update(project.id, updates);
+      setShowGeneralInfoModal(false);
+      onRefresh?.();
+    } catch (error: any) {
+      console.error('Error updating general info:', error);
+      alert(`Failed to update general info: ${error.message || 'Unknown error'}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const gemini = new GeminiService();
 
   useEffect(() => {
-    if (activeTab === 'messages') {
-      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [activeTab, project?.messages]);
+    if (!id) return;
 
-  useEffect(() => {
-    if (id) {
-      fetchMessages();
-        loadForms();
-      
-      const unsubscribe = client.subscribe(`databases.${DATABASE_ID}.collections.${COLLECTIONS.MESSAGES}.documents`, response => {
-        if (response.events.some(e => e.includes('create'))) {
-          const payload = response.payload as any;
-          if (payload.projectId === id) {
-            setMessages(prev => {
-              if (prev.some(m => m.id === payload.$id)) return prev;
-              const newMessage: Message = {
-                id: payload.$id,
-                senderId: payload.senderId,
-                text: payload.text,
-                timestamp: payload.timestamp
-              };
-              return [...prev, newMessage];
-            });
-          }
+    loadForms();
+
+    const unsubscribe = client.subscribe(`databases.${DATABASE_ID}.collections.${COLLECTIONS.MESSAGES}.documents`, response => {
+      if (response.events.some(e => e.includes('create'))) {
+        const payload = response.payload as any;
+        if (payload.projectId === id) {
+          // No-op for now since chat is removed
         }
-      });
+      }
+    });
 
-      return () => unsubscribe();
-    }
+    return () => unsubscribe();
   }, [id]);
-
-  useEffect(() => {
-    if (activeTab === 'forms') {
-      loadForms();
-    }
-  }, [activeTab, id]);
 
   const loadForms = async () => {
     if (!id) return;
@@ -478,7 +550,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
 
   const executeFormAssignment = async (def: FormDefinition, targetProfileId: string) => {
     if (!id || !project) return;
-    
+
     try {
       setIsLoadingForms(true);
       // 1. Create Form Submission
@@ -502,7 +574,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
           title: `Fill out form: ${def.title}`,
           description: `Please complete the ${def.title} form as requested.`,
           category: 'Legal',
-          dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Default 3 days
+          dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10), // Default 3 days
           completed: false,
           notifyAssignee: true,
           notifyAgentOnComplete: true
@@ -510,7 +582,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
 
         const updatedTasks = [...project.tasks, newTask];
         await projectService.update(id, { tasks: JSON.stringify(updatedTasks) });
-        
+
         // Also assign to profile for "My Tasks" view
         await profileService.assignTask(targetProfileId, newTask.id, {
           title: newTask.title,
@@ -533,56 +605,20 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
     }
   };
 
-  const fetchMessages = async () => {
-    try {
-      const response = await databases.listDocuments(DATABASE_ID, COLLECTIONS.MESSAGES, [
-        Query.equal('projectId', id!)
-      ]);
-      setMessages(response.documents.map((doc: any) => ({
-        id: doc.$id,
-        senderId: doc.senderId,
-        text: doc.text,
-        timestamp: doc.timestamp
-      })));
-    } catch (error) {
-      console.error('Error fetching messages:', error);
-    }
-  };
-
   const fetchInsights = async () => {
+    if (!project) return;
+    setShowAIModal(true);
     setAiInsight('Thinking...');
-    const result = await gemini.getProjectInsights(project);
-    setAiInsight(result);
-  };
-
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMessage.trim() || isSending) return;
-
-    setIsSending(true);
     try {
-      const msgData = {
-        projectId: id,
-        senderId: user.id,
-        text: newMessage,
-        timestamp: new Date().toISOString()
-      };
-      const response = await databases.createDocument(DATABASE_ID, COLLECTIONS.MESSAGES, ID.unique(), msgData);
-      setMessages(prev => [...prev, {
-        id: response.$id,
-        senderId: response.senderId,
-        text: response.text,
-        timestamp: response.timestamp
-      }]);
-      setNewMessage('');
-    } catch (error) {
-      console.error('Error sending message:', error);
-    } finally {
-      setIsSending(false);
+      const result = await gemini.getProjectInsights(project);
+      setAiInsight(result);
+    } catch (e) {
+      setAiInsight('Error generating insights.');
     }
   };
 
   const fetchLocationInsights = async () => {
+    if (!project) return;
     setIsLoadingLocation(true);
     let userLocation: { latitude: number, longitude: number } | undefined;
     try {
@@ -597,7 +633,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
   };
 
   const handleGenerateContract = async (template?: ContractTemplate) => {
-    if (!isAdmin) return;
+    if (!isAdmin || !project) return;
     setIsGenerating(true);
     setShowTemplatePicker(false);
     try {
@@ -634,16 +670,6 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
     setSigningContractId(null);
   };
 
-  const toggleTask = (taskId: string) => {
-    if (!isAdmin) return;
-    setProjects(prev => prev.map(p => {
-      if (p.id === id) {
-        return { ...p, tasks: p.tasks.map(t => t.id === taskId ? { ...t, completed: !t.completed } : t) };
-      }
-      return p;
-    }));
-  };
-
   const handleAddTask = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!project || !id) return;
@@ -651,25 +677,25 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
     try {
       const newTask: ProjectTask = {
         id: ID.unique(),
-        title: newTaskData.title!,
+        title: newTaskData.title as string,
         description: newTaskData.description || '',
         category: newTaskData.category as any,
-        dueDate: newTaskData.dueDate!,
+        dueDate: newTaskData.dueDate as string,
         completed: false,
-        notifyAssignee: newTaskData.notifyAssignee,
-        notifyAgentOnComplete: newTaskData.notifyAgentOnComplete
+        notifyAssignee: newTaskData.notifyAssignee ?? true,
+        notifyAgentOnComplete: newTaskData.notifyAgentOnComplete ?? true
       };
 
       const updatedTasks = [...project.tasks, newTask];
       await projectService.update(id, { tasks: JSON.stringify(updatedTasks) });
-      
+
       setProjects(prev => prev.map(p => p.id === id ? { ...p, tasks: updatedTasks } : p));
       setIsAddTaskModalOpen(false);
       setNewTaskData({
         title: '',
         description: '',
         category: 'General',
-        dueDate: new Date().toISOString().split('T')[0],
+        dueDate: new Date().toISOString().slice(0, 10),
         notifyAssignee: true,
         notifyAgentOnComplete: true
       });
@@ -688,7 +714,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
         title: template.title,
         description: template.description || '',
         category: template.category as any,
-        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Default 7 days
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10), // Default 7 days
         completed: false,
         notifyAssignee: template.notifyAssignee,
         notifyAgentOnComplete: template.notifyAgentOnComplete
@@ -696,7 +722,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
 
       const updatedTasks = [...project.tasks, newTask];
       await projectService.update(id, { tasks: JSON.stringify(updatedTasks) });
-      
+
       setProjects(prev => prev.map(p => p.id === id ? { ...p, tasks: updatedTasks } : p));
       setIsTaskLibraryOpen(false);
     } catch (error) {
@@ -706,7 +732,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
   };
 
   const assignUser = async (role: 'seller' | 'buyer' | 'manager', userId: string) => {
-    if (!isAdmin || !id) return;
+    if (!isAdmin || !id || !project) return;
     try {
       let field: string;
       if (role === 'seller') field = 'sellerId';
@@ -714,7 +740,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
       else field = 'managerId';
 
       await projectService.update(id, { [field]: userId });
-      
+
       setProjects(prev => prev.map(p => {
         if (p.id === project.id) {
           if (role === 'seller') return { ...p, sellerId: userId };
@@ -759,97 +785,210 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
   const buyer = allUsers.find(u => u.id === project.buyerId);
   const agent = allUsers.find(u => u.id === (project.managerId || defaultAgentId));
 
-  const currentCoverImage = project.coverImageId 
-    ? projectService.getImagePreview(project.coverImageId)
-    : project.property.images[0] || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80';
-
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      <input 
-        type="file" 
-        ref={docFileInputRef} 
-        className="hidden" 
+      <input
+        type="file"
+        ref={docFileInputRef}
+        className="hidden"
         onChange={onFileChange}
       />
 
       {signingContractId && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <SignaturePad onSave={handleSignContract} onCancel={() => setSigningContractId(null)} />
+        <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl overflow-hidden w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white relative z-10">
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">{projectContracts.find(c => c.id === signingContractId)?.title}</h3>
+                <p className="text-xs text-slate-500">Please review the document carefully before signing.</p>
+              </div>
+              <button
+                onClick={() => setSigningContractId(null)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-all"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-8 md:p-12 bg-slate-50/50">
+              <div className="bg-white shadow-sm border border-slate-100 rounded-2xl p-8 md:p-12 min-h-full">
+                <div className="max-w-prose mx-auto">
+                  <div
+                    className="prose prose-slate max-w-none font-serif text-slate-800 text-lg leading-relaxed break-words overflow-hidden"
+                    style={{ fontFamily: "'Times New Roman', Times, serif" }}
+                    dangerouslySetInnerHTML={{ __html: projectContracts.find(c => c.id === signingContractId)?.content || '' }}
+                  />
+
+                  {projectContracts.find(c => c.id === signingContractId)?.signedBy && (projectContracts.find(c => c.id === signingContractId)?.signedBy.length || 0) > 0 && (
+                    <div className="mt-12 pt-8 border-t border-slate-100 space-y-4">
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400">Signatures</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {projectContracts.find(c => c.id === signingContractId)?.signedBy.map((signerId: string) => {
+                          const signer = allUsers.find(u => u.id === signerId || u.$id === signerId);
+                          const sigData = (projectContracts.find(c => c.id === signingContractId)?.signatureData as any)?.[signerId];
+                          return (
+                            <div key={signerId} className="space-y-2">
+                              {sigData ? (
+                                <img src={sigData} alt={`Signature of ${signer?.name}`} className="h-16 object-contain" />
+                              ) : (
+                                <div className="h-16 flex items-center text-slate-400 italic text-sm">Signed (Image missing)</div>
+                              )}
+                              <p className="text-xs font-medium text-slate-600 border-t border-slate-100 pt-1">
+                                {signer?.name || 'Unknown Signer'}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-slate-100 bg-white flex flex-col md:flex-row items-center justify-center gap-8">
+              {!projectContracts.find(c => c.id === signingContractId)?.signedBy?.includes((user.id || user.$id)!) ? (
+                <div className="w-full flex flex-col items-center gap-4">
+                  <div className="w-full max-w-lg">
+                    <p className="text-sm font-bold text-center text-slate-400 uppercase tracking-widest mb-4">Draw your signature below</p>
+                    <SignaturePad
+                      onSave={handleSignContract}
+                      onCancel={() => setSigningContractId(null)}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-4 py-4">
+                  <div className="bg-emerald-100 text-emerald-600 p-3 rounded-full">
+                    <CheckCircle2 size={32} />
+                  </div>
+                  <div className="text-center">
+                    <p className="font-bold text-slate-900">Document Signed</p>
+                    <p className="text-sm text-slate-500">You have already signed this contract.</p>
+                  </div>
+                  <button
+                    onClick={() => setSigningContractId(null)}
+                    className="mt-2 bg-slate-900 text-white px-8 py-2.5 rounded-xl font-bold text-sm hover:bg-slate-800 transition-all"
+                  >
+                    Close Viewer
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
-      {isEditing && (
+      {/* Modal removed in favor of inline editing */}
+
+      {showGeneralInfoModal && project && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                <h2 className="text-xl font-bold text-slate-900">Edit Project</h2>
-                <button onClick={() => setIsEditing(false)} className="text-slate-400 hover:text-slate-600 p-2"><X size={20} /></button>
-              </div>
-              <form onSubmit={handleUpdateProject} className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2">
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Project Title</label>
-                    <input name="title" defaultValue={project.title} required className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm" />
-                  </div>
-                  <div className="col-span-2 text-center">
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5 text-left">Cover Image</label>
-                    <div 
-                      onClick={() => fileInputRef.current?.click()}
-                      className="group relative cursor-pointer aspect-video bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center overflow-hidden hover:border-blue-400 hover:bg-blue-50/30 transition-all"
-                    >
-                      {coverImage ? (
-                        <img src={URL.createObjectURL(coverImage)} className="w-full h-full object-cover" alt="Preview" />
-                      ) : project.coverImageId ? (
-                        <img src={projectService.getImagePreview(project.coverImageId)} className="w-full h-full object-cover" alt="Current" />
-                      ) : (
-                        <div className="flex flex-col items-center text-slate-400">
-                          <ImageIcon size={32} className="mb-2 opacity-50 group-hover:text-blue-500" />
-                          <p className="text-[10px] font-bold uppercase tracking-widest">Click to change photo</p>
-                        </div>
-                      )}
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                         <Edit2 className="text-white" size={24} />
-                      </div>
-                    </div>
-                    <input 
-                      type="file" 
-                      ref={fileInputRef} 
-                      className="hidden" 
-                      accept="image/*"
-                      onChange={(e) => setCoverImage(e.target.files?.[0] || null)}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Property Address</label>
-                    {googleApiKey ? (
-                      <AddressAutocomplete 
-                        apiKey={googleApiKey}
-                        value={projectAddress}
-                        onChange={setProjectAddress}
-                        name="address"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm" 
-                      />
-                    ) : (
-                      <input name="address" defaultValue={project.property.address} required className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm" />
-                    )}
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Listing Price</label>
-                    <input name="price" type="number" defaultValue={project.property.price} required className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm" />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Description</label>
-                    <textarea name="description" defaultValue={project.property.description} className="w-full h-24 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm resize-none"></textarea>
-                  </div>
-                </div>
-                <div className="pt-4 flex gap-3">
-                  <button type="button" onClick={() => setIsEditing(false)} className="flex-1 px-6 py-3 rounded-xl font-bold text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
-                  <button type="submit" disabled={isProcessing} className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 disabled:opacity-50">
-                    {isProcessing ? 'Saving Changes...' : 'Update Project'}
-                  </button>
-                </div>
-              </form>
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-slate-900">Edit General Information</h2>
+              <button onClick={() => setShowGeneralInfoModal(false)} className="text-slate-400 hover:text-slate-600 p-2"><X size={20} /></button>
             </div>
+            <form onSubmit={handleSaveGeneralInfo} className="p-6 space-y-4">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Project Title</label>
+                  <input name="title" type="text" defaultValue={project.title} required className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Property Address</label>
+                  {googleApiKey ? (
+                    <AddressAutocomplete
+                      apiKey={googleApiKey}
+                      value={tempAddress}
+                      onChange={setTempAddress}
+                      name="address"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm"
+                      placeholder="123 Ocean Drive, Miami, FL"
+                    />
+                  ) : (
+                    <input name="address" type="text" defaultValue={project.property.address} required className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm" />
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Price</label>
+                  <input name="price" type="number" defaultValue={project.property.price} required className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Reference Number</label>
+                  <input name="referenceNumber" type="text" defaultValue={project.referenceNumber} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm" placeholder="REF-001" />
+                </div>
+              </div>
+              <div className="pt-4 flex gap-3">
+                <button type="button" onClick={() => setShowGeneralInfoModal(false)} className="flex-1 px-6 py-3 rounded-xl font-bold text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
+                <button type="submit" disabled={isProcessing} className="flex-1 bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md disabled:opacity-50">
+                  {isProcessing ? 'Saving...' : 'Update Details'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showBulkSpecsModal && project && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-slate-900">Edit Property Specifications</h2>
+              <button onClick={() => setShowBulkSpecsModal(false)} className="text-slate-400 hover:text-slate-600 p-2"><X size={20} /></button>
+            </div>
+            <form onSubmit={handleSaveBulkSpecs} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Bedrooms</label>
+                  <div className="relative">
+                    <Bed size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input name="bedrooms" type="number" defaultValue={project.property.bedrooms} className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-2.5 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Bathrooms</label>
+                  <div className="relative">
+                    <Bath size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input name="bathrooms" type="number" step="0.5" defaultValue={project.property.bathrooms} className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-2.5 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Plot Size (Sq Ft)</label>
+                  <div className="relative">
+                    <Square size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input name="sqft" type="number" defaultValue={project.property.sqft} className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-2.5 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Living Area (Sq Ft)</label>
+                  <div className="relative">
+                    <Maximize2 size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input name="livingArea" type="number" defaultValue={project.property.livingArea} className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-2.5 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Build Year</label>
+                  <div className="relative">
+                    <Calendar size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input name="buildYear" type="number" defaultValue={project.property.buildYear} className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-2.5 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Garages</label>
+                  <div className="relative">
+                    <Car size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input name="garages" type="number" defaultValue={project.property.garages} className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-2.5 text-sm" />
+                  </div>
+                </div>
+              </div>
+              <div className="pt-4 flex gap-3">
+                <button type="button" onClick={() => setShowBulkSpecsModal(false)} className="flex-1 px-6 py-3 rounded-xl font-bold text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
+                <button type="submit" disabled={isProcessing} className="flex-1 bg-slate-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-md disabled:opacity-50">
+                  {isProcessing ? 'Saving...' : 'Update Specifications'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
@@ -886,233 +1025,415 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
         </div>
       )}
 
-      <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 font-medium transition-colors">
-        <ArrowLeft size={18} /> Back to Dashboard
-      </button>
-
-      <div className="flex flex-col lg:flex-row gap-8">
-        <div className="flex-1 space-y-8">
-          <div className="bg-white rounded-3xl overflow-hidden border border-slate-100 shadow-sm">
-            <div className="relative h-72">
-              <img src={currentCoverImage} alt={project.title} className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
-              <div className="absolute bottom-6 left-8 right-8 flex items-end justify-between">
-                <div className="text-white">
-                  <h1 className="text-3xl font-bold">{project.title}</h1>
-                  <p className="flex items-center gap-2 mt-2 opacity-90"><MapPin size={16} /> {project.property.address}</p>
+      {/* Form Template Selection Modal */}
+      {showFormTemplatePicker && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-xl font-bold text-slate-900">Assign Information Form</h3>
+              <button onClick={() => setShowFormTemplatePicker(false)} className="text-slate-400 hover:text-slate-600"><X/></button>
+            </div>
+            <div className="p-6 space-y-3 max-h-[60vh] overflow-y-auto no-scrollbar">
+              {isLoadingForms ? (
+                <div className="py-12 flex flex-col items-center justify-center text-center">
+                  <Loader2 size={32} className="text-indigo-600 animate-spin mb-3" />
+                  <p className="text-sm text-slate-500 italic">Syncing templates...</p>
                 </div>
-                <div className="flex items-center gap-4">
-                  {isAdmin && (
-                    <button 
-                      onClick={() => setIsEditing(true)}
-                      className="bg-white/10 backdrop-blur-md p-3 rounded-2xl border border-white/20 text-white hover:bg-white/20 transition-all"
-                      title="Edit Project"
-                    >
-                      <Edit2 size={20} />
-                    </button>
-                  )}
-                  <div className="bg-white/10 backdrop-blur-md px-6 py-3 rounded-2xl border border-white/20 text-white">
-                    <p className="text-xs font-bold uppercase tracking-wider opacity-70">List Price</p>
-                    <p className="text-2xl font-bold">${project.property.price.toLocaleString()}</p>
+              ) : formDefinitions.length === 0 ? (
+                <div className="text-center py-8 text-slate-400">No form templates found.</div>
+              ) : formDefinitions.map(def => (
+                <button
+                  key={def.id}
+                  onClick={() => {
+                    setShowFormTemplatePicker(false);
+                    handleTemplateAssignmentClick(def);
+                  }}
+                  className="w-full flex items-center justify-between p-4 bg-white hover:bg-blue-50 border border-slate-100 rounded-2xl transition-all group"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><ClipboardList size={18}/></div>
+                    <div className="text-left">
+                      <p className="font-bold text-slate-900">{def.title}</p>
+                      <p className="text-[10px] text-slate-500 uppercase tracking-widest">{def.role || 'General Form'}</p>
+                    </div>
                   </div>
+                  <ChevronRight className="text-slate-300 group-hover:text-blue-500" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Analysis Modal */}
+      {showAIModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-100 text-indigo-600 rounded-xl">
+                  <Sparkles size={20} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900">AI Project Analysis</h3>
+                  <p className="text-xs text-slate-500 font-medium">Strategic insights based on current project state.</p>
                 </div>
               </div>
+              <button onClick={() => setShowAIModal(false)} className="bg-white p-2 rounded-xl text-slate-400 hover:text-slate-600 border border-slate-100 shadow-sm transition-all"><X size={20}/></button>
             </div>
-            
-            <div className="flex border-b border-slate-100 overflow-x-auto no-scrollbar">
-              <TabButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<ClipboardList size={18}/>} label="Overview" />
-              {isAdmin && (
-                <>
-                  <TabButton active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} icon={<CheckCircle size={18}/>} label="Tasks" />
-                  <TabButton active={activeTab === 'documents'} onClick={() => setActiveTab('documents')} icon={<FileText size={18}/>} label="Documents" />
-                </>
+            <div className="p-8 max-h-[70vh] overflow-y-auto no-scrollbar">
+              {aiInsight === 'Thinking...' ? (
+                <div className="py-20 flex flex-col items-center justify-center text-center">
+                   <Loader2 size={40} className="text-indigo-600 animate-spin mb-4" />
+                   <p className="text-slate-500 font-medium italic">Analyzing documents and status...</p>
+                </div>
+              ) : (
+                <div className="prose prose-slate max-w-none text-slate-600 leading-relaxed whitespace-pre-line text-sm">
+                  {aiInsight || 'No insights available.'}
+                </div>
               )}
-              <TabButton active={activeTab === 'forms'} onClick={() => setActiveTab('forms')} icon={<ClipboardList size={18}/>} label="Forms" />
-              <TabButton active={activeTab === 'contracts'} onClick={() => setActiveTab('contracts')} icon={<FileText size={18}/>} label="Contracts" />
-              <TabButton active={activeTab === 'messages'} onClick={() => setActiveTab('messages')} icon={<MessageSquare size={18}/>} label="Chat" />
+            </div>
+            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end">
+               <button onClick={() => setShowAIModal(false)} className="px-6 py-2.5 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all shadow-md">
+                 Got it
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+        <div className="flex items-center gap-4 min-w-0">
+          <button onClick={() => navigate(-1)} className="p-3 bg-white border border-slate-100 rounded-2xl text-slate-400 hover:text-slate-900 transition-all shadow-sm shrink-0">
+            <ArrowLeft size={20} />
+          </button>
+          <div className="min-w-0">
+            {isAdmin && editingField === 'title' ? (
+              <div className="flex items-center gap-2">
+                <input
+                  autoFocus
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 text-slate-900 text-2xl font-bold px-3 py-1.5 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+                />
+                <button onClick={() => handleSaveInlineField('title', editValue)} className="p-2.5 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-all shrink-0">
+                  {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <Check size={18}/>}
+                </button>
+                <button onClick={() => setEditingField(null)} className="p-2.5 bg-slate-200 text-slate-600 rounded-xl hover:bg-slate-300 transition-all shrink-0"><X size={18}/></button>
+              </div>
+            ) : (
+              <div className="group flex items-center gap-2">
+                <h1 className="text-2xl font-black text-slate-900 truncate">{project.title}</h1>
+                {isAdmin && (
+                  <button
+                    onClick={() => { setEditingField('title'); setEditValue(project.title); }}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all"
+                  >
+                    <Edit2 size={14} />
+                  </button>
+                )}
+              </div>
+            )}
+            <div className="flex items-center gap-2 mt-0.5 opacity-60">
+               <MapPin size={14} />
+               <p className="text-xs font-bold truncate tracking-tight">{project.property.address}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* Controls moved into Project Summary */}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+        <div className="flex border-b border-slate-100 overflow-x-auto no-scrollbar bg-slate-50/50">
+              <TabButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<ClipboardList size={18}/>} label="Overview" />
+              <TabButton active={activeTab === 'property'} onClick={() => setActiveTab('property')} icon={<Home size={18}/>} label="Property" />
+              <TabButton active={activeTab === 'documents'} onClick={() => setActiveTab('documents')} icon={<FileText size={18}/>} label="Documents" />
               {isAdmin && <TabButton active={activeTab === 'team'} onClick={() => setActiveTab('team')} icon={<UsersGroupIcon size={18}/>} label="Team Management" />}
             </div>
 
             <div className="p-8">
               {activeTab === 'overview' && (
                 <div className="space-y-8 animate-in fade-in duration-300">
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-                    <FeatureBox icon={<Bed size={20}/>} value={project.property.bedrooms} label="Bedrooms" />
-                    <FeatureBox icon={<Bath size={20}/>} value={project.property.bathrooms} label="Bathrooms" />
-                    <FeatureBox icon={<Maximize size={20}/>} value={project.property.sqft} label="Square Feet" />
-                    <FeatureBox icon={<History size={20}/>} value={project.status.replace('_', ' ')} label="Status" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-900 mb-3">Property Description</h3>
-                    <p className="text-slate-600 leading-relaxed">{project.property.description}</p>
-                  </div>
-                  
-                  <div className="border-t border-slate-100 pt-8">
-                    <h3 className="text-lg font-bold text-slate-900 mb-6">Project Progress</h3>
-                    <div className="flex items-center justify-between relative">
-                       <div className="absolute top-4 left-0 right-0 h-0.5 bg-slate-100 -z-0"></div>
-                       {project.milestones.map((m, i) => (
-                         <div key={m.id} className="relative z-10 flex flex-col items-center flex-1">
-                           <div className={`w-8 h-8 rounded-full flex items-center justify-center border-4 border-white shadow-sm ${m.achieved ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400'}`}>
-                             {m.achieved ? <CheckCircle2 size={16} /> : <Circle size={16} />}
-                           </div>
-                           <p className={`text-[10px] font-bold uppercase mt-2 text-center tracking-tighter ${m.achieved ? 'text-emerald-600' : 'text-slate-400'}`}>{m.title}</p>
-                           <p className="text-[9px] text-slate-400 mt-0.5">{m.date}</p>
-                         </div>
-                       ))}
-                    </div>
-                  </div>
+                  <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-stretch">
+                    {/* Progress Widget */}
+                    <div className="lg:col-span-3 bg-slate-900 rounded-[32px] p-10 text-white relative overflow-hidden shadow-2xl">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 rounded-full blur-3xl -mr-32 -mt-32"></div>
+                        <div className="relative z-10">
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-3 mb-2">
+                                <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Project Summary</p>
+                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-100/50">ACTIVE</span>
+                              </div>
+                              <h3 className="text-xl font-black text-white leading-tight truncate">{project.title}</h3>
+                              <p className="text-xs text-slate-300 font-bold flex items-center gap-1.5 tracking-tight mt-1">
+                                <MapPin size={12} className="text-blue-500 flex-shrink-0" /> <span className="truncate">{project.property.address}</span>
+                              </p>
+                            </div>
 
-                  <div className="mt-8 border-t border-slate-100 pt-8">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2"><MapIcon className="text-blue-600" size={20} /><h3 className="text-lg font-bold text-slate-900">Neighborhood Insights</h3></div>
-                      <button onClick={fetchLocationInsights} disabled={isLoadingLocation} className="text-sm font-bold text-blue-600 flex items-center gap-2 hover:underline disabled:opacity-50">
-                        {isLoadingLocation && <Loader2 size={16} className="animate-spin" />}
-                        {locationInsights ? 'Refresh Data' : 'Load Area Info'}
-                      </button>
+                            <div className="flex items-center gap-4 ml-4">
+                              <div className="text-right">
+                                <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-0.5">List Price</p>
+                                <p className="text-lg font-black text-blue-400">${project.property.price?.toLocaleString() || 'TBD'}</p>
+                              </div>
+
+                              <div className="relative">
+                                <button
+                                  onClick={() => setShowActionMenu(!showActionMenu)}
+                                  className="w-10 h-10 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 transition-all flex items-center justify-center"
+                                  title="Actions"
+                                >
+                                  <Zap size={16} />
+                                </button>
+
+                                {showActionMenu && (
+                                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-3xl shadow-2xl border border-slate-100 py-3 z-[100] animate-in slide-in-from-top-2 duration-200">
+                                     <div className="px-4 py-2 mb-1 border-b border-slate-50">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Project Management</span>
+                                     </div>
+                                     <button
+                                       onClick={() => { fetchInsights(); setShowActionMenu(false); }}
+                                       className="w-full px-4 py-3 text-left text-sm font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-3 transition-colors"
+                                     >
+                                        <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-all">
+                                          <Sparkles size={16} />
+                                        </div>
+                                        AI Analyze Project
+                                     </button>
+                                     <button
+                                       onClick={() => { setShowFormTemplatePicker(true); setShowActionMenu(false); }}
+                                       className="w-full px-4 py-3 text-left text-sm font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-3 transition-colors"
+                                     >
+                                        <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                                          <ClipboardList size={16} />
+                                        </div>
+                                        Assign Form
+                                     </button>
+                                     <button
+                                       onClick={() => { setShowTemplatePicker(true); setShowActionMenu(false); }}
+                                       className="w-full px-4 py-3 text-left text-sm font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-3 transition-colors"
+                                     >
+                                        <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-all">
+                                          <FileText size={16} />
+                                        </div>
+                                        Assign Contract
+                                     </button>
+                                     <button
+                                       onClick={() => { setIsTaskLibraryOpen(true); setShowActionMenu(false); }}
+                                       className="w-full px-4 py-3 text-left text-sm font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-3 transition-colors"
+                                     >
+                                        <div className="p-1.5 bg-amber-50 text-amber-600 rounded-lg group-hover:bg-amber-600 group-hover:text-white transition-all">
+                                          <CheckCircle size={16} />
+                                        </div>
+                                        Assign Task
+                                     </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                         </div>
+
+                         <div className="flex items-center gap-6 mb-6">
+                            <div className="text-center">
+                              <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1">Closing</p>
+                              <p className="text-xs font-bold text-slate-300 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">{project.handover_date || 'Not set'}</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1">Reference</p>
+                              <p className="text-xs font-black text-blue-400 bg-blue-900/50 px-3 py-1.5 rounded-lg border border-blue-800/50">{project.referenceNumber || 'N/A'}</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1">Created</p>
+                              <p className="text-xs font-bold text-slate-300">{project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'N/A'}</p>
+                            </div>
+                         </div>
+
+                         <div className="flex items-center justify-between">
+                            <button onClick={() => setActiveTab('property')} className="text-[10px] font-bold text-slate-400 hover:text-white uppercase tracking-widest transition-colors flex items-center gap-1.5">
+                                View Specs <ChevronRight size={10} />
+                            </button>
+                            <button onClick={() => setShowGeneralInfoModal(true)} className="p-1.5 bg-slate-800 text-slate-400 hover:text-blue-400 hover:bg-slate-700 rounded-lg transition-all">
+                               <Edit2 size={12} />
+                            </button>
+                         </div>
+
+                         {/* Full Width Progress Bar at Bottom */}
+                         <div className="mt-6 pt-4 border-t border-slate-700">
+                           <div className="flex items-center justify-between mb-3">
+                             <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Completion Progress</p>
+                             <p className="text-sm font-bold text-blue-400">
+                               {(() => {
+                                 const total = projectStatusData.tasks.length;
+                                 const completed = projectStatusData.tasks.filter((t: any) => t.status === 'COMPLETED').length;
+                                 return total > 0 ? Math.round((completed / total) * 100) : 0;
+                               })()}%
+                             </p>
+                           </div>
+                           <div className="w-full h-3 bg-slate-700 rounded-full overflow-hidden">
+                             <div
+                               className="h-full bg-blue-500 rounded-full shadow-[0_0_20px_rgba(59,130,246,0.5)] transition-all duration-1000 ease-out"
+                               style={{ width: `${(() => {
+                                 const total = projectStatusData.tasks.length;
+                                 const completed = projectStatusData.tasks.filter((t: any) => t.status === 'COMPLETED').length;
+                                 return total > 0 ? Math.round((completed / total) * 100) : 0;
+                               })()}%` }}
+                             ></div>
+                           </div>
+                         </div>
+                        </div>
                     </div>
-                    {locationInsights && (
-                      <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 animate-in fade-in slide-in-from-top-4">
-                        <p className="text-slate-700 leading-relaxed prose prose-sm max-w-none mb-6 whitespace-pre-line">{locationInsights.text}</p>
-                        <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-200">
-                          {locationInsights.links.map((link, idx) => (
-                            <a key={idx} href={link.uri} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-blue-600 hover:bg-blue-50 transition-colors shadow-sm"><MapPin size={12} /> {link.title}</a>
-                          ))}
+
+                  {/* Primary Participants Grid */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Seller Contact Block */}
+                    {seller && (
+                      <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm p-6 flex items-center gap-6">
+                        <div className="relative shrink-0">
+                          <img
+                            src={seller.avatar || ''}
+                            className="w-16 h-16 rounded-2xl border-2 border-white shadow-lg object-cover"
+                            alt={seller.name}
+                          />
+                          <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full"></div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg uppercase tracking-wider">Seller</span>
+                            <h3 className="font-bold text-slate-900 truncate">{seller.name}</h3>
+                          </div>
+                          <p className="text-xs text-slate-500 mb-4 truncate">{seller.email}</p>
+                          <div className="flex gap-2">
+                             <button className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center justify-center gap-1.5"><MessageSquare size={14}/> Message</button>
+                             <a href={`tel:${seller.phone || ''}`} className="w-10 h-10 bg-slate-50 text-slate-400 rounded-xl hover:bg-slate-100 transition-all flex items-center justify-center shrink-0"><Phone size={14}/></a>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Buyer Contact Block */}
+                    {buyer && (
+                      <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm p-6 flex items-center gap-6">
+                        <div className="relative shrink-0">
+                          <img
+                            src={buyer.avatar || ''}
+                            className="w-16 h-16 rounded-2xl border-2 border-white shadow-lg object-cover"
+                            alt={buyer.name}
+                          />
+                          <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full"></div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg uppercase tracking-wider">Buyer</span>
+                            <h3 className="font-bold text-slate-900 truncate">{buyer.name}</h3>
+                          </div>
+                          <p className="text-xs text-slate-500 mb-4 truncate">{buyer.email}</p>
+                          <div className="flex gap-2">
+                             <button className="flex-1 py-2 bg-emerald-600 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center justify-center gap-1.5"><MessageSquare size={14}/> Message</button>
+                             <a href={`tel:${buyer.phone || ''}`} className="w-10 h-10 bg-slate-50 text-slate-400 rounded-xl hover:bg-slate-100 transition-all flex items-center justify-center shrink-0"><Phone size={14}/></a>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Agent Contact Block */}
+                    {agent && (
+                      <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm p-6 flex items-center gap-6">
+                        <div className="relative shrink-0">
+                          <img
+                            src={agent.avatar || ''}
+                            className="w-16 h-16 rounded-2xl border-2 border-white shadow-lg object-cover"
+                            alt={agent.name}
+                          />
+                          <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-blue-500 border-2 border-white rounded-full"></div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg uppercase tracking-wider">Agent</span>
+                            <h3 className="font-bold text-slate-900 truncate">{agent.name}</h3>
+                          </div>
+                          <p className="text-xs text-slate-500 mb-4 truncate">{agent.email}</p>
+                          <div className="flex gap-2">
+                             <button className="flex-1 py-2 bg-blue-600 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-blue-700 transition-all flex items-center justify-center gap-1.5"><MessageSquare size={14}/> Message</button>
+                             <a href={`tel:${agent.phone || ''}`} className="w-10 h-10 bg-slate-50 text-slate-400 rounded-xl hover:bg-slate-100 transition-all flex items-center justify-center shrink-0"><Phone size={14}/></a>
+                          </div>
                         </div>
                       </div>
                     )}
                   </div>
-                </div>
-              )}
 
-              {activeTab === 'tasks' && (
-                <div className="space-y-8 animate-in fade-in duration-300">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-bold">Participant Tasks</h3>
-                      <p className="text-xs text-slate-500">Manage and track progress for Buyer and Seller.</p>
+                  {/* Action Items List */}
+                  <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+                    <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                      <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <CheckSquare className="text-blue-600" size={20} /> Action Items
+                      </h2>
+                      <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg uppercase tracking-wider">
+                        {projectStatusData.tasks.filter((t: any) => t.status !== 'COMPLETED').length} Pending
+                      </span>
                     </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                     {['SELLER', 'BUYER'].map(roleType => {
-                        const roleTasks = projectStatusData.tasks.filter((t: any) => t.role === roleType);
-                        const completedCount = roleTasks.filter((t: any) => t.status === 'COMPLETED').length;
-                        const totalCount = roleTasks.length;
-                        const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-                        const roleUser = roleType === 'SELLER' ? seller : buyer;
-
-                        const pendingTasks = roleTasks.filter((t: any) => t.status !== 'COMPLETED');
-                        const completedTasks = roleTasks.filter((t: any) => t.status === 'COMPLETED');
-
+                    <div className="p-6 space-y-3">
+                      {projectStatusData.tasks.sort((a, b) => {
+                          if (a.status === 'COMPLETED' && b.status !== 'COMPLETED') return 1;
+                          if (a.status !== 'COMPLETED' && b.status === 'COMPLETED') return -1;
+                          return 0;
+                      }).map((task: any) => {
+                        const isCompleted = task.status === 'COMPLETED';
                         return (
-                           <div key={roleType} className="space-y-6">
-                              <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100 shadow-sm">
-                                 <div className="flex items-center justify-between mb-4">
-                                    <div className="flex items-center gap-3">
-                                       <div className={`p-2.5 rounded-xl ${roleType === 'SELLER' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                                          <UserIcon size={20} />
-                                       </div>
-                                       <div>
-                                          <h4 className="font-bold text-slate-900">{roleType === 'SELLER' ? 'Seller' : 'Buyer'}</h4>
-                                          <p className="text-xs text-slate-500 font-medium">{roleUser?.name || 'Unassigned'}</p>
-                                       </div>
-                                    </div>
-                                    <div className="text-right">
-                                       <p className="text-2xl font-bold text-slate-900">{percent}%</p>
-                                    </div>
-                                 </div>
-                                 <div className="w-full bg-white rounded-full h-2.5 overflow-hidden shadow-inner">
-                                     <div className={`h-full transition-all duration-700 ease-out ${roleType === 'SELLER' ? 'bg-indigo-500' : 'bg-emerald-500'}`} style={{ width: `${percent}%` }}></div>
-                                 </div>
-                                 <div className="flex justify-between mt-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                    <span>{completedCount} Completed</span>
-                                    <span>{totalCount - completedCount} Remaining</span>
-                                 </div>
+                          <div
+                            key={task.id}
+                            className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                              isCompleted
+                                ? 'bg-slate-50 border-slate-50 opacity-60'
+                                : 'bg-white border-slate-100 hover:border-blue-200 shadow-sm'
+                            }`}
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className={isCompleted ? 'text-emerald-500' : 'text-slate-300'}>
+                                {isCompleted ? <CheckCircle size={22} /> : <Circle size={22} />}
                               </div>
-
-                              <div className="space-y-3">
-                                 <h5 className="text-xs font-bold uppercase text-slate-400 tracking-widest pl-1 flex items-center gap-2">
-                                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> Active Tasks
-                                 </h5>
-                                 {pendingTasks.length === 0 ? (
-                                    <div className="p-8 border border-dashed border-slate-200 rounded-2xl text-center">
-                                      <CheckCircle2 size={32} className="text-slate-200 mx-auto mb-2" />
-                                      <p className="text-sm font-medium text-slate-400">All caught up!</p>
-                                    </div>
-                                 ) : pendingTasks.map((t: any) => (
-                                    <div key={t.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:border-blue-300 transition-all group">
-                                      <div className="flex items-start gap-4">
-                                        <div className={`mt-0.5 p-2 rounded-lg bg-slate-100 text-slate-300 group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors`}>
-                                          <Circle size={20} />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center justify-between gap-2 mb-1">
-                                            <p className="font-bold text-slate-900 truncate">{t.title}</p>
-                                            {t.dueDate && <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full whitespace-nowrap">{new Date(t.dueDate).toLocaleDateString()}</span>}
-                                          </div>
-                                          <p className="text-xs text-slate-500 line-clamp-2 mb-3">{t.description}</p>
-                                          
-                                          <div className="flex flex-wrap gap-2">
-                                            {(() => {
-                                                const rd = requiredDocs.find((r: any) => r.taskId === t.taskId);
-                                                const userDocs = t.user?.userDocuments ? (typeof t.user.userDocuments === 'string' ? JSON.parse(t.user.userDocuments) : t.user.userDocuments) : [];
-                                                const reqId = rd? (rd.$id || rd.id) : null;
-                                                const provided = reqId ? userDocs.find((d: any) => d.documentRequirementId === reqId && (rd?.isGlobal || d.projectId === id)) : null;
-                                                
-                                                if (provided) {
-                                                  return (
-                                                    <button 
-                                                      onClick={() => handleOpenViewer({ fileId: provided.fileId, url: provided.url, documentType: provided.documentType }, t.title)}
-                                                      className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 transition-colors"
-                                                    >
-                                                      <Eye size={12} /> View Doc
-                                                    </button>
-                                                  );
-                                                }
-                                                return null;
-                                            })()}
-                                            
-                                            <button 
-                                              onClick={() => handleApproveDoc(t.user.id, t.taskId)} 
-                                              className="flex-1 flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-wider bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors shadow-sm shadow-blue-200"
-                                            >
-                                              Mark Complete
-                                            </button>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                 ))}
-                              </div>
-
-                              {completedTasks.length > 0 && (
-                                <div className="space-y-3 pt-4 border-t border-slate-100">
-                                   <h5 className="text-xs font-bold uppercase text-slate-400 tracking-widest pl-1 flex items-center gap-2">
-                                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> Completed
-                                   </h5>
-                                   <div className="opacity-60 hover:opacity-100 transition-opacity space-y-2">
-                                     {completedTasks.map((t: any) => (
-                                         <div key={t.id} className="bg-slate-50 p-3 rounded-lg border border-slate-100 flex items-center justify-between gap-3">
-                                            <div className="flex items-center gap-3 overflow-hidden">
-                                              <div className="text-emerald-500 min-w-[20px]"><CheckCircle2 size={20} /></div>
-                                              <span className="text-sm font-medium text-slate-600 truncate line-through decoration-slate-300">{t.title}</span>
-                                            </div>
-                                            <button 
-                                              onClick={() => handleRejectDoc(t.user.id, t.taskId)} 
-                                              className="text-slate-400 hover:text-amber-600 p-1.5 rounded-md hover:bg-amber-50 transition-colors"
-                                              title="Revert Status"
-                                            >
-                                              <History size={16} />
-                                            </button>
-                                         </div>
-                                     ))}
-                                   </div>
+                              <div>
+                                <p className={`font-bold text-sm ${isCompleted ? 'line-through text-slate-400' : 'text-slate-900'}`}>
+                                  {task.title}
+                                </p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-tighter ${task.role === 'SELLER' ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                    {task.role}
+                                  </span>
+                                  <p className="text-[10px] text-slate-500 font-medium">
+                                    Assigned to {task.userName} • {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'No date'}
+                                  </p>
                                 </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {!isCompleted && (
+                                <button
+                                  onClick={() => handleApproveDoc(task.user.id, task.taskId)}
+                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
+                                  title="Mark as Complete"
+                                >
+                                  <CheckCircle2 size={18} />
+                                </button>
                               )}
-                           </div>
+                              {isCompleted && (
+                                <button
+                                  onClick={() => handleRejectDoc(task.user.id, task.taskId)}
+                                  className="p-2 text-slate-400 hover:text-amber-600 rounded-xl transition-colors"
+                                  title="Revert Status"
+                                >
+                                  <History size={18} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         );
-                     })}
+                      })}
+                      {projectStatusData.tasks.length === 0 && (
+                        <p className="text-center py-8 text-slate-400 italic">No tasks active for this project.</p>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -1121,239 +1442,142 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                 <div className="space-y-8 animate-in fade-in duration-300">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-lg font-bold text-slate-900">Document Compliance</h3>
-                      <p className="text-xs text-slate-500">Track required documents for closing.</p>
-                    </div>
-                    {isAdmin && (
-                      <button 
-                        onClick={handleSyncDocs}
-                        className="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-800 transition-all flex items-center gap-2"
-                        disabled={isSyncing}
-                      >
-                        {isSyncing ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                        Sync Requirements
-                      </button>
-                    )}
-                  </div>
-
-                  {projectStatusData.docs.length === 0 ? (
-                      <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-12 text-center">
-                        <FileText size={48} className="text-slate-300 mx-auto mb-4" />
-                        <h4 className="text-slate-900 font-bold mb-1">No Requirements Found</h4>
-                        <p className="text-slate-500 text-sm">There are no document requirements configured for this project type.</p>
-                      </div>
-                  ) : (
-                      <div className="grid grid-cols-1 gap-4">
-                        {projectStatusData.docs.map(rd => (
-                          <div key={rd.$id} className="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm hover:border-blue-200 transition-all group">
-                             <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
-                                <div className="flex items-start gap-4">
-                                   <div className="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover:scale-110 transition-transform">
-                                      <FileText size={24} />
-                                   </div>
-                                   <div>
-                                      <h4 className="font-bold text-slate-900 text-lg">{rd.name}</h4>
-                                      <p className="text-sm text-slate-500 max-w-2xl">{rd.description}</p>
-                                   </div>
-                                </div>
-                             </div>
-                             
-                             <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {(rd as any).participants.map((p: any) => (
-                                   <div key={p.role} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${p.isProvided ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-slate-100'}`}>
-                                      <div className="flex items-center gap-3">
-                                         <div className={`p-2 rounded-lg ${p.role === 'SELLER' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                                            <UserIcon size={16} />
-                                         </div>
-                                         <div>
-                                            <div className="flex items-center gap-2">
-                                               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{p.role === 'SELLER' ? 'Seller' : 'Buyer'}</span>
-                                               {p.isProvided ? (
-                                                  <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full"><CheckCircle2 size={10} /> RECEIVED</span>
-                                               ) : (
-                                                  <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full"><Clock size={10} /> PENDING</span>
-                                               )}
-                                            </div>
-                                            <p className="text-xs font-bold text-slate-700 mt-0.5">{p.user?.name || 'Unassigned'}</p>
-                                         </div>
-                                      </div>
-                                      
-                                      <div className="flex items-center gap-2">
-                                         {p.isProvided ? (
-                                            <button 
-                                               onClick={() => handleOpenViewer({ fileId: p.fileId, url: p.url, documentType: p.documentType }, rd.name)} 
-                                               className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors tooltip"
-                                               title="View Document"
-                                            >
-                                               <Eye size={18} />
-                                            </button>
-                                         ) : (
-                                            isAdmin && p.user && (
-                                               <button 
-                                                  onClick={() => {
-                                                     setUploadingDocId((rd as any).$id);
-                                                     setUploadingForUserId(p.user.id);
-                                                     docFileInputRef.current?.click();
-                                                  }}
-                                                  className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-lg hover:border-blue-300 hover:text-blue-600 transition-colors shadow-sm"
-                                               >
-                                                  <Plus size={14} /> Upload
-                                               </button>
-                                            )
-                                         )}
-                                      </div>
-                                   </div>
-                                ))}
-                             </div>
-                          </div>
-                        ))}
-                      </div>
-                  )}
-                </div>
-              )}
-
-              {activeTab === 'forms' && (
-                <div className="space-y-8 animate-in fade-in duration-300">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-bold text-slate-900">Project Forms</h3>
-                      <p className="text-xs text-slate-500">Official documentation and questionnaires</p>
+                      <h3 className="text-lg font-bold text-slate-900">Document Vault</h3>
+                      <p className="text-xs text-slate-500">Unified repository for Contracts, Forms, and Property Requirements.</p>
                     </div>
                     <div className="flex items-center gap-3">
                       {isAdmin && (
-                        <button onClick={() => setShowFormEditor(true)} className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-slate-900/20 hover:bg-slate-800 transition-all">
-                          <Plus size={18} />
-                          Manual Entry
-                        </button>
+                        <>
+                          <button
+                            onClick={() => setShowTemplatePicker(true)}
+                            className="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-800 transition-all flex items-center gap-2"
+                            disabled={isGenerating}
+                          >
+                            {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Bot size={16} />}
+                            Contract Builder
+                          </button>
+                          <button
+                            onClick={() => setShowFormEditor(true)}
+                            className="bg-white text-slate-900 border border-slate-200 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm"
+                          >
+                            <Plus size={16} />
+                            Manual Form
+                          </button>
+                        </>
                       )}
-                      <button onClick={loadForms} className="p-2 bg-white rounded-xl border border-slate-100 text-slate-400 hover:text-blue-600 transition-colors">
-                        <History size={20} />
+                      <button
+                        onClick={handleSyncDocs}
+                        className="p-2 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-xl border border-slate-100 transition-colors"
+                        title="Sync Requirements"
+                        disabled={isSyncing}
+                      >
+                        {isSyncing ? <Loader2 size={18} className="animate-spin" /> : <History size={18} />}
                       </button>
                     </div>
                   </div>
 
-                  {/* User's Assigned Forms */}
-                  {forms.some(f => f.assignedToUserId === user.id && f.status !== 'submitted') && (
-                    <div className="bg-blue-600 rounded-3xl p-6 text-white shadow-xl shadow-blue-600/20">
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="shrink-0 p-2 bg-white/20 rounded-xl">
-                          <ClipboardList size={24} />
+                  {/* Document Summary Stats */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                        <FileText size={24}/>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-black text-slate-900">{projectContracts.length}</div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Contracts</div>
+                      </div>
+                    </div>
+                    <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <ClipboardList size={24}/>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-black text-slate-900">{forms.length}</div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Forms</div>
+                      </div>
+                    </div>
+                    <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                        <CheckCircle2 size={24}/>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-black text-emerald-600">
+                          {projectStatusData.docs.filter(d => d.participants.every((p: any) => p.isProvided)).length}
                         </div>
-                        <div>
-                          <h4 className="font-bold">Pending Action</h4>
-                          <p className="text-xs text-blue-100">You have forms waiting for your input</p>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Provided</div>
+                      </div>
+                    </div>
+                    <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                        <Clock size={24}/>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-black text-amber-600">
+                          {projectStatusData.docs.filter(d => d.participants.some((p: any) => !p.isProvided)).length}
                         </div>
-                      </div>
-                      <div className="space-y-3">
-                        {forms.filter(f => f.assignedToUserId === user.id && f.status !== 'submitted').map(f => (
-                          <div key={f.id} className="bg-white/10 hover:bg-white/20 border border-white/10 rounded-2xl p-4 flex items-center justify-between transition-all">
-                            <div>
-                              <div className="font-bold">{f.title}</div>
-                              <div className="text-[10px] text-blue-100 uppercase tracking-widest">{f.formKey.replace(/_/g, ' ')}</div>
-                            </div>
-                            <button 
-                              onClick={() => setSelectedSubmission(f)}
-                              className="bg-white text-blue-600 px-4 py-2 rounded-xl text-xs font-bold shadow-sm hover:bg-blue-50 transition-colors"
-                            >
-                              Fill Form
-                            </button>
-                          </div>
-                        ))}
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Attention</div>
                       </div>
                     </div>
-                  )}
+                  </div>
 
-                  {isLoadingForms ? (
-                    <div className="p-8 text-center text-slate-400 flex flex-col items-center">
-                      <Loader2 className="animate-spin mb-2" />
-                      Loading...
+                  {/* Section: Legal Contracts */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 px-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Legal Contracts</span>
+                      <div className="h-[1px] flex-1 bg-slate-100"></div>
                     </div>
-                  ) : forms.length === 0 ? (
-                    <div className="py-20 text-center bg-white rounded-3xl border border-dashed border-slate-200">
-                      <div className="p-4 bg-slate-50 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4 text-slate-300">
-                        <ClipboardList size={32} />
-                      </div>
-                      <h4 className="font-bold text-slate-900">No forms yet</h4>
-                      <p className="text-sm text-slate-500 max-w-xs mx-auto">Templates can be assigned to participants to start the documentation process.</p>
+                    <div className="grid grid-cols-1 gap-4">
+                      {projectContracts.map(contract => (
+                        <div key={contract.id} className="bg-white border border-slate-100 rounded-3xl p-5 shadow-sm hover:border-blue-200 transition-all group flex items-center justify-between gap-6">
+                           <div className="flex items-center gap-4 flex-1">
+                              <div className="p-3 bg-slate-50 text-slate-600 rounded-2xl group-hover:scale-110 transition-transform">
+                                 <FileText size={20} />
+                              </div>
+                              <div className="min-w-0">
+                                 <h4 className="font-bold text-slate-900 text-sm truncate">{contract.title}</h4>
+                                 <p className="text-xs text-slate-500 line-clamp-1">{contract.content.replace(/<[^>]*>/g, ' ').substring(0, 100)}...</p>
+                              </div>
+                           </div>
+                           <div className="flex items-center gap-4 shrink-0">
+                              <div className="flex flex-col items-end">
+                                 <span className={`text-[10px] font-bold uppercase ${contract.status === ContractStatus.SIGNED ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                    {contract.status.replace('_', ' ')}
+                                 </span>
+                              </div>
+                              <div className="flex gap-2">
+                                 {contract.assignees.includes(user.id) && !contract.signedBy.includes(user.id) && (
+                                   <button onClick={() => setSigningContractId(contract.id)} className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-sm"><SignatureIcon size={16}/></button>
+                                 )}
+                                 <button onClick={() => downloadContractPDF(contract, project, allUsers)} className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors"><Download size={16}/></button>
+                              </div>
+                           </div>
+                        </div>
+                      ))}
+                      {projectContracts.length === 0 && (
+                        <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400 text-xs italic">
+                           No contracts generated yet.
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2 px-1">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Project Activity</span>
-                        <div className="h-[1px] flex-1 bg-slate-100"></div>
-                      </div>
-                      <div className="grid grid-cols-1 gap-3">
-                        {forms
-                          .filter((f: any) => {
-                            if (isAdmin) return true;
-                            
-                            // Get user IDs (Profile $id and Auth userId)
-                            const myAuthId = user.id;
-                            const myProfileId = user.$id;
-                            const isAssignee = f.assignedToUserId === myAuthId || (myProfileId && f.assignedToUserId === myProfileId);
-                            if (isAssignee) return true;
+                  </div>
 
-                            // Non-assignees (Approvers) logic
-                            let meta: any = {};
-                            try {
-                              if (typeof f.meta === 'object' && f.meta !== null) {
-                                meta = f.meta;
-                              } else if (typeof f.meta === 'string' && f.meta.trim()) {
-                                meta = JSON.parse(f.meta);
-                              }
-                            } catch (e) {
-                              console.error('Error parsing meta', e);
-                            }
-                            
-                            const status = f.status;
-                            const signatures = meta?.signatures || {};
-                            const hasAnySignature = Object.keys(signatures).length > 0;
-
-                            // Determine if current user needs to sign
-                            const userRole = user.role?.toUpperCase();
-                            const needsMySign = (
-                                (userRole === UserRole.SELLER && (meta.needsSignatureFromSeller === true || meta.needsSignatureFromSeller === 'true' || meta.needSignatureFromSeller === true || meta.needSignatureFromSeller === 'true')) ||
-                                (userRole === UserRole.BUYER && (meta.needsSignatureFromBuyer === true || meta.needsSignatureFromBuyer === 'true' || meta.needSignatureFromBuyer === true || meta.needSignatureFromBuyer === 'true'))
-                            );
-
-                            // Project participants should see forms if they need to sign, or if it's already signed/submitted
-                            if (!needsMySign && !isAssignee && !isAdmin) {
-                                // If I don't need to sign and I'm not the assignee/admin, only show if already submitted or has signatures
-                                if (status === 'draft' || status === 'assigned') return false;
-                            }
-
-                            // Sequential visibility logic for approvers (non-assignees)
-                            // "Only show to approver if assignee has signed (if required) or at least submitted"
-                            if (!isAssignee && !isAdmin) {
-                                // 1. Hide if it's still in draft/assigned and has no signatures at all
-                                if (!hasAnySignature && (status === 'draft' || status === 'assigned')) return false;
-
-                                const isSellerAssignee = f.assignedToUserId === project?.sellerId;
-                                const isBuyerAssignee = f.assignedToUserId === project?.buyerId;
-
-                                // 2. If user is Buyer, but Seller signature is required and missing, hide it
-                                const sellerNeedsToSign = (meta.needsSignatureFromSeller === true || meta.needsSignatureFromSeller === 'true' || meta.needSignatureFromSeller === true || meta.needSignatureFromSeller === 'true');
-                                if (userRole === UserRole.BUYER && sellerNeedsToSign && !signatures.seller) {
-                                    // Buyer should only see it AFTER Seller has approved
-                                    return false;
-                                }
-
-                                // 3. If form was assigned specifically to one party to fill, other parties wait until they submit/sign
-                                // (This is mostly redundant with point 1 but good for clarity)
-                                if (isSellerAssignee && sellerNeedsToSign && !signatures.seller) return false;
-                                if (isBuyerAssignee && (meta.needsSignatureFromBuyer === true || meta.needsSignatureFromBuyer === 'true' || meta.needSignatureFromBuyer === true || meta.needSignatureFromBuyer === 'true') && !signatures.buyer) {
-                                    // This hides it from Seller if Buyer is the primary filler and hasn't finished
-                                    if (userRole === UserRole.SELLER) return false;
-                                }
-                            }
-
-                            return true;
-                          })
-                          .map((f: any) => (
+                  {/* Section: Project Forms */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 px-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Information Forms</span>
+                      <div className="h-[1px] flex-1 bg-slate-100"></div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3">
+                        {forms.length === 0 ? (
+                           <div className="p-8 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200 text-slate-400 text-xs italic">
+                              No forms assigned yet.
+                           </div>
+                        ) : (
+                          forms.map((f: any) => (
                             <div key={f.id}>
-                              <FormListItem 
-                                submission={f} 
-                                onView={(s) => setSelectedSubmission(s)} 
+                              <FormListItem
+                                submission={f}
+                                onView={(s) => setSelectedSubmission(s)}
                                 onDelete={isAdmin ? handleDeleteForm : undefined}
                                 user={user}
                                 onUpdate={(updated) => {
@@ -1361,187 +1585,385 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                                 }}
                               />
                             </div>
-                          ))}
-                      </div>
+                          ))
+                        )}
                     </div>
-                  )}
+                  </div>
 
-                  {showFormEditor && (
-                    <FormEditor projectId={project.id} onClose={() => setShowFormEditor(false)} onCreated={(s) => setForms(prev => [s, ...prev])} />
-                  )}
+                  {/* Closing Requirements */}
+                  <div className="space-y-4 pt-4">
+                    <div className="flex items-center gap-2 px-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Closing Requirements</span>
+                      <div className="h-[1px] flex-1 bg-slate-100"></div>
+                    </div>
 
-                  {selectedSubmission && (
-                    <FormRenderer 
-                      submission={selectedSubmission} 
-                      user={user}
-                      allUsers={allUsers}
-                      project={project}
-                      onClose={() => setSelectedSubmission(null)} 
-                      onUpdate={(updated) => {
-                        setForms(prev => prev.map(f => f.id === updated.id ? updated : f));
-                      }}
-                    />
-                  )}
-
-                  {isAssigningForm && selectedTemplate && (
-                    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-                      <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                          <h3 className="font-bold text-lg">Assign {selectedTemplate.title}</h3>
-                          <button onClick={() => setIsAssigningForm(false)} className="p-2 text-slate-400 hover:text-slate-600"><X /></button>
+                    {projectStatusData.docs.length === 0 ? (
+                        <div className="bg-slate-50 border border-dashed border-slate-200 rounded-3xl p-12 text-center">
+                          <FileText size={48} className="text-slate-300 mx-auto mb-4" />
+                          <h4 className="font-bold text-slate-900 mb-1">No Requirements Found</h4>
+                          <p className="text-slate-500 text-sm">There are no document requirements configured for this project type.</p>
                         </div>
-                        <div className="p-6 space-y-4">
-                          <p className="text-sm text-slate-500">Select a user to assign this form to. This will create a pending submission for them to fill out.</p>
-                          <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                            {allUsers
-                              .filter(u => u.id === project.sellerId || u.id === project.buyerId || u.id === project.managerId)
-                              .map(u => (
-                                <button 
-                                  key={u.id}
-                                  onClick={() => executeFormAssignment(selectedTemplate, u.id)}
-                                  className="w-full flex items-center gap-3 p-3 rounded-2xl border border-slate-100 hover:bg-blue-50 hover:border-blue-200 transition-all text-left group"
-                                >
-                                  <img src={u.avatar} className="w-10 h-10 rounded-full" alt="" />
-                                  <div className="flex-1">
-                                    <div className="text-sm font-bold text-slate-900">{u.name}</div>
-                                    <div className="text-[10px] text-slate-500 uppercase tracking-widest">{u.role}</div>
+                    ) : (
+                        <div className="grid grid-cols-1 gap-4">
+                          {projectStatusData.docs.map(rd => (
+                            <div key={rd.$id} className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm hover:border-indigo-200 transition-all group">
+                               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                                  <div className="flex items-start gap-4">
+                                     <div className="p-3 bg-slate-50 text-slate-600 rounded-2xl group-hover:scale-110 transition-transform">
+                                        <FileText size={24} />
+                                     </div>
+                                     <div>
+                                        <h4 className="font-bold text-slate-900 text-lg">{rd.title}</h4>
+                                        <p className="text-sm text-slate-500 max-w-md line-clamp-1">Mandatory document for property transfer.</p>
+                                     </div>
                                   </div>
-                                  <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-500 transition-colors" />
-                                </button>
-                              ))}
-                          </div>
+
+                                  <div className="flex flex-wrap gap-3">
+                                    {rd.participants.map((p: any) => (
+                                       <div key={p.role} className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all ${p.isProvided ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-slate-100'}`}>
+                                          <div className="relative shrink-0">
+                                            <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center overflow-hidden">
+                                              {p.user?.avatar ? <img src={p.user.avatar} className="w-full h-full object-cover" /> : <UserIcon size={14} className="text-slate-400" />}
+                                            </div>
+                                            <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${p.isProvided ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
+                                          </div>
+
+                                          <div className="min-w-[80px]">
+                                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter leading-none mb-1">{p.role}</div>
+                                            <div className="text-xs font-bold text-slate-700 truncate max-w-[100px]">{p.user?.name || 'Pending...'}</div>
+                                          </div>
+
+                                          {p.isProvided && (p.url || p.fileId) && (
+                                            <button
+                                              onClick={() => handleOpenViewer({ fileId: p.fileId, url: p.url, documentType: p.documentType }, rd.title)}
+                                              className="p-2 bg-white rounded-xl shadow-sm border border-slate-100 text-indigo-600 hover:text-white hover:bg-indigo-600 transition-all"
+                                              title="View Document"
+                                            >
+                                              <Eye size={16} />
+                                            </button>
+                                          )}
+                                       </div>
+                                    ))}
+                                  </div>
+                               </div>
+                            </div>
+                          ))}
                         </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'property' && project && (
+                <div className="space-y-8 animate-in fade-in duration-300">
+                  {/* General Information Section */}
+                  <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+                    <div className="p-6 border-b border-slate-50 flex items-center justify-between">
+                      <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                         <Home size={20} className="text-indigo-600" /> General Information
+                      </h2>
+                      {isAdmin && (
+                        <button
+                          onClick={() => { setShowGeneralInfoModal(true); setTempAddress(project.property.address); }}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white rounded-xl text-[10px] font-bold hover:bg-slate-800 transition-all shadow-sm"
+                        >
+                            <Edit2 size={12} /> Edit Details
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-slate-50">
+                      <div className="p-6">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Project Title</p>
+                        <p className="text-sm font-bold text-slate-900">{project.title}</p>
+                      </div>
+                      <div className="p-6">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Address</p>
+                        <p className="text-sm font-bold text-slate-900">{project.property.address}</p>
+                      </div>
+                      <div className="p-6">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Price</p>
+                        <p className="text-sm font-black text-blue-600">${(project.property.price || 0).toLocaleString()}</p>
+                      </div>
+                      <div className="p-6">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Reference Number</p>
+                        <p className="text-sm font-bold text-slate-900">{project.referenceNumber || 'N/A'}</p>
                       </div>
                     </div>
-                  )}
+                  </div>
 
-                  {isAdmin && (
-                    <div className="pt-6 border-t border-slate-100">
-                      <h4 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
-                         <Library size={16} className="text-blue-600" />
-                         Available Form Templates
-                      </h4>
-                      
-                      {isLoadingForms ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-pulse">
-                          {[1, 2].map(i => (
-                            <div key={i} className="bg-slate-50 h-16 rounded-2xl border border-slate-100"></div>
-                          ))}
+                  {/* Property Description */}
+                  <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                         <FileText size={20} className="text-blue-600" /> Property Overview
+                      </h2>
+                      {isAdmin && editingField !== 'description' && (
+                        <button
+                          onClick={() => { setEditingField('description'); setEditValue(project.property.description); }}
+                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                          title="Edit Description"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                      )}
+                    </div>
+
+                    {isAdmin && editingField === 'description' ? (
+                      <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                        <textarea
+                          autoFocus
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          className="w-full h-32 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                        />
+                        <div className="flex justify-end gap-2">
+                          <button onClick={() => setEditingField(null)} className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-700">Cancel</button>
+                          <button
+                            onClick={() => handleSaveInlineField('description', editValue)}
+                            disabled={isProcessing}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 flex items-center gap-2"
+                          >
+                            {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Check size={16}/>}
+                            Save Description
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-slate-600 leading-relaxed text-sm whitespace-pre-line">{project.property.description || 'No description provided for this property.'}</p>
+                    )}
+
+                    {/* Handover Date Section */}
+                    <div className="mt-8 pt-8 border-t border-slate-100">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <Clock size={20} className="text-orange-500" />
+                          <h3 className="font-bold text-slate-900">Project Handover Date</h3>
+                        </div>
+                        {isAdmin && editingField !== 'handover_date' && (
+                          <button
+                            onClick={() => { setEditingField('handover_date'); setEditValue(project.handover_date ? new Date(project.handover_date).toISOString().split('T')[0] : ''); }}
+                            className="p-2 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-xl transition-all"
+                            title="Edit Handover Date"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                        )}
+                      </div>
+
+                      {isAdmin && editingField === 'handover_date' ? (
+                        <div className="flex items-center gap-3 animate-in fade-in slide-in-from-left-2">
+                          <input
+                            type="date"
+                            autoFocus
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          />
+                          <button
+                            onClick={() => handleSaveInlineField('handover_date', editValue)}
+                            disabled={isProcessing}
+                            className="p-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-all"
+                          >
+                            {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <Check size={18}/>}
+                          </button>
+                          <button onClick={() => setEditingField(null)} className="p-2 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 transition-all"><X size={18}/></button>
                         </div>
                       ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {formDefinitions.length === 0 ? (
-                            <div className="col-span-2 p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                              <p className="text-sm text-slate-500 italic">No form templates defined in the system.</p>
-                            </div>
-                          ) : (
-                            formDefinitions.map(def => (
-                              <div key={def.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow flex items-center justify-between group">
-                                <div className="min-w-0 pr-4">
-                                  <h5 className="text-sm font-bold text-slate-900 truncate">{def.title}</h5>
-                                  <div className="flex flex-wrap gap-1.5 mt-1">
-                                    {def.needSignatureFromSeller && (
-                                      <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100 uppercase">Seller Sign</span>
-                                    )}
-                                    {def.needSignatureFromBuyer && (
-                                      <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase">Buyer Sign</span>
-                                    )}
-                                    <p className="text-[10px] text-slate-400 line-clamp-1">{def.description || 'Standard form'}</p>
-                                  </div>
-                                </div>
-                                <button 
-                                  onClick={() => handleTemplateAssignmentClick(def)}
-                                  className="px-3 py-1.5 bg-blue-50 text-blue-600 text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
-                                >
-                                  {def.autoAssignTo && def.autoAssignTo !== 'none' ? 'Invite' : 'Assign'}
-                                </button>
-                              </div>
-                            ))
-                          )}
+                        <div className="flex items-center gap-3">
+                           <div className="px-4 py-2 bg-orange-50 text-orange-700 rounded-xl text-xs font-bold ring-1 ring-orange-100">
+                             {project.handover_date ? new Date(project.handover_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'NOT SCHEDULED'}
+                           </div>
+                           {!project.handover_date && isAdmin && (
+                             <button
+                               onClick={() => { setEditingField('handover_date'); setEditValue(''); }}
+                               className="text-xs font-bold text-blue-600 hover:underline"
+                             >
+                               Set Date
+                             </button>
+                           )}
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
-              )}
-
-              {activeTab === 'contracts' && (
-                <div className="space-y-6 animate-in fade-in duration-300">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-bold">Project Contracts</h3>
-                    {isAdmin && (
-                      <button onClick={() => setShowTemplatePicker(true)} disabled={isGenerating} className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg font-semibold hover:bg-slate-800 transition-all disabled:opacity-50">
-                        {isGenerating ? <Loader2 size={18} className="animate-spin" /> : <Bot size={18} />}
-                        AI Builder
-                      </button>
-                    )}
                   </div>
+
+                  {/* Property Specs */}
                   <div className="space-y-4">
-                    {projectContracts.map(contract => (
-                      <div key={contract.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col md:flex-row items-center gap-6">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <div className="p-2 bg-blue-50 rounded-lg text-blue-600"><FileText size={20}/></div>
-                            <h4 className="font-bold text-slate-900">{contract.title}</h4>
-                          </div>
-                          <p className="text-sm text-slate-500 line-clamp-2">{contract.content.substring(0, 150)}...</p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="flex flex-col items-center">
-                             {contract.status === ContractStatus.SIGNED ? <CheckCircle2 className="text-emerald-500" /> : <Clock className="text-amber-500" />}
-                             <span className="text-[10px] font-bold mt-1 uppercase">{contract.status.replace('_', ' ')}</span>
-                          </div>
-                          <div className="h-10 w-[1px] bg-slate-100"></div>
-                          <div className="flex flex-col gap-2">
-                            {contract.assignees.includes(user.id) && !contract.signedBy.includes(user.id) && (
-                              <button onClick={() => setSigningContractId(contract.id)} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors shadow-sm"><SignatureIcon size={14}/> Sign Now</button>
-                            )}
-                            <button onClick={() => downloadContractPDF(contract, project, allUsers)} className="flex items-center gap-2 bg-slate-100 text-slate-600 px-4 py-2 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors"><Download size={14}/> PDF</button>
+                    <div className="flex items-center justify-between px-2">
+                       <h3 className="font-bold text-slate-900 flex items-center gap-2 uppercase tracking-widest text-xs">
+                         Property Specifications
+                       </h3>
+                       {isAdmin && (
+                         <button
+                           onClick={() => setShowBulkSpecsModal(true)}
+                           className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white rounded-xl text-[10px] font-bold hover:bg-slate-800 transition-all shadow-sm"
+                         >
+                            <Edit2 size={12} /> Edit All
+                         </button>
+                       )}
+                    </div>
+
+                    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                      {/* Bedrooms */}
+                      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 text-center group hover:border-blue-200 transition-all relative">
+                        <Bed className="mx-auto text-slate-300 group-hover:text-blue-500 mb-3 transition-colors" size={24} />
+                        <p className="text-xl font-black text-slate-900">{project.property.bedrooms || 0}</p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Bedrooms</p>
+                      </div>
+
+                      {/* Bathrooms */}
+                      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 text-center group hover:border-blue-200 transition-all relative">
+                        <Bath className="mx-auto text-slate-300 group-hover:text-blue-500 mb-3 transition-colors" size={24} />
+                        <p className="text-xl font-black text-slate-900">{project.property.bathrooms || 0}</p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Bathrooms</p>
+                      </div>
+
+                      {/* Living Area */}
+                      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 text-center group hover:border-blue-200 transition-all relative">
+                        <Maximize2 className="mx-auto text-slate-300 group-hover:text-blue-500 mb-3 transition-colors" size={24} />
+                        <p className="text-xl font-black text-slate-900">{(project.property.livingArea || 0).toLocaleString()} <span className="text-[10px] font-bold">m²</span></p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Living Area</p>
+                      </div>
+
+                      {/* Plot Size */}
+                      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 text-center group hover:border-blue-200 transition-all relative">
+                        <Square className="mx-auto text-slate-300 group-hover:text-blue-500 mb-3 transition-colors" size={24} />
+                        <p className="text-xl font-black text-slate-900">{(project.property.sqft || 0).toLocaleString()} <span className="text-[10px] font-bold">m²</span></p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Plot Size</p>
+                      </div>
+
+                      {/* Build Year */}
+                      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 text-center group hover:border-blue-200 transition-all relative">
+                        <Calendar className="mx-auto text-slate-300 group-hover:text-blue-500 mb-3 transition-colors" size={24} />
+                        <p className="text-xl font-black text-slate-900">{project.property.buildYear || 'TBD'}</p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Build Year</p>
+                      </div>
+
+                      {/* Garages */}
+                      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 text-center group hover:border-blue-200 transition-all relative">
+                        <Car className="mx-auto text-slate-300 group-hover:text-blue-500 mb-3 transition-colors" size={24} />
+                        <p className="text-xl font-black text-slate-900">{project.property.garages || 0}</p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Garages</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Image Gallery */}
+                  <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+                    <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                       <h3 className="font-bold text-slate-900">Property Gallery</h3>
+                       <span className="text-[10px] font-bold text-slate-400 uppercase bg-slate-50 px-3 py-1 rounded-full">
+                         {project.property.images?.length || 0} Assets
+                       </span>
+                    </div>
+                    {project.property.images && project.property.images.length > 0 ? (
+                      <div className="relative group bg-slate-950 flex items-center justify-center p-4">
+                        <div className="relative w-full max-w-4xl aspect-[16/9] rounded-2xl overflow-hidden shadow-2xl">
+                          <img
+                            src={project.property.images[currentImageIndex] ? projectService.getImagePreview(project.property.images[currentImageIndex]) : ''}
+                            alt="Property"
+                            className="w-full h-full object-cover"
+                          />
+
+                          {project.property.images.length > 1 && (
+                            <div className="absolute inset-0 flex items-center justify-between p-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={prevImage}
+                                className="bg-white/20 hover:bg-white/40 backdrop-blur-md text-white rounded-full p-3 shadow-lg transition-all"
+                              >
+                                <ChevronLeft size={24} />
+                              </button>
+                              <button
+                                onClick={nextImage}
+                                className="bg-white/20 hover:bg-white/40 backdrop-blur-md text-white rounded-full p-3 shadow-lg transition-all"
+                              >
+                                <ChevronRight size={24} />
+                              </button>
+                            </div>
+                          )}
+
+                          <div className="absolute bottom-4 right-4 bg-black/50 backdrop-blur-md text-white px-3 py-1.5 rounded-lg text-xs font-bold">
+                            {currentImageIndex + 1} / {project.property.images.length}
                           </div>
                         </div>
                       </div>
-                    ))}
-                    {projectContracts.length === 0 && <p className="text-center py-12 text-slate-400 italic">No contracts generated yet.</p>}
-                  </div>
-                </div>
-              )}
+                    ) : (
+                      <div className="aspect-video bg-slate-50 flex flex-col items-center justify-center text-slate-300">
+                        <ImageIcon size={64} className="mb-4 opacity-20" />
+                        <p className="font-bold uppercase tracking-widest text-xs">No gallery images uploaded</p>
+                      </div>
+                    )}
 
-              {activeTab === 'messages' && (
-                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[60vh]">
-                  <div className="flex-1 overflow-y-auto p-6 space-y-4 no-scrollbar">
-                    {messages.map((msg) => {
-                      const isMe = msg.senderId === user.id;
-                      const sender = allUsers.find(u => u.id === msg.senderId);
-                      return (
-                        <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`max-w-[80%] flex gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                            <img src={sender?.avatar} className="w-8 h-8 rounded-full shadow-sm" alt="" />
-                            <div className={`p-3 rounded-2xl shadow-sm text-sm ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-slate-700 rounded-tl-none'}`}>
-                              <p className="text-[10px] font-bold opacity-70 mb-1">{sender?.name}</p>
-                              {msg.text}
-                              <p className="text-[9px] mt-2 opacity-50 text-right">{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    <div ref={chatEndRef} />
+                    {/* Thumbnail Strip */}
+                    {project.property.images && project.property.images.length > 0 && (
+                      <div className="p-4 bg-slate-50 flex gap-3 overflow-x-auto no-scrollbar">
+                        {project.property.images.map((img, idx) => (
+                          <button
+                            key={img}
+                            onClick={() => setCurrentImageIndex(idx)}
+                            className={`relative min-w-[100px] h-[60px] rounded-xl overflow-hidden border-2 transition-all ${
+                              currentImageIndex === idx ? 'border-blue-600 scale-105 shadow-md' : 'border-transparent opacity-60 hover:opacity-100'
+                            }`}
+                          >
+                             <img src={projectService.getImagePreview(img)} className="w-full h-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-100 flex gap-2">
-                    <input 
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      placeholder="Type a message..."
-                      className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-blue-500"
-                    />
-                    <button 
-                      type="submit"
-                      disabled={isSending}
-                      className="bg-blue-600 text-white p-2 rounded-xl hover:bg-blue-700 transition-all disabled:opacity-50"
-                    >
-                      <Send size={20} />
-                    </button>
-                  </form>
+
+                  {/* Neighborhood Insights (AIGround) */}
+                  <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                           <MapIcon size={20} />
+                        </div>
+                        <h3 className="text-xl font-bold text-slate-900">Area & Neighborhood</h3>
+                      </div>
+                      <button
+                        onClick={fetchLocationInsights}
+                        disabled={isLoadingLocation}
+                        className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all disabled:opacity-50"
+                      >
+                         {isLoadingLocation ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                         {locationInsights ? 'Update Insights' : 'Analyze Neighborhood'}
+                      </button>
+                    </div>
+
+                    {locationInsights ? (
+                      <div className="animate-in fade-in slide-in-from-top-4">
+                        <p className="text-slate-700 leading-relaxed text-sm whitespace-pre-line mb-8">{locationInsights.text}</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                          {locationInsights.links.map((link, idx) => (
+                            <a
+                              key={idx}
+                              href={link.uri}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="group flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-2xl hover:border-blue-300 hover:bg-white transition-all"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 bg-white rounded-lg shadow-sm group-hover:bg-blue-600 group-hover:text-white transition-all">
+                                  <MapPin size={14} />
+                                </div>
+                                <span className="text-xs font-bold text-slate-700">{link.title}</span>
+                              </div>
+                              <ChevronRight size={14} className="text-slate-300" />
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="py-12 flex flex-col items-center justify-center text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                         <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4 text-slate-400">
+                           <MapIcon size={32} />
+                         </div>
+                         <h4 className="font-bold text-slate-900 mb-2">No Area Data Loaded</h4>
+                         <p className="text-xs text-slate-500 max-w-xs leading-relaxed">Click the button above to generate AI-powered insights about schools, amenities, and market trends for this neighborhood.</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1549,7 +1971,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                 <div className="space-y-8 animate-in fade-in duration-300">
                   <div className="flex justify-between items-center">
                     <h2 className="text-xl font-bold text-slate-900">Project Participants</h2>
-                    <button 
+                    <button
                       onClick={() => setShowInviteModal(true)}
                       className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-700 transition-all flex items-center gap-2"
                     >
@@ -1568,7 +1990,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                               <div className="flex items-center gap-2">
                                 <Link to={`/profile/${agent.id}`} className="font-bold text-sm hover:text-blue-600 transition-colors">{agent.name}</Link>
                                 {onSwitchUser && (
-                                  <button 
+                                  <button
                                     onClick={() => onSwitchUser(agent.id)}
                                     className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-all tooltip"
                                     title="View as Agent"
@@ -1598,7 +2020,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                               <div className="flex items-center gap-2">
                                 <Link to={`/profile/${seller.id}`} className="font-bold text-sm hover:text-blue-600 transition-colors">{seller.name}</Link>
                                 {onSwitchUser && (
-                                  <button 
+                                  <button
                                     onClick={() => onSwitchUser(seller.id)}
                                     className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-all tooltip"
                                     title="View as Seller"
@@ -1628,7 +2050,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                               <div className="flex items-center gap-2">
                                 <Link to={`/profile/${buyer.id}`} className="font-bold text-sm hover:text-blue-600 transition-colors">{buyer.name}</Link>
                                 {onSwitchUser && (
-                                  <button 
+                                  <button
                                     onClick={() => onSwitchUser(buyer.id)}
                                     className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-all tooltip"
                                     title="View as Buyer"
@@ -1652,57 +2074,16 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
               )}
             </div>
           </div>
-        </div>
-
-        {/* Sidebar Info */}
-        <div className="w-full lg:w-80 shrink-0 space-y-6">
-          <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-xl overflow-hidden relative group">
-            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Bot size={80}/></div>
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 text-blue-400 mb-4"><Bot size={20} /><span className="font-bold uppercase tracking-wider text-xs">AI Project Insights</span></div>
-              {aiInsight ? (
-                <div className="animate-in fade-in slide-in-from-bottom-2">
-                  <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-line">{aiInsight}</p>
-                  <button onClick={() => setAiInsight(null)} className="mt-4 text-[10px] font-bold text-blue-400 hover:text-blue-300">REFRESH INSIGHTS</button>
-                </div>
-              ) : (
-                <button onClick={fetchInsights} className="w-full py-3 bg-blue-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-blue-500 transition-colors"><Sparkles size={16}/> Analyze Project</button>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-6">
-            <h3 className="font-bold text-slate-900 border-b border-slate-50 pb-4">Key Participants</h3>
-            <ParticipantRow user={seller} role="Seller" isAdmin={isAdmin} onSwitchUser={onSwitchUser} />
-            <ParticipantRow user={buyer} role="Buyer" isAdmin={isAdmin} onSwitchUser={onSwitchUser} />
-            <ParticipantRow 
-              user={(() => {
-                 const managerId = project.managerId || defaultAgentId; // Fallback to default
-                 const fromAll = allUsers.find(u => u.id === managerId || u.$id === managerId);
-                 if (fromAll) return fromAll;
-                 
-                 // Fallback to current user if IDs match
-                 if (user?.id === managerId || (user as any).$id === managerId) return user;
-                 
-                 return undefined;
-              })()}
-              role="Agent" 
-              isAdmin={isAdmin} 
-              onSwitchUser={onSwitchUser}
-            />
-          </div>
-        </div>
-      </div>
 
         {/* Task Library Modal */}
       {(viewerUrl || viewerError) && (
-        <DocumentViewer 
-          url={viewerUrl} 
+        <DocumentViewer
+          url={viewerUrl}
           downloadUrl={viewerDownloadUrl}
           documentType={viewerType}
-          error={viewerError || undefined} 
-          title={viewerTitle || undefined} 
-          onClose={handleCloseViewer} 
+          error={viewerError || undefined}
+          title={viewerTitle || undefined}
+          onClose={handleCloseViewer}
         />
       )}
       {isTaskLibraryOpen && (
@@ -1717,8 +2098,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
             </div>
             <div className="p-6 max-h-[60vh] overflow-y-auto no-scrollbar space-y-3">
               {taskTemplates.map(tmpl => (
-                <button 
-                  key={tmpl.id} 
+                <button
+                  key={tmpl.id}
                   onClick={() => addFromTemplate(tmpl)}
                   className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-blue-50 border border-slate-100 rounded-2xl transition-all group"
                 >
@@ -1748,8 +2129,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
             <form onSubmit={handleAddTask} className="p-6 space-y-4">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-400 uppercase">Title</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   required
                   value={newTaskData.title}
                   onChange={e => setNewTaskData({...newTaskData, title: e.target.value})}
@@ -1759,7 +2140,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-400 uppercase">Description</label>
-                <textarea 
+                <textarea
                   value={newTaskData.description}
                   onChange={e => setNewTaskData({...newTaskData, description: e.target.value})}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm resize-none"
@@ -1769,12 +2150,12 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-400 uppercase">Category</label>
-                  <select 
+                  <select
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm"
                     value={newTaskData.category}
                     onChange={e => setNewTaskData({...newTaskData, category: e.target.value as any})}
                   >
-                    <option value="GENERAL">General</option>
+                    <option value="General">General</option>
                     <option value="LEGAL">Legal</option>
                     <option value="FINANCIAL">Financial</option>
                     <option value="INSPECTION">Inspection</option>
@@ -1783,7 +2164,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-400 uppercase">Due Date</label>
-                  <input 
+                  <input
                     type="date"
                     required
                     value={newTaskData.dueDate}
@@ -1795,8 +2176,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
 
               <div className="space-y-3 pt-2">
                 <label className="flex items-center gap-3 cursor-pointer group">
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
                     checked={newTaskData.notifyAssignee}
                     onChange={e => setNewTaskData({...newTaskData, notifyAssignee: e.target.checked})}
                     className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
@@ -1804,8 +2185,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
                   <span className="text-sm font-semibold text-slate-600 group-hover:text-slate-900 transition-colors">Notify assigned user</span>
                 </label>
                 <label className="flex items-center gap-3 cursor-pointer group">
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
                     checked={newTaskData.notifyAgentOnComplete}
                     onChange={e => setNewTaskData({...newTaskData, notifyAgentOnComplete: e.target.checked})}
                     className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
@@ -1816,14 +2197,63 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
 
               <div className="pt-4 flex gap-3">
                 <button type="button" onClick={() => setIsAddTaskModalOpen(false)} className="flex-1 px-4 py-2.5 font-bold text-slate-500">Cancel</button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-md"
                 >
                   Create Task
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showFormEditor && (
+        <FormEditor projectId={project.id} onClose={() => setShowFormEditor(false)} onCreated={(s) => setForms(prev => [s, ...prev])} />
+      )}
+
+      {selectedSubmission && (
+        <FormRenderer
+          submission={selectedSubmission}
+          user={user}
+          allUsers={allUsers}
+          project={project}
+          onClose={() => setSelectedSubmission(null)}
+          onUpdate={(updated) => {
+            setForms(prev => prev.map(f => f.id === updated.id ? updated : f));
+          }}
+        />
+      )}
+
+      {isAssigningForm && selectedTemplate && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="font-bold text-lg">Assign {selectedTemplate.title}</h3>
+              <button onClick={() => setIsAssigningForm(false)} className="p-2 text-slate-400 hover:text-slate-600"><X /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-500">Select a user to assign this form to. This will create a pending submission for them to fill out.</p>
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                {allUsers
+                  .filter(u => u.id === project.sellerId || u.id === project.buyerId || u.id === project.managerId)
+                  .map(u => (
+                    <button
+                      key={u.id}
+                      onClick={() => executeFormAssignment(selectedTemplate, u.id)}
+                      className="w-full flex items-center gap-3 p-3 rounded-2xl border border-slate-100 hover:bg-blue-50 hover:border-blue-200 transition-all text-left group"
+                    >
+                      <img src={u.avatar} className="w-10 h-10 rounded-full" alt="" />
+                      <div className="flex-1">
+                        <div className="text-sm font-bold text-slate-900">{u.name}</div>
+                        <div className="text-[10px] text-slate-500 uppercase tracking-widest">{u.role}</div>
+                      </div>
+                      <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-500 transition-colors" />
+                    </button>
+                  ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1838,8 +2268,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
             <form onSubmit={handleSendInvite} className="p-6 space-y-4">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-400 uppercase">Full Name</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   required
                   value={inviteName}
                   onChange={e => setInviteName(e.target.value)}
@@ -1849,8 +2279,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-400 uppercase">Email Address</label>
-                <input 
-                  type="email" 
+                <input
+                  type="email"
                   required
                   value={inviteEmail}
                   onChange={e => setInviteEmail(e.target.value)}
@@ -1860,7 +2290,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-400 uppercase">Role</label>
-                <select 
+                <select
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm"
                   value={inviteRole}
                   onChange={e => setInviteRole(e.target.value as 'BUYER' | 'SELLER')}
@@ -1871,8 +2301,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
               </div>
               <div className="pt-4 flex gap-3">
                 <button type="button" onClick={() => setShowInviteModal(false)} className="flex-1 px-4 py-2.5 font-bold text-slate-500">Cancel</button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   disabled={isSending}
                   className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-md disabled:opacity-50"
                 >
@@ -1884,59 +2314,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
         </div>
       )}
     </div>
+    </>
   );
 };
-
-const ParticipantRow: React.FC<{ 
-  user?: User, 
-  role: string, 
-  isAdmin?: boolean,
-  onSwitchUser?: (identifier: string) => void
-}> = ({ user, role, isAdmin, onSwitchUser }) => (
-  <div className="flex items-center justify-between group/row">
-    <div className="flex items-center gap-3">
-      <img 
-        src={user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(role)}&background=f1f5f9&color=64748b`} 
-        className="w-10 h-10 rounded-full border border-slate-100 object-cover" 
-        alt={role} 
-      />
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          {isAdmin && user ? (
-            <Link to={`/profile/${user.id}`} className="text-sm font-bold text-slate-900 truncate hover:text-blue-600 transition-colors">
-              {user.name}
-            </Link>
-          ) : (
-            <p className="text-sm font-bold text-slate-900 truncate">{user?.name || 'Unassigned'}</p>
-          )}
-          {isAdmin && onSwitchUser && user && (
-            <button 
-              onClick={() => onSwitchUser(user.id)}
-              className="opacity-0 group-hover/row:opacity-100 p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-all tooltip"
-              title={`View as ${role}`}
-            >
-              <Eye size={12} />
-            </button>
-          )}
-        </div>
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{role}</p>
-      </div>
-    </div>
-  </div>
-);
-
-const TabButton: React.FC<{ active: boolean, onClick: () => void, icon: React.ReactNode, label: string }> = ({ active, onClick, icon, label }) => (
-  <button onClick={onClick} className={`flex items-center gap-2 px-8 py-5 text-sm font-bold border-b-2 transition-all shrink-0 ${active ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
-    {icon} {label}
-  </button>
-);
-
-const FeatureBox: React.FC<{ icon: React.ReactNode, value: string | number, label: string }> = ({ icon, value, label }) => (
-  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-    <div className="text-blue-600 mb-2">{icon}</div>
-    <p className="text-lg font-bold text-slate-900">{value}</p>
-    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{label}</p>
-  </div>
-);
 
 export default ProjectDetail;

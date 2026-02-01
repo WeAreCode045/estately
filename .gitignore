@@ -7,15 +7,41 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
+.pnp
+.pnp.js
+
+# Build outputs
 dist
 dist-ssr
+build
+.next
+out
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 *.local
+
+# Testing
+coverage
+*.lcov
+.nyc_output
 
 # Editor directories and files
 .vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
 !.vscode/extensions.json
 .idea
+*.swp
+*.swo
+*~
 .DS_Store
 *.suo
 *.ntvs*
@@ -23,7 +49,25 @@ dist-ssr
 *.sln
 *.sw?
 
-# amplify
+# Amplify
 .amplify
 amplify_outputs*
 amplifyconfiguration*
+
+# Misc
+.cache
+.temp
+.tmp
+*.tsbuildinfo
+.eslintcache
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# Husky
+.husky/_
+
+# Bundle analysis
+stats.html
+.vite-bundle-visualizer

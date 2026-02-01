@@ -1,32 +1,29 @@
-import React, { useState } from 'react';
-import { useParams, Navigate } from 'react-router-dom';
-import { User, UploadedDocument, Project, UserRole } from '../types';
-import { 
-  User as UserIcon, 
-  Mail, 
-  Phone, 
-  MapPin, 
-  ShieldCheck, 
-  Upload, 
-  File, 
-  FileText,
-  MoreVertical,
-  Camera,
-  Download,
-  Trash2,
-  X,
-  Lock,
+import {
   Bell,
+  Camera,
   CheckCircle2,
   Clock,
-  AlertCircle
+  CreditCard,
+  Download,
+  File,
+  FileText,
+  Hash,
+  Lock,
+  Mail,
+  MapPin,
+  Phone,
+  ShieldCheck,
+  User as UserIcon
 } from 'lucide-react';
-import { account, profileService, databases, COLLECTIONS } from '../services/appwrite';
-import { documentService } from '../services/documentService';
-import DocumentViewer from '../components/DocumentViewer3';
-import { useAuth } from '../contexts/AuthContext';
-import { useSettings } from '../utils/useSettings';
+import React, { useState } from 'react';
+import { Navigate, useParams } from 'react-router-dom';
 import AddressAutocomplete from '../components/AddressAutocomplete';
+import DocumentViewer from '../components/DocumentViewer';
+import { useAuth } from '../contexts/AuthContext';
+import { profileService } from '../services/appwrite';
+import { documentService } from '../services/documentService';
+import { Project, User, UserRole } from '../types';
+import { useSettings } from '../utils/useSettings';
 
 interface ProfileProps {
   user: User;
@@ -37,7 +34,7 @@ interface ProfileProps {
 }
 
 const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplates, docDefinitions }) => {
-  const { profile: myProfile, refreshProfile } = useAuth();
+  const { refreshProfile } = useAuth();
   const { userId } = useParams<{ userId: string }>();
   const isOwnProfile = !userId || userId === user.id;
   const isAdminOrAgent = user.role === UserRole.ADMIN;
@@ -49,7 +46,7 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
 
   // Determine which user data to display
   const displayUser = !isOwnProfile ? (allUsers.find(u => u.id === userId) || user) : user;
-  
+
   const { googleApiKey } = useSettings();
   const [activeSubTab, setActiveSubTab] = useState<'details' | 'tasks' | 'documents' | 'security'>('details');
   const [loading, setLoading] = useState(false);
@@ -87,13 +84,22 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
     setViewerError(null);
     setViewerDownloadUrl(null);
   };
-  
+
   const [formData, setFormData] = useState({
     name: displayUser.name || '',
+    firstName: displayUser.firstName || '',
+    lastName: displayUser.lastName || '',
     phone: displayUser.phone || '',
     address: displayUser.address || '',
-    bio: displayUser.bio || '',
+    city: displayUser.city || '',
+    postalCode: displayUser.postalCode || '',
+    country: displayUser.country || '',
     notificationPreference: displayUser.notificationPreference || 'BOTH',
+    birthday: displayUser.birthday ? displayUser.birthday.split('T')[0] : '',
+    birthPlace: displayUser.birthPlace || '',
+    idNumber: displayUser.idNumber || '',
+    vatNumber: displayUser.vatNumber || '',
+    bankAccount: (displayUser as any).bankAccount || '',
   });
 
   // Track the ID to avoid resetting when profile finishes loading (Account -> Profile)
@@ -104,10 +110,19 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
     if (displayUser.id !== lastUserId.current) {
       setFormData({
         name: displayUser.name || '',
+        firstName: displayUser.firstName || '',
+        lastName: displayUser.lastName || '',
         phone: displayUser.phone || '',
         address: displayUser.address || '',
-        bio: displayUser.bio || '',
+        city: displayUser.city || '',
+        postalCode: displayUser.postalCode || '',
+        country: displayUser.country || '',
         notificationPreference: displayUser.notificationPreference || 'BOTH',
+        birthday: displayUser.birthday ? displayUser.birthday.split('T')[0] : '',
+        birthPlace: displayUser.birthPlace || '',
+        idNumber: displayUser.idNumber || '',
+        vatNumber: displayUser.vatNumber || '',
+        bankAccount: (displayUser as any).bankAccount || '',
       });
       lastUserId.current = displayUser.id;
     }
@@ -118,9 +133,9 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
     let mounted = true;
     (async () => {
       try {
-        const res = await documentService.listRequired();
+        const res = await documentService.listDefinitions();
         if (!mounted) return;
-        const mapped = (res.documents || []).map((d: any) => ({ id: d.$id, taskId: d.taskId, isGlobal: d.isGlobal }));
+        const mapped = (res.documents || []).map((d: any) => ({ id: d.$id, title: d.title }));
         setRequiredDocs(mapped);
       } catch (e) {
         console.error('Failed to load required docs:', e);
@@ -131,7 +146,7 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
 
   const handleSave = async () => {
     let docId = (displayUser as any).$id;
-    
+
     // Fallback: If profile doc ID missing, try direct fetch
     if (!docId) {
         setLoading(true);
@@ -161,10 +176,19 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
     try {
       const updateData = {
         name: formData.name.trim(),
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
         phone: formData.phone.trim(),
         address: formData.address.trim(),
-        bio: formData.bio.trim(),
+        city: formData.city.trim(),
+        postalCode: formData.postalCode.trim(),
+        country: formData.country.trim(),
         notificationPreference: formData.notificationPreference,
+        birthday: formData.birthday || null,
+        birthPlace: formData.birthPlace,
+        idNumber: formData.idNumber,
+        vatNumber: formData.vatNumber,
+        bankAccount: formData.bankAccount,
       };
 
       await profileService.update(docId, updateData);
@@ -188,7 +212,7 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
           {isOwnProfile ? 'My Profile' : `${displayUser.name}'s Profile`}
         </h1>
         {(isOwnProfile || isAdminOrAgent) && (
-          <button 
+          <button
             onClick={handleSave}
             disabled={loading}
             className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-blue-700 transition-all shadow-md disabled:opacity-50"
@@ -219,25 +243,25 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
         </div>
 
         <div className="flex border-b border-slate-100 px-8 mt-4 overflow-x-auto no-scrollbar">
-          <button 
+          <button
             onClick={() => setActiveSubTab('details')}
             className={`px-6 py-4 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeSubTab === 'details' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
           >
             Personal Info
           </button>
-          <button 
+          <button
             onClick={() => setActiveSubTab('tasks')}
             className={`px-6 py-4 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeSubTab === 'tasks' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
           >
             Assigned Tasks
           </button>
-          <button 
+          <button
             onClick={() => setActiveSubTab('documents')}
             className={`px-6 py-4 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeSubTab === 'documents' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
           >
             Document Vault
           </button>
-          <button 
+          <button
             onClick={() => setActiveSubTab('security')}
             className={`px-6 py-4 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeSubTab === 'security' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
           >
@@ -248,39 +272,94 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
         <div className="p-8">
           {activeSubTab === 'details' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <ProfileField 
-                icon={<UserIcon size={18}/>} 
-                label="Full Name" 
-                value={formData.name} 
-                onChange={(v) => setFormData({...formData, name: v})}
-                editable 
+              <ProfileField
+                icon={<UserIcon size={18}/>}
+                label="First Name"
+                value={formData.firstName}
+                onChange={(v) => setFormData({...formData, firstName: v})}
+                editable
+              />
+              <ProfileField
+                icon={<UserIcon size={18}/>}
+                label="Last Name"
+                value={formData.lastName}
+                onChange={(v) => setFormData({...formData, lastName: v})}
+                editable
               />
               <ProfileField icon={<Mail size={18}/>} label="Email Address" value={displayUser.email} />
-              <ProfileField 
-                icon={<Phone size={18}/>} 
-                label="Phone Number" 
-                value={formData.phone} 
+              <ProfileField
+                icon={<Phone size={18}/>}
+                label="Phone Number"
+                value={formData.phone}
                 onChange={(v) => setFormData({...formData, phone: v})}
-                editable 
+                editable
               />
-              <ProfileField 
-                icon={<MapPin size={18}/>} 
-                label="Current Address" 
-                value={formData.address} 
+              <ProfileField
+                icon={<MapPin size={18}/>}
+                label="Current Address"
+                value={formData.address}
                 onChange={(v) => setFormData({...formData, address: v})}
-                editable 
+                editable
                 isAddress
                 googleApiKey={googleApiKey}
               />
-              <div className="md:col-span-2 space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Bio / Professional Summary</label>
-                <textarea 
-                  className="w-full h-32 bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  placeholder="Tell us a bit about yourself..."
-                  value={formData.bio}
-                  onChange={(e) => setFormData({...formData, bio: e.target.value})}
-                ></textarea>
-              </div>
+              <ProfileField
+                icon={<MapPin size={18}/>}
+                label="City"
+                value={formData.city}
+                onChange={(v) => setFormData({...formData, city: v})}
+                editable
+              />
+              <ProfileField
+                icon={<MapPin size={18}/>}
+                label="Postal Code"
+                value={formData.postalCode}
+                onChange={(v) => setFormData({...formData, postalCode: v})}
+                editable
+              />
+              <ProfileField
+                icon={<Clock size={18}/>}
+                label="Date of Birth"
+                value={formData.birthday}
+                onChange={(v) => setFormData({...formData, birthday: v})}
+                editable
+                type="date"
+              />
+              <ProfileField
+                icon={<MapPin size={18}/>}
+                label="Place of Birth"
+                value={formData.birthPlace}
+                onChange={(v) => setFormData({...formData, birthPlace: v})}
+                editable
+              />
+              <ProfileField
+                icon={<Hash size={18}/>}
+                label="Personal ID Number"
+                value={formData.idNumber}
+                onChange={(v) => setFormData({...formData, idNumber: v})}
+                editable
+              />
+              <ProfileField
+                icon={<ShieldCheck size={18}/>}
+                label="VAT/Tax Number"
+                value={formData.vatNumber}
+                onChange={(v) => setFormData({...formData, vatNumber: v})}
+                editable
+              />
+              <ProfileField
+                icon={<CreditCard size={18}/>}
+                label="Bank Account (IBAN)"
+                value={formData.bankAccount}
+                onChange={(v) => setFormData({...formData, bankAccount: v})}
+                editable
+              />
+              <ProfileField
+                icon={<MapPin size={18}/>}
+                label="Country"
+                value={formData.country}
+                onChange={(v) => setFormData({...formData, country: v})}
+                editable
+              />
 
               <div className="md:col-span-2 space-y-4 pt-4 border-t border-slate-100">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Notification Preferences</label>
@@ -294,8 +373,8 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
                       key={opt.id}
                       onClick={() => setFormData({...formData, notificationPreference: opt.id as any})}
                       className={`flex items-center gap-2 px-6 py-3 rounded-2xl border-2 transition-all font-bold text-sm ${
-                        formData.notificationPreference === opt.id 
-                          ? 'border-blue-600 bg-blue-50 text-blue-600' 
+                        formData.notificationPreference === opt.id
+                          ? 'border-blue-600 bg-blue-50 text-blue-600'
                           : 'border-slate-100 bg-white text-slate-500 hover:border-slate-200'
                       }`}
                     >
@@ -344,8 +423,11 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
                           {/* View Document button when a document exists for this task */}
                           {(() => {
                             const userDocs = displayUser.userDocuments ? (typeof displayUser.userDocuments === 'string' ? JSON.parse(displayUser.userDocuments) : displayUser.userDocuments) : [];
-                            const req = requiredDocs.find(d => d.taskId === task.taskId);
-                            const userDoc = req ? userDocs.find((ud: any) => ud.documentRequirementId === req.id && (req.isGlobal || ud.projectId === task.projectId)) : null;
+                            const matchTitlePrefix = "Upload Document: ";
+                            const isDocTask = task.title?.startsWith(matchTitlePrefix);
+                            const docTitle = isDocTask ? task.title.replace(matchTitlePrefix, "") : "";
+                            const req = docTitle ? requiredDocs.find(d => d.title === docTitle) : null;
+                            const userDoc = req ? userDocs.find((ud: any) => ud.userDocumentDefinitionId === req.id && ud.projectId === task.projectId) : null;
                             if (userDoc) {
                               return (
                                 <button onClick={() => handleOpenViewer(userDoc, template?.title || 'Document')} className="mt-2 inline-flex items-center gap-2 text-xs font-bold text-slate-700 hover:underline">
@@ -380,7 +462,7 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {displayUser.userDocuments && displayUser.userDocuments.length > 0 ? (
                   displayUser.userDocuments.map((doc, idx) => {
-                    const definition = docDefinitions.find(d => d.id === doc.documentRequirementId);
+                    const definition = docDefinitions.find(d => d.id === doc.userDocumentDefinitionId);
                     return (
                       <div key={idx} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm group hover:border-blue-200 transition-all flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -388,12 +470,12 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
                             <File size={20} />
                           </div>
                           <div>
-                            <h4 className="text-sm font-bold text-slate-900 truncate max-w-[120px]">{definition?.name || 'Document'}</h4>
+                            <h4 className="text-sm font-bold text-slate-900 truncate max-w-[120px]">{definition?.title || doc.documentType || 'Document'}</h4>
                             <p className="text-[10px] text-slate-400 font-medium">Provided {new Date(doc.uploadedAt).toLocaleDateString()}</p>
                           </div>
                         </div>
                         <button
-                          onClick={() => handleOpenViewer(doc, definition?.name)}
+                          onClick={() => handleOpenViewer(doc, definition?.title || doc.documentType || 'Document')}
                           className="p-2 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-lg transition-colors"
                         >
                           <Download size={18} />
@@ -433,27 +515,28 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
       </div>
     </div>
     {(viewerUrl || viewerError) && (
-      <DocumentViewer 
-        url={viewerUrl} 
+      <DocumentViewer
+        url={viewerUrl}
         downloadUrl={viewerDownloadUrl}
-        error={viewerError || undefined} 
-        title={viewerTitle || undefined} 
-        onClose={handleCloseViewer} 
+        error={viewerError || undefined}
+        title={viewerTitle || undefined}
+        onClose={handleCloseViewer}
       />
     )}
     </>
   );
 };
 
-const ProfileField: React.FC<{ 
-  icon: React.ReactNode, 
-  label: string, 
-  value: string, 
-  editable?: boolean, 
+const ProfileField: React.FC<{
+  icon: React.ReactNode,
+  label: string,
+  value: string,
+  editable?: boolean,
   onChange?: (value: string) => void,
   isAddress?: boolean,
-  googleApiKey?: string | null
-}> = ({ icon, label, value, editable, onChange, isAddress, googleApiKey }) => (
+  googleApiKey?: string | null,
+  type?: string
+}> = ({ icon, label, value, editable, onChange, isAddress, googleApiKey, type = "text" }) => (
   <div className="space-y-2">
     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">{label}</label>
     <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 group">
@@ -466,30 +549,14 @@ const ProfileField: React.FC<{
           className="flex-1 bg-transparent border-none outline-none text-sm font-medium text-slate-900"
         />
       ) : (
-        <input 
-          type="text" 
-          value={value} 
+        <input
+          type={type}
+          value={value}
           readOnly={!editable}
           onChange={(e) => onChange?.(e.target.value)}
-          className="flex-1 bg-transparent border-none outline-none text-sm font-medium text-slate-900" 
+          className="flex-1 bg-transparent border-none outline-none text-sm font-medium text-slate-900"
         />
       )}
-    </div>
-  </div>
-);
-
-const DocumentCard: React.FC<{ name: string, date: string, size: string }> = ({ name, date, size }) => (
-  <div className="p-4 bg-white border border-slate-100 rounded-2xl flex items-center gap-4 hover:shadow-md transition-shadow group">
-    <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-      <File size={24} />
-    </div>
-    <div className="flex-1 min-w-0">
-      <p className="text-sm font-bold text-slate-900 truncate">{name}</p>
-      <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">{date} • {size}</p>
-    </div>
-    <div className="flex items-center gap-1">
-      <button className="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition-colors"><Download size={18}/></button>
-      <button className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={18}/></button>
     </div>
   </div>
 );

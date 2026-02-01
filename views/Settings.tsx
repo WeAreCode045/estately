@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { User, UserRole } from '../types';
-import { Settings as SettingsIcon, Shield, Bell, Globe, Key, Save, Loader2, User as UserIcon } from 'lucide-react';
+import { Bell, Globe, Key, Loader2, Save, Shield, User as UserIcon } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { configService, profileService } from '../services/appwrite';
+import { User, UserRole } from '../types';
 
 interface SettingsProps {
   user: User;
 }
 
-const Settings: React.FC<SettingsProps> = ({ user }) => {
+const Settings: React.FC<SettingsProps> = ({ user: _user }) => {
   const [googleApiKey, setGoogleApiKey] = useState('');
   const [messagingProviderId, setMessagingProviderId] = useState('');
   const [appUrl, setAppUrl] = useState('');
@@ -115,18 +115,18 @@ const Settings: React.FC<SettingsProps> = ({ user }) => {
               </div>
               <h3 className="font-bold text-slate-900">Google Maps Integration</h3>
             </div>
-            
+
             <form onSubmit={handleSave} className="p-6 space-y-4">
               <p className="text-sm text-slate-500">
                 To enable address autocomplete for property listings and user profiles, please provide a Google Maps Platform API key with the "Places API" enabled.
               </p>
-              
+
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
                   <Key size={14} /> Google Maps API Key
                 </label>
                 <div className="relative">
-                  <input 
+                  <input
                     type="password"
                     value={googleApiKey}
                     onChange={(e) => setGoogleApiKey(e.target.value)}
@@ -134,8 +134,8 @@ const Settings: React.FC<SettingsProps> = ({ user }) => {
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-4 pr-12 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all font-mono"
                   />
                   {googleApiKey && (
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       onClick={() => setGoogleApiKey('')}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                     >
@@ -154,7 +154,7 @@ const Settings: React.FC<SettingsProps> = ({ user }) => {
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
                     <Bell size={14} /> Messaging Provider ID
                   </label>
-                  <input 
+                  <input
                     type="text"
                     value={messagingProviderId}
                     onChange={(e) => setMessagingProviderId(e.target.value)}
@@ -167,7 +167,7 @@ const Settings: React.FC<SettingsProps> = ({ user }) => {
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
                     <Globe size={14} /> Application Base URL
                   </label>
-                  <input 
+                  <input
                     type="url"
                     value={appUrl}
                     onChange={(e) => setAppUrl(e.target.value)}
@@ -182,15 +182,15 @@ const Settings: React.FC<SettingsProps> = ({ user }) => {
                     <UserIcon size={14} /> Default Agent
                   </label>
                   <p className="text-sm text-slate-500 mb-2">Select the agent that will be automatically assigned to new projects if no manager is specified.</p>
-                  
+
                   <div className="space-y-2">
                     {agents.length === 0 ? (
                        <p className="text-sm text-slate-400 italic bg-slate-50 p-2 rounded-lg">No admin profiles found.</p>
                     ) : (
                       agents.map(agent => (
                         <label key={agent.$id} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${defaultAgentId === agent.userId ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
-                          <input 
-                            type="radio" 
+                          <input
+                            type="radio"
                             name="defaultAgent"
                             value={agent.userId}
                             checked={defaultAgentId === agent.userId}
@@ -223,7 +223,7 @@ const Settings: React.FC<SettingsProps> = ({ user }) => {
               )}
 
               <div className="pt-4">
-                <button 
+                <button
                   type="submit"
                   disabled={saving}
                   className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-slate-800 transition-all shadow-md disabled:opacity-50"

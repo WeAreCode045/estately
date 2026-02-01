@@ -1,20 +1,20 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  CheckSquare, 
-  Plus, 
-  Clock, 
-  Bell, 
-  Loader2,
-  Inbox,
-  Upload,
-  FileText,
-  X
-} from 'lucide-react';
-import { User, Project, TaskTemplate, RequiredDocument } from '../types';
-import { databases, DATABASE_ID, COLLECTIONS, profileService } from '../services/appwrite';
-import { documentService } from '../services/documentService';
-import DocumentViewer from '../components/DocumentViewer3';
 import { ID } from 'appwrite';
+import {
+    Bell,
+    CheckSquare,
+    Clock,
+    FileText,
+    Inbox,
+    Loader2,
+    Plus,
+    Upload,
+    X
+} from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import DocumentViewer from '../components/DocumentViewer';
+import { COLLECTIONS, DATABASE_ID, databases, profileService } from '../services/appwrite';
+import { documentService } from '../services/documentService';
+import { Project, TaskTemplate, User, UserDocumentDefinition } from '../types';
 
 interface TasksViewProps {
   user: User;
@@ -24,7 +24,7 @@ interface TasksViewProps {
 
 const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
   const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>([]);
-  const [requiredDocs, setRequiredDocs] = useState<RequiredDocument[]>([]);
+  const [requiredDocs, setRequiredDocs] = useState<UserDocumentDefinition[]>([]);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [uploadingTaskId, setUploadingTaskId] = useState<string | null>(null);
@@ -72,7 +72,7 @@ const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
     setViewerError(null);
     setViewerDownloadUrl(null);
   };
-  
+
   // Personal Task State
   const [taskData, setTaskData] = useState({
     title: '',
@@ -80,8 +80,6 @@ const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
     projectId: 'personal',
     dueDate: new Date().toISOString().split('T')[0]
   });
-
-  const isAdmin = user.role === 'ADMIN';
 
   useEffect(() => {
     fetchDefinitions();
@@ -92,15 +90,13 @@ const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
       setLoading(true);
       const [templatesRes, docsRes] = await Promise.all([
         databases.listDocuments(DATABASE_ID, COLLECTIONS.TASK_TEMPLATES),
-        databases.listDocuments(DATABASE_ID, COLLECTIONS.REQUIRED_DOCUMENTS)
+        documentService.listDefinitions()
       ]);
-      
+
       setTaskTemplates(templatesRes.documents as any);
       setRequiredDocs(docsRes.documents.map((d: any) => ({
         id: d.$id,
-        documentType: d.documentType,
-        taskId: d.taskId,
-        isGlobal: d.isGlobal || false
+        title: d.title
       })) as any);
     } catch (error) {
       console.error('Error fetching definitions:', error);
@@ -122,7 +118,7 @@ const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
         description: taskData.description,
         dueDate: taskData.dueDate
       } as any));
-      
+
       setIsModalOpen(false);
       setTaskData({
         title: '',
@@ -158,9 +154,13 @@ const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
     try {
       setLoading(true);
       // Find matching required doc definition
-      const reqDoc = requiredDocs.find(d => d.taskId === taskId);
+      const task = (user.assignedTasks || []).find(at => at.taskId === taskId);
+      const matchTitlePrefix = "Upload Document: ";
+      const docTitle = task?.title?.replace(matchTitlePrefix, "");
+      const reqDoc = requiredDocs.find(d => (d as any).title === docTitle);
+
       if (!reqDoc) {
-        alert("This task is not linked to a document requirement.");
+        alert("This task is not linked to a document definition.");
         return;
       }
 
@@ -179,7 +179,9 @@ const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
   const allPendingTasks = (user.assignedTasks || []).map(at => {
     const p = projects.find(proj => proj.id === at.projectId);
     const template = taskTemplates.find(tpl => tpl.id === at.taskId || (tpl as any).$id === at.taskId);
-    const reqDoc = requiredDocs.find(d => d.taskId === at.taskId);
+
+    const matchTitlePrefix = "Upload Document: ";
+    const isDocTask = at.title?.startsWith(matchTitlePrefix);
 
     // Prefer explicit assigned title/description on the assigned task; fallback to template
     const resolvedTitle = (at as any).title && (at as any).title.trim() ? (at as any).title : template?.title;
@@ -191,7 +193,7 @@ const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
       title: resolvedTitle || 'Personal Task',
       description: resolvedDescription || '',
       projectTitle: p?.title || 'Personal / General',
-      isDocumentTask: !!reqDoc
+      isDocumentTask: !!isDocTask
     };
   }).filter(t => t.status === 'PENDING')
     .sort((a, b) => new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime());
@@ -203,7 +205,7 @@ const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
           <h1 className="text-2xl font-bold text-slate-900">My Tasks</h1>
           <p className="text-slate-500 mt-1">Your personal action items and project assignments.</p>
         </div>
-        <button 
+        <button
           onClick={() => setIsModalOpen(true)}
           className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-blue-700 transition-all shadow-md flex items-center gap-2"
         >
@@ -245,8 +247,11 @@ const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
                 {(() => {
                   // Find any uploaded document that matches this task's required doc
                   const userDocs = user.userDocuments ? (typeof user.userDocuments === 'string' ? JSON.parse(user.userDocuments) : user.userDocuments) : [];
-                  const req = requiredDocs.find(d => d.taskId === task.id || d.taskId === task.taskId);
-                  const userDoc = req ? userDocs.find((ud: any) => ud.documentRequirementId === req.id && (req.isGlobal || ud.projectId === task.projectId)) : null;
+                  const matchTitlePrefix = "Upload Document: ";
+                  const isDocTask = task.title?.startsWith(matchTitlePrefix);
+                  const docTitle = isDocTask ? task.title.replace(matchTitlePrefix, "") : "";
+                  const req = docTitle ? requiredDocs.find(d => (d as any).title === docTitle) : null;
+                  const userDoc = req ? userDocs.find((ud: any) => ud.userDocumentDefinitionId === req.id && ud.projectId === task.projectId) : null;
 
                   if (userDoc) {
                     return (
@@ -261,7 +266,7 @@ const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
 
                   if (task.isDocumentTask) {
                     return (
-                      <button 
+                      <button
                         onClick={() => {
                             setUploadingTaskId(task.id);
                             setTimeout(() => fileInputRef.current?.click(), 0);
@@ -274,7 +279,7 @@ const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
                   }
 
                   return (
-                    <button 
+                    <button
                       onClick={() => handleCompleteTask(task.id)}
                       className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-blue-700 transition-all shadow-sm"
                     >
@@ -294,10 +299,10 @@ const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
         </div>
       </div>
 
-      <input 
-        type="file" 
-        hidden 
-        ref={fileInputRef} 
+      <input
+        type="file"
+        hidden
+        ref={fileInputRef}
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (file && uploadingTaskId) {
@@ -315,33 +320,33 @@ const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
                 <h2 className="text-2xl font-bold text-slate-900">New Personal Task</h2>
                 <p className="text-slate-500 text-sm mt-1">Add a custom action item to your list.</p>
               </div>
-              <button 
+              <button
                 onClick={() => setIsModalOpen(false)}
                 className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors"
               >
                 <X size={24} />
               </button>
             </div>
-            
+
             <form onSubmit={handleCreatePersonalTask} className="p-8 flex flex-col lg:flex-row gap-8">
               <div className="flex-1 space-y-5">
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">Task Title</label>
-                  <input 
-                    required 
-                    type="text" 
-                    value={taskData.title} 
-                    onChange={e => setTaskData({...taskData, title: e.target.value})} 
-                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-all" 
+                  <input
+                    required
+                    type="text"
+                    value={taskData.title}
+                    onChange={e => setTaskData({...taskData, title: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-all"
                     placeholder="Enter task title..."
                   />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">Description</label>
-                  <textarea 
-                    value={taskData.description} 
-                    onChange={e => setTaskData({...taskData, description: e.target.value})} 
-                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm h-[180px] resize-none focus:outline-none focus:border-blue-500 transition-all" 
+                  <textarea
+                    value={taskData.description}
+                    onChange={e => setTaskData({...taskData, description: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm h-[180px] resize-none focus:outline-none focus:border-blue-500 transition-all"
                     placeholder="Describe what needs to be done..."
                   />
                 </div>
@@ -350,18 +355,18 @@ const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
               <div className="w-full lg:w-[240px] space-y-5 flex flex-col">
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">Due Date</label>
-                  <input 
-                    type="date" 
-                    value={taskData.dueDate} 
-                    onChange={e => setTaskData({...taskData, dueDate: e.target.value})} 
-                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-all" 
+                  <input
+                    type="date"
+                    value={taskData.dueDate}
+                    onChange={e => setTaskData({...taskData, dueDate: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-all"
                   />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">Project (Optional)</label>
-                  <select 
-                    value={taskData.projectId} 
-                    onChange={e => setTaskData({...taskData, projectId: e.target.value})} 
+                  <select
+                    value={taskData.projectId}
+                    onChange={e => setTaskData({...taskData, projectId: e.target.value})}
                     className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-all"
                   >
                     <option value="personal">Personal / General</option>
@@ -370,16 +375,16 @@ const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
                 </div>
 
                 <div className="mt-auto space-y-3 pt-4">
-                  <button 
-                    type="submit" 
-                    disabled={loading} 
+                  <button
+                    type="submit"
+                    disabled={loading}
                     className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2"
                   >
                     {loading ? <Loader2 className="animate-spin" size={20} /> : 'Create Task'}
                   </button>
-                  <button 
-                    type="button" 
-                    onClick={() => setIsModalOpen(false)} 
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
                     className="w-full bg-slate-100 py-3.5 rounded-2xl font-bold text-slate-600 hover:bg-slate-200 transition-all"
                   >
                     Cancel
@@ -391,12 +396,12 @@ const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
         </div>
       )}
       {(viewerUrl || viewerError) && (
-        <DocumentViewer 
-          url={viewerUrl} 
+        <DocumentViewer
+          url={viewerUrl}
           downloadUrl={viewerDownloadUrl}
-          error={viewerError || undefined} 
-          title={viewerTitle || undefined} 
-          onClose={handleCloseViewer} 
+          error={viewerError || undefined}
+          title={viewerTitle || undefined}
+          onClose={handleCloseViewer}
         />
       )}
     </div>

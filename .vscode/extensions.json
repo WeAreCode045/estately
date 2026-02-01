@@ -1,0 +1,69 @@
+{
+  "recommendations": [
+    // Essential for React Development
+    "dsznajder.es7-react-js-snippets",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+
+    // TypeScript Support
+    "ms-vscode.vscode-typescript-next",
+
+    // Tailwind CSS (if using)
+    "bradlc.vscode-tailwindcss",
+
+    // Path Intellisense
+    "christian-kohler.path-intellisense",
+
+    // Auto Rename Tag
+    "formulahendry.auto-rename-tag",
+
+    // Auto Close Tag
+    "formulahendry.auto-close-tag",
+
+    // Import Cost
+    "wix.vscode-import-cost",
+
+    // Better Comments
+    "aaron-bond.better-comments",
+
+    // Error Lens
+    "usernamehw.errorlens",
+
+    // GitLens
+    "eamodio.gitlens",
+
+    // Git Graph
+    "mhutchie.git-graph",
+
+    // Thunder Client (API Testing)
+    "rangav.vscode-thunder-client",
+
+    // TODO Highlight
+    "wayou.vscode-todo-highlight",
+
+    // Bracket Pair Colorizer (built-in now, but good to have)
+    "coenraads.bracket-pair-colorizer-2",
+
+    // Console Ninja
+    "wallabyjs.console-ninja",
+
+    // Code Spell Checker
+    "streetsidesoftware.code-spell-checker",
+
+    // DotENV
+    "mikestead.dotenv",
+
+    // Markdown Preview Enhanced
+    "shd101wyy.markdown-preview-enhanced",
+
+    // REST Client
+    "humao.rest-client",
+
+    // YAML
+    "redhat.vscode-yaml",
+
+    // JSON Tools
+    "eriklynd.json-tools"
+  ],
+  "unwantedRecommendations": []
+}

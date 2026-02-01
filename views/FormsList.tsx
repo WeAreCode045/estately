@@ -1,15 +1,15 @@
+import { Library, Loader2, Plus, Trash2 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
-import { projectService, databases, DATABASE_ID, COLLECTIONS, projectFormsService, profileService } from '../services/appwrite';
-import { formDefinitionsService } from '../services/formDefinitionsService';
-import type { FormSubmission, FormDefinition } from '../types';
+import { useNavigate } from 'react-router-dom';
 import FormListItem from '../components/FormListItem';
 import FormRenderer from '../components/FormRenderer';
-import { Loader2, Plus, Library, Settings, Trash2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { profileService, projectFormsService, projectService } from '../services/appwrite';
+import { formDefinitionsService } from '../services/formDefinitionsService';
+import type { FormDefinition, FormSubmission } from '../types';
 import { UserRole } from '../types';
 
-const statusOptions = ['draft', 'submitted', 'assigned', 'closed', 'rejected'];
+const statusOptions = ['draft', 'submitted', 'assigned', 'completed', 'closed', 'rejected'];
 
 const FormsList: React.FC = () => {
   const navigate = useNavigate();
@@ -84,13 +84,13 @@ const FormsList: React.FC = () => {
         <div className="flex items-center gap-3">
            {isAdmin && (
              <div className="flex bg-slate-100 p-1 rounded-xl">
-               <button 
+               <button
                  onClick={() => setActiveView('submissions')}
                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeView === 'submissions' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                >
                  Submissions
                </button>
-               <button 
+               <button
                  onClick={() => setActiveView('definitions')}
                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeView === 'definitions' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                >
@@ -99,7 +99,7 @@ const FormsList: React.FC = () => {
              </div>
            )}
            {activeView === 'submissions' ? (
-             <button 
+             <button
                onClick={() => navigate('/admin/forms/edit/new')}
                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm hover:bg-blue-700 transition-colors"
              >
@@ -108,7 +108,7 @@ const FormsList: React.FC = () => {
              </button>
            ) : (
              isAdmin && (
-               <button 
+               <button
                   onClick={() => navigate('/admin/forms/templates/edit/new')}
                   className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-800 transition-colors"
                 >
@@ -153,12 +153,12 @@ const FormsList: React.FC = () => {
                 {items.map(i => {
                   const project = projects.find(p => p.$id === i.projectId);
                   const profile = profiles.find(u => (u.userId || u.$id) === i.assignedToUserId);
-                  
+
                   return (
                     <div key={i.id}>
-                      <FormListItem 
-                        submission={i} 
-                        onView={(s) => setSelected(s)} 
+                      <FormListItem
+                        submission={i}
+                        onView={(s) => setSelected(s)}
                         onDelete={handleDelete}
                         projectName={project?.title || project?.name}
                         assigneeName={profile?.name}
@@ -179,7 +179,7 @@ const FormsList: React.FC = () => {
                 <div className="p-2 bg-blue-50 rounded-xl text-blue-600">
                   <Library size={20} />
                 </div>
-                <button 
+                <button
                   onClick={() => {
                     if (confirm('Delete this template?')) {
                       formDefinitionsService.delete(def.id).then(loadMeta);
@@ -192,7 +192,7 @@ const FormsList: React.FC = () => {
               </div>
               <h3 className="font-bold text-slate-900 mb-1">{def.title}</h3>
               <p className="text-xs text-slate-500 mb-4 h-8 line-clamp-2">{def.description || 'Standard form definition'}</p>
-              
+
               <div className="flex flex-wrap gap-2 mb-4">
                 {def.needSignatureFromSeller && (
                   <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 border border-indigo-100 uppercase tracking-tighter">Seller Sign</span>
@@ -207,7 +207,7 @@ const FormsList: React.FC = () => {
 
               <div className="flex items-center justify-between pt-4 border-t border-slate-50">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{def.key}</span>
-                <button 
+                <button
                   onClick={() => navigate(`/admin/forms/templates/edit/${def.id}`)}
                   className="text-blue-600 text-xs font-bold hover:underline"
                 >

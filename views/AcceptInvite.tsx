@@ -1,12 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { AlertCircle, CheckCircle2, Home, Loader2, Lock } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { account } from '../services/appwrite';
-import { Home, Lock, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 
 const AcceptInvite: React.FC = () => {
     const [searchParams] = useSearchParams();
-    const navigate = useNavigate();
-    
+
     // Magic URL parameters from the invitation link
     const userId = searchParams.get('userId');
     const secret = searchParams.get('secret');
@@ -27,7 +26,7 @@ const AcceptInvite: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         if (password.length < 8) {
             setErrorMessage('Password must be at least 8 characters long.');
             return;
@@ -44,12 +43,12 @@ const AcceptInvite: React.FC = () => {
         try {
             // 1. Create a session using the invited user's token
             await account.createSession(userId!, secret!);
-            
+
             // 2. Set the permanent password
             await account.updatePassword(password);
-            
+
             setStatus('SUCCESS');
-            
+
             // Redirect to dashboard
             setTimeout(() => {
                 window.location.href = '#/';
@@ -99,11 +98,11 @@ const AcceptInvite: React.FC = () => {
                     <form onSubmit={handleSubmit} className="space-y-5">
                         {status === 'ERROR' && (
                             <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-medium border border-red-100 flex items-start gap-2 animate-in slide-in-from-top-2">
-                                <AlertCircle size={18} className="shrink-0" /> 
+                                <AlertCircle size={18} className="shrink-0" />
                                 <span>{errorMessage}</span>
                             </div>
                         )}
-                        
+
                         <div>
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Email Address</label>
                             <input

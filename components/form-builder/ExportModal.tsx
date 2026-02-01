@@ -1,6 +1,6 @@
+import { Check, Code, Copy, Download, FileJson, X } from 'lucide-react';
 import React, { useState } from 'react';
-import { X, Copy, Check, Code, FileJson, Download } from 'lucide-react';
-import { FormSchema, FieldType, FormField } from './types';
+import { FormSchema } from './types';
 
 interface ExportModalProps {
   schema: FormSchema;
@@ -12,7 +12,7 @@ const ExportModal: React.FC<ExportModalProps> = ({ schema, onClose }) => {
   const [tab, setTab] = useState<'json' | 'code'>('json');
 
   const jsonContent = JSON.stringify(schema, null, 2);
-  
+
   const reactCode = `
 import React, { useState } from 'react';
 
@@ -40,7 +40,7 @@ const GeneratedForm = () => {
       const isCollapsed = collapsedSections[field.id];
       return (
         <div key={field.id} className="mb-10 p-8 bg-slate-50/50 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
-          <div 
+          <div
             className="flex items-center gap-4 mb-6 cursor-pointer select-none group"
             onClick={() => toggleSection(field.id)}
           >
@@ -51,7 +51,7 @@ const GeneratedForm = () => {
             </div>
             <h3 className="text-2xl font-black text-slate-800 tracking-tight">{field.label}</h3>
           </div>
-          
+
           <div className={\`space-y-8 pl-6 border-l-2 border-indigo-50 transition-all duration-500 \${isCollapsed ? 'max-h-0 opacity-0 overflow-hidden' : 'max-h-[5000px] opacity-100'}\`}>
             {field.children?.map(child => renderField(child))}
           </div>
@@ -66,9 +66,9 @@ const GeneratedForm = () => {
         <label className="block text-sm font-extrabold text-slate-700 uppercase tracking-widest px-1">
           {field.label} {field.required && <span className="text-red-500 font-black ml-1">*</span>}
         </label>
-        
+
         {field.type === 'textarea' ? (
-          <textarea 
+          <textarea
             required={field.required}
             placeholder={field.placeholder}
             onChange={e => handleChange(field.id, e.target.value)}
@@ -76,7 +76,7 @@ const GeneratedForm = () => {
           />
         ) : field.type === 'select' ? (
           <div className="relative">
-            <select 
+            <select
               required={field.required}
               onChange={e => handleChange(field.id, e.target.value)}
               className={\`\${inputClasses} appearance-none\`}
@@ -90,10 +90,10 @@ const GeneratedForm = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
             {field.options?.map(opt => (
               <label key={opt.value} className="flex items-center gap-4 p-4 bg-slate-50/50 border-2 border-transparent hover:border-indigo-100 rounded-2xl cursor-pointer transition-all group">
-                <input 
-                  type={field.type} 
+                <input
+                  type={field.type}
                   name={field.id}
-                  className="w-6 h-6 rounded-lg border-slate-300 text-indigo-600 focus:ring-indigo-500" 
+                  className="w-6 h-6 rounded-lg border-slate-300 text-indigo-600 focus:ring-indigo-500"
                   onChange={() => handleChange(field.id, opt.value)}
                 />
                 <span className="text-slate-700 font-bold group-hover:text-indigo-600 transition-colors">{opt.label}</span>
@@ -101,7 +101,7 @@ const GeneratedForm = () => {
             ))}
           </div>
         ) : (
-          <input 
+          <input
             type={field.type}
             required={field.required}
             placeholder={field.placeholder}
@@ -121,10 +121,10 @@ const GeneratedForm = () => {
         <div className="h-1 w-24 bg-indigo-600 rounded-full mb-8" />
         <p className="text-2xl text-slate-400 font-medium leading-relaxed">{schema.description}</p>
       </header>
-      
+
       <form onSubmit={handleSubmit} className="space-y-2">
         {schema.fields.map(field => renderField(field))}
-        
+
         <div className="pt-12">
           <button type="submit" className="w-full py-8 px-12 bg-indigo-600 text-white rounded-[2rem] font-black text-2xl hover:bg-indigo-700 transform active:scale-[0.98] transition-all shadow-[0_20px_50px_-15px_rgba(79,70,229,0.3)] uppercase tracking-widest">
             {schema.submitButtonText}
@@ -149,7 +149,7 @@ export default GeneratedForm;
   };
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-md animate-in fade-in duration-300"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
@@ -166,13 +166,13 @@ export default GeneratedForm;
               </div>
             </div>
             <div className="flex bg-slate-100 p-1.5 rounded-2xl">
-              <button 
+              <button
                 onClick={() => setTab('json')}
                 className={`flex items-center gap-2 px-6 py-2.5 text-sm font-black rounded-xl transition-all ${tab === 'json' ? 'bg-white shadow-xl text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
               >
                 <FileJson className="w-4 h-4" /> JSON Schema
               </button>
-              <button 
+              <button
                 onClick={() => setTab('code')}
                 className={`flex items-center gap-2 px-6 py-2.5 text-sm font-black rounded-xl transition-all ${tab === 'code' ? 'bg-white shadow-xl text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
               >

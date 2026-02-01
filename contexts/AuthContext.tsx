@@ -1,6 +1,6 @@
+import { ID, Models } from 'appwrite';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Models, ID } from 'appwrite';
-import { account, profileService, inviteService, projectService } from '../services/appwrite';
+import { account, inviteService, profileService, projectService } from '../services/appwrite';
 
 interface AuthContextType {
     user: Models.User<Models.Preferences> | null;
@@ -63,10 +63,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const refreshProfile = async (userId?: string) => {
         const id = userId || user?.$id;
         if (!id) return;
-        
+
         try {
             let userProfile = await profileService.getByUserId(id);
-            
+
             if (!userProfile) {
                 // Determine if we should create a profile (only for the logged-in user)
                 const currentUser = user || await account.get();
@@ -74,7 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     // Check again with the listAll fallback just to be 100% sure we don't duplicate
                     const all = await profileService.listAll();
                     const exists = all.documents.find((d: any) => d.userId === id || d.email === currentUser.email);
-                    
+
                     if (exists) {
                         setProfile(exists);
                         return;
@@ -85,14 +85,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     let role = all.total === 0 ? 'ADMIN' : 'BUYER';
                     let projectId = '';
 
-                    if (invites.total > 0) {
+                    if (invites.total > 0 && invites.documents[0]) {
                         const invite = invites.documents[0];
                         role = invite.role;
                         projectId = invite.projectId;
-                        
+
                         // Mark invite as accepted
                         await inviteService.updateStatus(invite.$id, 'ACCEPTED');
-                        
+
                         // Link user to project if project exists
                         if (projectId) {
                             const field = role === 'SELLER' ? 'sellerId' : 'buyerId';
@@ -109,7 +109,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     });
                 }
             }
-            
+
             if (userProfile) {
                 // If we're currently impersonating, keep the impersonation active
                 if (impersonation && impersonation.impersonatedProfile) {
@@ -169,7 +169,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch (e) {}
         await account.create(ID.unique(), email, pass, name);
         await login(email, pass);
-        
+
         // Final profile check/sync is handled by login -> refreshProfile
     };
 

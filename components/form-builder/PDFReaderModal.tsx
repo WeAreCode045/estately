@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { FileText, X, UploadCloud, Loader2, FileCheck, AlertCircle } from 'lucide-react';
+import { AlertCircle, FileCheck, FileText, Loader2, UploadCloud, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
 import { GeminiService } from '../../services/geminiService';
 import { FormSchema } from './types';
 
@@ -92,7 +92,8 @@ const PDFReaderModal: React.FC<PDFReaderModalProps> = ({ onClose, onGenerated })
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onload = () => {
-        const base64 = (reader.result as string).split(',')[1];
+        const result = reader.result as string;
+        const base64 = result.split(',')[1] || '';
         resolve(base64);
       };
       reader.onerror = (error) => reject(error);
@@ -109,7 +110,7 @@ const PDFReaderModal: React.FC<PDFReaderModalProps> = ({ onClose, onGenerated })
       const base64Data = await fileToBase64(file);
       const gemini = new GeminiService();
       const newSchema = await gemini.generateFormFromPDF(base64Data);
-      
+
       // Complete progress before closing
       setProgress(100);
       setTimeout(() => {
@@ -142,14 +143,14 @@ const PDFReaderModal: React.FC<PDFReaderModalProps> = ({ onClose, onGenerated })
 
         <div className="p-8">
           {!file ? (
-            <div 
+            <div
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
               className={`border-2 border-dashed rounded-2xl p-12 flex flex-col items-center justify-center gap-4 transition-all cursor-pointer group ${
-                isDragging 
-                  ? 'border-emerald-500 bg-emerald-50 scale-[1.02]' 
+                isDragging
+                  ? 'border-emerald-500 bg-emerald-50 scale-[1.02]'
                   : 'border-slate-200 hover:border-emerald-500 hover:bg-emerald-50'
               }`}
             >
@@ -164,12 +165,12 @@ const PDFReaderModal: React.FC<PDFReaderModalProps> = ({ onClose, onGenerated })
                 <p className="font-bold text-slate-700">Drop your PDF here</p>
                 <p className="text-sm text-slate-400">or click to browse files</p>
               </div>
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleFileChange} 
-                accept=".pdf" 
-                className="hidden" 
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept=".pdf"
+                className="hidden"
               />
             </div>
           ) : (
@@ -185,7 +186,7 @@ const PDFReaderModal: React.FC<PDFReaderModalProps> = ({ onClose, onGenerated })
                   </div>
                 </div>
                 {!loading && (
-                  <button 
+                  <button
                     onClick={(e) => { e.stopPropagation(); setFile(null); }}
                     className="p-1.5 text-slate-400 hover:text-red-500 transition-colors shrink-0"
                   >
@@ -201,7 +202,7 @@ const PDFReaderModal: React.FC<PDFReaderModalProps> = ({ onClose, onGenerated })
                     <span className="font-bold text-emerald-600">{Math.round(progress)}%</span>
                   </div>
                   <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
-                    <div 
+                    <div
                       className="h-full bg-emerald-500 transition-all duration-500 ease-out relative"
                       style={{ width: `${progress}%` }}
                     >

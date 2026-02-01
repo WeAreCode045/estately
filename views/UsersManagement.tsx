@@ -1,22 +1,19 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { User, UserRole, Project } from '../types';
-import { profileService, inviteService, projectService } from '../services/appwrite';
-import { 
-  Users as UsersIcon, 
-  Search, 
-  Plus, 
-  Mail, 
-  MoreHorizontal, 
-  UserPlus,
-  Filter,
+import {
+  Building2,
   CheckCircle2,
   Clock,
+  Filter,
+  Mail,
+  Search,
   Trash2,
-  Building2
+  UserPlus,
+  Users as UsersIcon
 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { inviteService, profileService, projectService } from '../services/appwrite';
+import { Project, User, UserRole } from '../types';
 
 interface UsersManagementProps {
   user: User;
@@ -31,11 +28,16 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
   const [loading, setLoading] = useState(false);
   const auth = useAuth();
   const navigate = useNavigate();
-  const [newUserInfo, setNewUserInfo] = useState({ 
-    name: '', 
-    email: '', 
+  const [newUserInfo, setNewUserInfo] = useState<{
+    name: string;
+    email: string;
+    role: UserRole;
+    projectId: string;
+  }>({
+    name: '',
+    email: '',
     role: UserRole.BUYER,
-    projectId: '' 
+    projectId: ''
   });
 
   const handleInvite = async (e: React.FormEvent) => {
@@ -44,7 +46,7 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
     try {
       // Check if user already exists in allUsers
       const existingUser = allUsers.find(u => u.email.toLowerCase() === newUserInfo.email.toLowerCase());
-      
+
       if (existingUser && existingUser.status !== 'PENDING_INVITE') {
         // Just link to project directly
         if (newUserInfo.projectId) {
@@ -64,9 +66,9 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
           projectId: newUserInfo.projectId || undefined,
           invitedBy: user.id
         };
-        
+
         const response = await inviteService.create(inviteData);
-        
+
         setAllUsers(prev => {
           // Remove existing pending if any (to avoid duplicates)
           const filtered = prev.filter(u => u.email.toLowerCase() !== newUserInfo.email.toLowerCase());
@@ -77,11 +79,11 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
             role: newUserInfo.role as UserRole,
             status: 'PENDING_INVITE',
             avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${newUserInfo.email}`
-          }];
+          } as User];
         });
         alert(`Invitation sent to ${newUserInfo.email}`);
       }
-      
+
       setIsInviteModalOpen(false);
       setNewUserInfo({ name: '', email: '', role: UserRole.BUYER, projectId: '' });
     } catch (error) {
@@ -113,7 +115,7 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
 
   const handleDeleteUser = async (userToDelete: User) => {
     if (!window.confirm(`Are you sure you want to remove ${userToDelete.name}?`)) return;
-    
+
     try {
       if (userToDelete.status === 'PENDING_INVITE') {
         // For pending invites, the 'id' is the document ID in the invites collection
@@ -142,7 +144,7 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
     try {
       const response = await profileService.listAll();
       const doc = response.documents.find((d: any) => d.userId === userId);
-      
+
       if (doc) {
         await profileService.update(doc.$id, { role: newRole });
         setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
@@ -152,8 +154,8 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
     }
   };
 
-  const filteredUsers = allUsers.filter(u => 
-    u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+  const filteredUsers = allUsers.filter(u =>
+    u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     u.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -164,7 +166,7 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
           <h1 className="text-2xl font-bold text-slate-900">User Management</h1>
           <p className="text-slate-500 mt-1">Manage agency staff, sellers, and buyers across the platform.</p>
         </div>
-        <button 
+        <button
           onClick={() => setIsInviteModalOpen(true)}
           className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-blue-700 transition-all shadow-md flex items-center gap-2"
         >
@@ -176,9 +178,9 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
         <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search by name or email..." 
+            <input
+              type="text"
+              placeholder="Search by name or email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
@@ -205,8 +207,8 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
                     <div className="flex items-center gap-3">
                       <img src={u.avatar} className="w-10 h-10 rounded-full border border-slate-200" alt="" />
                       <div>
-                        <Link 
-                          to={`/profile/${u.id}`} 
+                        <Link
+                          to={`/profile/${u.id}`}
                           className="font-bold text-slate-900 hover:text-blue-600 transition-colors"
                         >
                           {u.name}
@@ -216,7 +218,7 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
                     </div>
                   </td>
                   <td className="px-6 py-5">
-                    <select 
+                    <select
                       value={u.role}
                       onChange={(e) => handleRoleChange(u.id, e.target.value as UserRole)}
                       className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md border-none bg-transparent cursor-pointer ${
@@ -272,7 +274,7 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
                         </button>
                       )}
                       {u.status === 'PENDING_INVITE' && (
-                        <button 
+                        <button
                           onClick={() => handleResendInvite(u)}
                           className="p-2 hover:bg-amber-50 rounded-lg text-slate-400 hover:text-amber-600 transition-colors"
                           title="Resend Invitation"
@@ -280,8 +282,8 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
                           <Mail size={18} />
                         </button>
                       )}
-                      
-                      <button 
+
+                      <button
                         onClick={() => handleDeleteUser(u)}
                         className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-600 transition-colors"
                         title="Delete User"
@@ -290,7 +292,7 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
                       </button>
 
                       {(u.role === UserRole.BUYER || u.role === UserRole.SELLER) && (
-                        <button 
+                        <button
                           onClick={() => {
                             setNewUserInfo({
                               name: u.name,
@@ -325,8 +327,8 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
             <form onSubmit={handleInvite} className="p-6 space-y-4">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-400 uppercase">Full Name</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   required
                   value={newUserInfo.name}
                   onChange={e => setNewUserInfo({...newUserInfo, name: e.target.value})}
@@ -336,8 +338,8 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-400 uppercase">Email Address</label>
-                <input 
-                  type="email" 
+                <input
+                  type="email"
                   required
                   value={newUserInfo.email}
                   onChange={e => setNewUserInfo({...newUserInfo, email: e.target.value})}
@@ -347,7 +349,7 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-400 uppercase">Role</label>
-                <select 
+                <select
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm"
                   value={newUserInfo.role}
                   onChange={e => setNewUserInfo({...newUserInfo, role: e.target.value as UserRole})}
@@ -358,11 +360,11 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
                 </select>
               </div>
 
-              {(newUserInfo.role === UserRole.BUYER || newUserInfo.role === UserRole.SELLER) && (
+              {(newUserInfo.role as any) !== UserRole.ADMIN && (
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-400 uppercase">Link to Property</label>
-                  <select 
-                    required={newUserInfo.role !== UserRole.ADMIN}
+                  <select
+                    required={(newUserInfo.role as any) !== UserRole.ADMIN}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm"
                     value={newUserInfo.projectId}
                     onChange={e => setNewUserInfo({...newUserInfo, projectId: e.target.value})}
@@ -377,8 +379,8 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
 
               <div className="pt-4 flex gap-3">
                 <button type="button" onClick={() => setIsInviteModalOpen(false)} className="flex-1 px-4 py-2.5 font-bold text-slate-500">Cancel</button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   disabled={loading}
                   className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 disabled:opacity-50"
                 >
