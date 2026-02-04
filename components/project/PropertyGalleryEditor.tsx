@@ -1,0 +1,215 @@
+import { CheckCircle2, Loader2, Star, Trash2, Upload } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { projectService } from '../../services/appwrite';
+
+interface PropertyGalleryEditorProps {
+  projectId: string;
+  media: string[];
+  coverImageId?: string;
+  onUpdate: (items: string[], coverId: string) => Promise<void>;
+}
+
+const PropertyGalleryEditor: React.FC<PropertyGalleryEditorProps> = ({
+  projectId,
+  media,
+  coverImageId,
+  onUpdate
+}) => {
+  const [isUploading, setIsUploading] = useState(false);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Helper to ensure we have a valid list to work with
+  const files = media || [];
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setIsUploading(true);
+      const newIds: string[] = [];
+      try {
+        for (let i = 0; i < e.target.files.length; i++) {
+          const file = e.target.files[i];
+          const response = await projectService.uploadPropertyImage(projectId, file);
+          newIds.push(response.$id);
+        }
+
+        const updatedList = [...files, ...newIds];
+        // If no cover image yet, set the first new one as cover
+        const newCoverId = coverImageId || (updatedList.length > 0 ? updatedList[0] : '');
+
+        await onUpdate(updatedList, newCoverId);
+      } catch (error) {
+        console.error('Upload failed:', error);
+        alert('Failed to upload images.');
+      } finally {
+        setIsUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleSetMain = async (id: string) => {
+    // Requirements: "with the main image as first image"
+    // So we move this image to index 0
+    const newList = [...files];
+    const index = newList.indexOf(id);
+    if (index > -1) {
+      newList.splice(index, 1);
+      newList.unshift(id);
+    }
+    await onUpdate(newList, id);
+  };
+
+  const handleRemove = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Are you sure you want to remove this image?')) return;
+
+    const newList = files.filter(f => f !== id);
+    // If we removed the cover image, set new cover to the first one available
+    let newCover = coverImageId;
+    if (id === coverImageId) {
+      newCover = newList.length > 0 ? newList[0] : '';
+    }
+    await onUpdate(newList, newCover!);
+  };
+
+  // HTML5 Drag and Drop Handlers
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    e.dataTransfer.setData('sourceIndex', index.toString());
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    setDragOverIndex(index);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    setDragOverIndex(null);
+    const sourceIndexStr = e.dataTransfer.getData('sourceIndex');
+    if (!sourceIndexStr) return;
+
+    const sourceIndex = parseInt(sourceIndexStr, 10);
+    if (isNaN(sourceIndex) || sourceIndex === targetIndex) return;
+
+    const newList = [...files];
+    const [movedItem] = newList.splice(sourceIndex, 1);
+    newList.splice(targetIndex, 0, movedItem);
+
+    // If "main image as first image" is strict rule, we might need to update coverID if index 0 changed
+    // But usually user explicitly sets main. However, prompt says "main image as first image".
+    // If dragging changes index 0, should we update cover?
+    // Let's assume coverID must track the item at index 0 if that's the rule, OR coverID tracks a specific ID and that ID moves to 0.
+    // The prompt says "set the main image ... to show in the slider gallery with the main image as first image".
+    // This implies forcing main image to be first.
+    // If I drag something else to pos 0, does it become main? Or should main always bubble to top?
+    // I will stick to: SetMain moves to top. Dragging reorders freely. If I drag X to top, X becomes main?
+    // Let's keep it simple: Dragging updates list order. SetMain updates coverID AND moves to top.
+
+    // Check if the item at index 0 changed
+    const newCoverId = newList.length > 0 ? newList[0] : '';
+    // If the cover was dependent on position 0, update it.
+    // Ideally, we respect the coverImageId prop.
+    // If I drag a non-cover image to #1, should it become cover?
+    // I will adhere to: "Set Main" button sets it. "Drag" reorders.
+    // BUT "with the main image as first image". This implies consistent state.
+    // I will auto-update coverId to be files[0] after reorder.
+
+    await onUpdate(newList, newList[0]);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-center p-8 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer"
+           onClick={() => fileInputRef.current?.click()}>
+        <input
+          type="file"
+          multiple
+          accept="image/*"
+          className="hidden"
+          ref={fileInputRef}
+          onChange={handleFileSelect}
+        />
+        <div className="text-center">
+            {isUploading ? (
+                <div className="flex flex-col items-center gap-2">
+                    <Loader2 className="animate-spin text-blue-600" />
+                    <span className="text-sm font-bold text-slate-500">Uploading...</span>
+                </div>
+            ) : (
+                <>
+                    <Upload className="mx-auto text-slate-400 mb-2" />
+                    <p className="font-bold text-slate-600">Click to upload images</p>
+                    <p className="text-xs text-slate-400 uppercase tracking-widest mt-1">JPG, PNG, WebP</p>
+                </>
+            )}
+        </div>
+      </div>
+
+      {files.length === 0 ? (
+        <div className="text-center py-8 text-slate-400 italic">No images yet. Upload some to get started.</div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {files.map((fileId, index) => {
+            const isMain = fileId === coverImageId || index === 0; // Fallback to index 0 if coverId unset
+            return (
+              <div
+                key={fileId}
+                draggable
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, index)}
+                className={`relative aspect-square rounded-xl overflow-hidden group border-2 transition-all cursor-move ${
+                   dragOverIndex === index ? 'border-blue-500 scale-105 z-10' :
+                   isMain ? 'border-emerald-500 ring-4 ring-emerald-500/20' : 'border-slate-100'
+                }`}
+              >
+                <img
+                  src={projectService.getImagePreview(fileId)}
+                  className="w-full h-full object-cover"
+                  alt=""
+                />
+
+                {/* Actions Overlay */}
+                <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-2">
+                    {!isMain && (
+                        <button
+                            onClick={() => handleSetMain(fileId)}
+                            className="flex items-center gap-2 bg-white/90 hover:bg-white text-emerald-700 px-3 py-1.5 rounded-full text-xs font-bold shadow-sm transition-all"
+                        >
+                            <Star size={12} fill="currentColor" /> Set Main
+                        </button>
+                    )}
+                    <button
+                        onClick={(e) => handleRemove(fileId, e)}
+                        className="p-2 bg-red-500/80 hover:bg-red-600 text-white rounded-full shadow-sm"
+                        title="Remove image"
+                    >
+                        <Trash2 size={16} />
+                    </button>
+                    <span className="absolute top-2 left-2 text-[10px] font-bold text-white bg-black/50 px-2 py-0.5 rounded">
+                        #{index + 1}
+                    </span>
+                </div>
+
+                {isMain && (
+                    <div className="absolute top-2 right-2 bg-emerald-500 text-white p-1 rounded-full shadow-md z-10">
+                        <CheckCircle2 size={16} />
+                    </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default PropertyGalleryEditor;

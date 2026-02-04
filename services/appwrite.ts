@@ -1,4 +1,4 @@
-import { Account, Client, Databases, ID, ImageFormat, Query, Storage, Teams } from 'appwrite';
+import { Account, Client, Databases, ID, ImageFormat, Permission, Query, Role, Storage, Teams } from 'appwrite';
 
 const client = new Client();
 
@@ -109,6 +109,24 @@ export const projectService = {
     },
     async uploadImage(file: File) {
         return await storage.createFile(BUCKETS.PROPERTY_IMAGES, ID.unique(), file);
+    },
+    async uploadPropertyImage(projectId: string, file: File) {
+        const ext = file.name.split('.').pop() || 'jpg';
+        const mediaId = ID.unique();
+        const fileName = `${projectId}_${mediaId}.${ext}`;
+        const renamedFile = new File([file], fileName, { type: file.type });
+
+        // Note: For this to work, the 'property-images' bucket must have 'Create' permission enabled for 'Users' or the specific role of the authenticated user.
+        // We set file-level permissions to be public read, so they can be viewed in the gallery by anyone.
+        return await storage.createFile(
+            BUCKETS.PROPERTY_IMAGES,
+            ID.unique(),
+            renamedFile,
+            [
+                Permission.read(Role.any()),
+                Permission.write(Role.users()) // or Role.user(userId) if we had it available here
+            ]
+        );
     },
     getImagePreview(fileId: string) {
         if (!fileId) return '';

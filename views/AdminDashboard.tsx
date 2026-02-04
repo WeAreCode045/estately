@@ -1,16 +1,16 @@
 import {
-  ArrowRight,
-  Bell,
-  Building2,
-  CheckCircle2,
-  ClipboardList,
-  Clock,
-  Edit2,
-  FileText,
-  Image as ImageIcon,
-  Plus,
-  TrendingUp,
-  X
+    ArrowRight,
+    Bell,
+    Building2,
+    CheckCircle2,
+    ClipboardList,
+    Clock,
+    Edit2,
+    FileText,
+    Image as ImageIcon,
+    Plus,
+    TrendingUp,
+    X
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -187,7 +187,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     },
     {
       label: 'Portfolio Value',
-      value: `$${((visibleProjects.reduce((acc, p) => acc + (p.property?.price || 0), 0)) / 1000000).toFixed(1)}M`,
+      value: `€${((visibleProjects.reduce((acc, p) => acc + (p.property?.price || 0), 0)) / 1000000).toFixed(1)}M`,
       icon: <TrendingUp className="text-indigo-600" />,
       color: 'bg-indigo-50'
     },
@@ -395,7 +395,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
                             <div className="hidden sm:flex flex-col items-end">
-                                <span className="text-xs font-bold text-slate-900">${(project.property.price || 0).toLocaleString()}</span>
+                                <span className="text-xs font-bold text-slate-900">€{(project.property.price || 0).toLocaleString()}</span>
                                 <span className={`text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded ${
                                     project.status === ProjectStatus.ACTIVE ? 'bg-blue-50 text-blue-600' :
                                     project.status === ProjectStatus.UNDER_CONTRACT ? 'bg-amber-50 text-amber-600' :

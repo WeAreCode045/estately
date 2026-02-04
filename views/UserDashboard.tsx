@@ -1,48 +1,40 @@
 import {
-  Bath,
-  Bed,
-  Bell,
-  Building2,
-  CalendarDays,
-  CheckCircle,
-  CheckCircle2,
-  CheckSquare,
-  ChevronLeft,
-  ChevronRight,
-  Circle,
-  ClipboardList,
-  Clock,
-  Download,
-  Eye,
-  FileSignature,
-  FileText,
-  FormInput,
-  Globe,
-  History,
-  Home,
-  Lock,
-  Mail,
-  Map,
-  MessageSquare,
-  Phone,
-  RefreshCcw,
-  Shield,
-  Square,
-  Trash2,
-  Upload,
-  User as UserIcon,
-  Users,
-  X
+    Bell,
+    Building2,
+    CalendarDays,
+    CheckCircle,
+    CheckCircle2,
+    ClipboardList,
+    Clock,
+    Download,
+    Eye,
+    FileSignature,
+    FileText,
+    FormInput,
+    Globe,
+    History,
+    Home,
+    Lock,
+    Mail,
+    MessageSquare,
+    Phone,
+    RefreshCcw,
+    Shield,
+    Trash2,
+    User as UserIcon,
+    X
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AdminAgendaWidget from '../components/AdminAgendaWidget';
 import DocumentViewer from '../components/DocumentViewer';
 import FormRenderer from '../components/FormRenderer';
+import { ProjectProperty } from '../components/project';
 import SignaturePad from '../components/SignaturePad';
 import { COLLECTIONS, DATABASE_ID, contractService, databases, profileService, projectFormsService, projectService } from '../services/appwrite';
 import { documentService } from '../services/documentService';
 import { formDefinitionsService } from '../services/formDefinitionsService';
+import { GeminiService, GroundingLink } from '../services/geminiService';
 import type { Contract, FormSubmission, Project, TaskTemplate, User } from '../types';
 import { ContractStatus, UserRole } from '../types';
 import { downloadContractPDF, downloadFormPDF } from '../utils/pdfGenerator';
@@ -81,8 +73,11 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
   const [showFormEditor, setShowFormEditor] = useState(false); // Placeholder
   const [isGenerating, setIsGenerating] = useState(false); // Placeholder
   const [formDefinitions, setFormDefinitions] = useState<any[]>([]);
+  const [locationInsights, setLocationInsights] = useState<{ text: string, links: GroundingLink[] } | null>(null);
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
 
   const isAdmin = user.role === UserRole.ADMIN || user.role === UserRole.AGENT;
+  const gemini = new GeminiService();
 
   // Filter to only projects where user is seller, buyer or manager
   const visibleProjects = (projects || []).filter(
@@ -93,6 +88,10 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
 
   // Focus on the first matching project for the personal dashboard
   const userProject = visibleProjects[0] || null;
+
+  const displayImages = userProject
+    ? (userProject.media && userProject.media.length > 0 ? userProject.media : (userProject.property.images || []))
+    : [];
 
   const projectStatusData = React.useMemo(() => {
     if (!userProject) return { tasks: [], docs: [] };
@@ -147,6 +146,20 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
 
     return { tasks, docs: combinedDocs };
   }, [allUsers, userProject, requiredDocs]);
+
+  const fetchLocationInsights = async () => {
+    if (!userProject || !userProject.property.address) return;
+    setIsLoadingLocation(true);
+    try {
+      const insights = await gemini.getNeighborhoodInsights(userProject.property.address);
+      setLocationInsights(insights);
+    } catch (e) {
+      console.error('Failed to get location insights:', e);
+      alert('Could not generate location insights at this time.');
+    } finally {
+      setIsLoadingLocation(false);
+    }
+  };
 
   const handleOpenViewer = async (provided: any | any[], title?: string) => {
     try {
@@ -694,128 +707,23 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
   const totalTasks = userProjectTasks.length;
   const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 65;
 
-  // Image slider functions
-  const nextImage = () => {
-    if (userProject.property.images.length > 0) {
-      setCurrentImageIndex((prev) => (prev + 1) % userProject.property.images.length);
-    }
-  };
-
-  const prevImage = () => {
-    if (userProject.property.images.length > 0) {
-      setCurrentImageIndex((prev) => (prev - 1 + userProject.property.images.length) % userProject.property.images.length);
-    }
-  };
-
   const renderContent = () => {
     switch (activeTab) {
 
 
       case 'details':
         return (
-          <div className="space-y-8">
-            {/* Property Description */}
-            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
-              <h2 className="text-lg font-bold text-slate-900 mb-4">Property Description</h2>
-              <p className="text-slate-600 leading-relaxed">{userProject.property.description}</p>
-            </div>
-
-            {/* Property Specs */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 text-center">
-                <Bed className="mx-auto text-slate-400 mb-2" size={24} />
-                <p className="text-2xl font-bold text-slate-900">{userProject.property.bedrooms}</p>
-                <p className="text-xs text-slate-500 uppercase tracking-widest">Bedrooms</p>
-              </div>
-              <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 text-center">
-                <Bath className="mx-auto text-slate-400 mb-2" size={24} />
-                <p className="text-2xl font-bold text-slate-900">{userProject.property.bathrooms}</p>
-                <p className="text-xs text-slate-500 uppercase tracking-widest">Bathrooms</p>
-              </div>
-              <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 text-center">
-                <Square className="mx-auto text-slate-400 mb-2" size={24} />
-                <p className="text-2xl font-bold text-slate-900">{(userProject.property.sqft || 0).toLocaleString()}</p>
-                <p className="text-xs text-slate-500 uppercase tracking-widest">Sq Ft</p>
-              </div>
-              <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 text-center">
-                <CalendarDays className="mx-auto text-slate-400 mb-2" size={24} />
-                <p className="text-2xl font-bold text-slate-900">2020</p>
-                <p className="text-xs text-slate-500 uppercase tracking-widest">Year Built</p>
-              </div>
-            </div>
-
-            {/* Image Slider */}
-            {userProject.property.images.length > 0 && (
-              <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                <div className="relative h-96">
-                  <img
-                    src={projectService.getImagePreview(userProject.property.images[currentImageIndex] || '')}
-                    alt="Property"
-                    className="w-full h-full object-cover"
-                  />
-                  {userProject.property.images.length > 1 && (
-                    <>
-                      <button
-                        onClick={prevImage}
-                        className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white rounded-full p-2 shadow-lg"
-                      >
-                        <ChevronLeft size={20} />
-                      </button>
-                      <button
-                        onClick={nextImage}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white rounded-full p-2 shadow-lg"
-                      >
-                        <ChevronRight size={20} />
-                      </button>
-                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-                        {userProject.property.images.map((_: any, idx: number) => (
-                          <button
-                            key={idx}
-                            onClick={() => setCurrentImageIndex(idx)}
-                            className={`w-2 h-2 rounded-full ${idx === currentImageIndex ? 'bg-white' : 'bg-white/50'}`}
-                          />
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Map Placeholder */}
-            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Map className="text-slate-400" size={20} />
-                <h3 className="text-lg font-bold text-slate-900">Location</h3>
-              </div>
-              <div className="bg-slate-100 rounded-2xl h-48 flex items-center justify-center">
-                <p className="text-slate-500">Map integration coming soon</p>
-              </div>
-              <p className="text-sm text-slate-600 mt-4">{userProject.property.address}</p>
-            </div>
-
-            {/* Neighbourhood Info */}
-            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Users className="text-slate-400" size={20} />
-                <h3 className="text-lg font-bold text-slate-900">Neighbourhood</h3>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-slate-900">A+</p>
-                  <p className="text-xs text-slate-500 uppercase tracking-widest">Walk Score</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-slate-900">Excellent</p>
-                  <p className="text-xs text-slate-500 uppercase tracking-widest">Schools</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-slate-900">Low</p>
-                  <p className="text-xs text-slate-500 uppercase tracking-widest">Crime Rate</p>
-                </div>
-              </div>
-            </div>
-          </div>
+          <ProjectProperty
+            project={userProject}
+            isAdmin={false} // Ensure read-only view for buyers/sellers
+            setShowGeneralInfoModal={() => {}}
+            setTempAddress={() => {}}
+            setShowBulkSpecsModal={() => {}}
+            isLoadingLocation={isLoadingLocation}
+            locationInsights={locationInsights}
+            fetchLocationInsights={fetchLocationInsights}
+            onUpdateProject={projectService.update} // They likely can't update anyway due to isAdmin=false
+          />
         );
 
       case 'documents':
@@ -1490,23 +1398,43 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       {/* Top Section: Property Address, Price, Thumbnail */}
-      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
-        <div className="flex flex-col md:flex-row md:items-center gap-6">
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold text-slate-900">{userProject.property.address}</h1>
-            <p className="text-3xl font-bold text-blue-600 mt-2">
-              ${(userProject.property.price || 0).toLocaleString()}
+      <div className="bg-slate-900 rounded-3xl p-6 md:p-8 text-white shadow-xl">
+        <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
+          <div className="flex items-center gap-6">
+             {displayImages.length > 0 ? (
+                <img
+                  src={displayImages[0].startsWith('http') ? displayImages[0] : projectService.getImagePreview(displayImages[0])}
+                  alt="Property"
+                  className="w-20 h-20 rounded-full object-cover border-4 border-slate-700 shadow-md"
+                />
+             ) : (
+                <div className="w-20 h-20 rounded-full bg-slate-800 flex items-center justify-center border-4 border-slate-700 shadow-md">
+                   <Home size={32} className="text-slate-500" />
+                </div>
+             )}
+             <div className="space-y-1">
+                <h1 className="text-2xl md:text-3xl font-bold">{userProject.property.address}</h1>
+                <div className="flex flex-wrap items-center gap-4 text-sm text-slate-400">
+                   <div className="flex items-center gap-1.5">
+                      <span className="px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold uppercase tracking-wider text-slate-300">
+                        {userProject.status.replace('_', ' ')}
+                      </span>
+                   </div>
+                   <span className="flex items-center gap-1.5" title="Creation Date"><CalendarDays size={14}/> {userProject.createdAt ? new Date(userProject.createdAt).toLocaleDateString() : 'N/A'}</span>
+                   {userProject.handover_date && (
+                     <span className="flex items-center gap-1.5 text-blue-400" title="Closing Date"><Clock size={14}/> {new Date(userProject.handover_date).toLocaleDateString()}</span>
+                   )}
+                   <span className="flex items-center gap-1.5" title="Project ID">ID: {userProject.referenceNumber || userProject.id.substring(0, 8)}</span>
+                </div>
+             </div>
+          </div>
+
+          <div className="flex flex-col items-end gap-1">
+            <p className="text-sm font-medium text-slate-400 uppercase tracking-widest">Price</p>
+            <p className="text-3xl font-bold text-emerald-400">
+               {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(userProject.property.price)}
             </p>
           </div>
-          {userProject.property.images.length > 0 && (
-            <div className="w-32 h-24 rounded-2xl overflow-hidden shadow-lg">
-              <img
-                src={projectService.getImagePreview(userProject.property.images[0] || '')}
-                alt="Property"
-                className="w-full h-full object-cover"
-              />
-            </div>
-          )}
         </div>
       </div>
 

@@ -227,6 +227,7 @@ export interface Project {
   contractIds: string[];
   messages: Message[];
   coverImageId?: string;
+  media?: string[];
   handover_date?: string;
   referenceNumber?: string;
   createdAt?: string;

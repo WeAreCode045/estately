@@ -19,9 +19,37 @@ const ProjectSummaryCard: React.FC<ProjectSummaryCardProps> = ({ project, isAdmi
     [ProjectStatus.ARCHIVED]: 'bg-slate-200 text-slate-700 border-slate-200',
   };
 
-  const coverImage = project.coverImageId
-    ? projectService.getImagePreview(project.coverImageId)
-    : project.property?.images?.[0] || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80';
+  const getCoverImageUrl = () => {
+    // 1. Explicit cover image
+    if (project.coverImageId) {
+      return projectService.getImagePreview(project.coverImageId);
+    }
+
+    // 2. First image from 'media' (new gallery system)
+    if (project.media && project.media.length > 0) {
+      const id = project.media[0];
+      // Ensure it's an ID and not a URL (though type is string[])
+      if (!id.startsWith('http')) {
+        return projectService.getImagePreview(id);
+      }
+      return id;
+    }
+
+    // 3. First image from 'property.images' (legacy/fallback)
+    if (project.property?.images && project.property.images.length > 0) {
+       const img = project.property.images[0];
+       // Ensure ID
+       if (!img.startsWith('http')) {
+          return projectService.getImagePreview(img);
+       }
+       return img;
+    }
+
+    // 4. Default placeholder
+    return 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80';
+  };
+
+  const coverImage = getCoverImageUrl();
 
   return (
     <div className="group relative">
@@ -48,7 +76,7 @@ const ProjectSummaryCard: React.FC<ProjectSummaryCardProps> = ({ project, isAdmi
               <span className="truncate">{project.property?.address}</span>
             </div>
             <div className="flex items-center justify-between pt-3 border-t border-slate-50">
-              <p className="font-bold text-slate-900">${(project.property?.price || 0).toLocaleString()}</p>
+              <p className="font-bold text-slate-900">€{(project.property?.price || 0).toLocaleString()}</p>
               <div className="flex items-center gap-1 text-[10px] font-bold text-blue-600 uppercase tracking-widest">
                 Manage <ChevronRight size={14} />
               </div>
