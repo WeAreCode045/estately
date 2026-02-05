@@ -3,6 +3,7 @@ import {
     CheckCircle, ChevronRight,
     ClipboardList,
     Clock,
+    Download,
     Edit2,
     FileText,
     Home,
@@ -25,6 +26,7 @@ interface ProjectHeaderProps {
   setIsTaskLibraryOpen: (show: boolean) => void;
   setActiveTab: (tab: 'overview' | 'team' | 'documents' | 'property') => void;
   setShowGeneralInfoModal: (show: boolean) => void;
+  onGenerateBrochure?: () => void;
 }
 
 const ProjectHeader: React.FC<ProjectHeaderProps> = ({
@@ -37,7 +39,8 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   setShowTemplatePicker,
   setIsTaskLibraryOpen,
   setActiveTab,
-  setShowGeneralInfoModal
+  setShowGeneralInfoModal,
+  onGenerateBrochure
 }) => {
 
   const getCoverImageUrl = () => {
@@ -70,9 +73,14 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   const coverImage = getCoverImageUrl();
 
   return (
-    <div className="bg-slate-900 rounded-[32px] p-8 md:p-10 text-white relative overflow-hidden shadow-2xl mb-8">
-      <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 rounded-full blur-3xl -mr-32 -mt-32"></div>
-      <div className="relative z-10">
+    <div className="relative mb-8 group">
+      {/* Background Container - Handles clipping for blur effects */}
+      <div className="absolute inset-0 bg-slate-900 rounded-[32px] overflow-hidden shadow-2xl">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 rounded-full blur-3xl -mr-32 -mt-32"></div>
+      </div>
+      
+      {/* Content Container - Allows overflow for dropdowns */}
+      <div className="relative z-10 p-8 md:p-10 text-white">
         <div className="flex flex-col xl:flex-row items-start justify-between gap-8 mb-6">
           <div className="flex-1 min-w-0 flex items-start gap-6">
              {coverImage ? (
@@ -168,6 +176,20 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
                         <div className="text-[10px] text-slate-400 font-normal">Manage todos & timeline</div>
                       </div>
                    </button>
+                   {onGenerateBrochure && (
+                   <button
+                     onClick={() => { onGenerateBrochure(); setShowActionMenu(false); }}
+                     className="w-full px-5 py-3 text-left text-sm font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-3 transition-colors"
+                   >
+                      <div className="p-2 bg-purple-50 text-purple-600 rounded-xl group-hover:bg-purple-600 group-hover:text-white transition-all">
+                        <Download size={18} />
+                      </div>
+                       <div>
+                        <div className="font-bold">Download Brochure</div>
+                        <div className="text-[10px] text-slate-400 font-normal">Generate PDF flyer</div>
+                      </div>
+                   </button>
+                   )}
                 </div>
               )}
             </div>

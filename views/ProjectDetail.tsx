@@ -1,4 +1,3 @@
-import { ID } from 'appwrite';
 import {
   ArrowLeft,
   Check,
@@ -12,14 +11,15 @@ import FormEditor from '../components/FormEditor';
 import FormRenderer from '../components/FormRenderer';
 
 import { AIModal, AddTaskModal, AssignFormModal, BulkSpecsModal, FormTemplatePickerModal, GeneralInfoModal, InviteModal, ProjectDocuments, ProjectHeader, ProjectOverview, ProjectProperty, ProjectTabBar, ProjectTeam, SigningModal, TaskLibraryModal, TemplatePickerModal } from '../components/project';
-import { COLLECTIONS, DATABASE_ID, client, databases, inviteService, profileService, projectFormsService, projectService } from '../services/appwrite';
+import { downloadContractPDF, downloadFormPDF } from '../utils/pdfGenerator';
+import { generateBrochureBlob } from '../components/pdf/utils/brochureGenerator';
+import { BUCKETS, COLLECTIONS, DATABASE_ID, ID, client, databases, inviteService, profileService, projectFormsService, projectService, storage } from '../services/appwrite';
 import { documentService } from '../services/documentService';
 import { formDefinitionsService } from '../services/formDefinitionsService';
 import type { GroundingLink } from '../services/geminiService';
 import { GeminiService } from '../services/geminiService';
 import type { Contract, ContractTemplate, FormDefinition, FormSubmission, Project, ProjectTask, TaskTemplate, User, UserDocumentDefinition } from '../types';
 import { ContractStatus, UserRole } from '../types';
-import { downloadContractPDF, downloadFormPDF } from '../utils/pdfGenerator';
 import { useSettings } from '../utils/useSettings';
 
 interface ProjectDetailProps {
@@ -884,6 +884,46 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
     }
   };
 
+  const handleGenerateBrochure = async () => {
+    setIsGenerating(true);
+    try {
+        const agRes = await databases.listDocuments(DATABASE_ID, COLLECTIONS.AGENCY);
+        // We only need the ID now, as the generator fetches the settings
+        const agencyId = agRes.documents.length > 0 ? agRes.documents[0].$id : null;
+        
+        if (!agencyId) {
+            alert('No agency configuration found.');
+            return;
+        }
+
+        const manager = allUsers.find(u => u.id === project?.managerId);
+        
+        if (project) {
+            // Generate Blob using the new React-PDF system
+            const blob = await generateBrochureBlob(project, agencyId, manager || user);
+            
+            // 1. Trigger Download
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${project.title.replace(/\s+/g, '_')}_Brochure.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            // 2. Upload to Storage (Property Brochures Bucket)
+            const file = new File([blob], `${project.title}_Brochure.pdf`, { type: 'application/pdf' });
+            await storage.createFile(BUCKETS.PROPERTY_BROCHURES, ID.unique(), file);
+        }
+    } catch(e: any) {
+        console.error(e);
+        alert(`Failed to generate brochure: ${e.message || e}`);
+    } finally {
+        setIsGenerating(false);
+    }
+  };
+
   if (!project) return <div className="p-8 text-center">Project not found.</div>;
 
   const seller = allUsers.find(u => u.id === project.sellerId);
@@ -910,6 +950,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
         setIsTaskLibraryOpen={setIsTaskLibraryOpen}
         setActiveTab={setActiveTab}
         setShowGeneralInfoModal={setShowGeneralInfoModal}
+        onGenerateBrochure={handleGenerateBrochure}
       />
 
       {/* Breadcrumb and Editable Title Header - kept for navigation structure outside the unified header */}

@@ -35,6 +35,8 @@ export const COLLECTIONS = {
 export const BUCKETS = {
     PROPERTY_IMAGES: 'property-images',
     DOCUMENTS: 'documents',
+    AGENCY: 'agency',
+    PROPERTY_BROCHURES: 'property-brochures',
 };
 
 export const configService = {
@@ -130,12 +132,21 @@ export const projectService = {
     },
     getImagePreview(fileId: string) {
         if (!fileId) return '';
-        const url = storage.getFilePreview({
-            bucketId: BUCKETS.PROPERTY_IMAGES,
-            fileId: fileId,
-            quality: 100,
-            output: ImageFormat.Jpg
-        });
+        const url = storage.getFilePreview(
+            BUCKETS.PROPERTY_IMAGES,
+            fileId,
+            0, // width
+            0, // height
+            undefined, // gravity
+            100, // quality
+            undefined, // borderWidth
+            undefined, // borderColor
+            undefined, // borderRadius
+            undefined, // opacity
+            undefined, // rotation
+            undefined, // background
+            ImageFormat.Jpg // output
+        );
         return url.toString();
     }
 };

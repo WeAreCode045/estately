@@ -148,6 +148,85 @@ export class GeminiService {
     }
   }
 
+  /**
+   * Analyzes an uploaded PDF brochure template and extracts a compatible BrochureSettings JSON configuration.
+   * @param fileBase64 Base64 string of the PDF file (approx < 10MB recommended)
+   * @param mimeType Mime type (application/pdf)
+   */
+  async generateBrochureTemplateFromPDF(fileBase64: string, mimeType: string = 'application/pdf') {
+    const prompt = `
+      You are an expert design system analyzer. 
+      Analyze the attached brochure document or image. Extract its design tokens (colors, fonts), structural layout, and visual styling (shapes, cards, backgrounds).
+      
+      Map your findings to the following JSON structure exactly. 
+      Do not include markdown formatting, just the raw JSON object.
+      
+      {
+        "theme": {
+          "colors": {
+            "primary": "#HEXCODE", // Main brand color found in headers/logos
+            "secondary": "#HEXCODE", // Secondary elements
+            "accent": "#HEXCODE", // Highlights, buttons, callouts
+            "text": "#HEXCODE", // Main body text color
+            "background": "#HEXCODE" // Default page background color (usually #ffffff)
+          },
+          "fonts": {
+            "heading": "Helvetica", // Choose best match: "Helvetica", "Times-Roman", "Courier"
+            "body": "Helvetica" // Choose best match: "Helvetica", "Times-Roman", "Courier"
+          },
+          "shapes": {
+            "borderRadius": 0, // 0 for square, 4-8 for slight curve, 20+ for very round
+            "cardStyle": "flat" // One of: "flat", "shadow", "border", "filled" (based on how property/content cards look)
+          },
+          "background": {
+             "style": "clean" // One of: "clean" (solid color), "geometric" (shapes/lines), "subtle" (faint patterns)
+          }
+        },
+        "pages": [
+           // Infer the order of pages based on the PDF content.
+           // Supported types: 'cover', 'description', 'gallery', 'features', 'map', 'contact'.
+           // You can repeat types if needed, or omit if not found.
+           // Example:
+           { "type": "cover", "enabled": true },
+           { "type": "description", "enabled": true },
+           { "type": "gallery", "enabled": true },
+           { "type": "contact", "enabled": true }
+        ]
+      }
+    `;
+
+    try {
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-3-flash-preview', // Updated to match project environment (2026)
+        contents: [
+            {
+                role: 'user',
+                parts: [
+                    { inlineData: { mimeType: mimeType, data: fileBase64 } },
+                    { text: prompt }
+                ]
+            }
+        ],
+        config: {
+            responseMimeType: 'application/json', // Force JSON output mode
+            temperature: 0.2
+        }
+      });
+      
+      const text = response.text;
+      if (!text) throw new Error("Empty response from AI - The model may have blocked the content.");
+      
+      // Clean potential markdown code blocks
+      const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
+      return JSON.parse(cleanJson);
+
+    } catch (error: any) {
+      console.error("Brochure analysis failed:", error);
+      // Re-throw with more context
+      throw new Error(error.message || "Gemini API Error");
+    }
+  }
+
   private getFieldSchema() {
     return {
       type: Type.OBJECT,

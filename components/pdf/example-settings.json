@@ -1,0 +1,26 @@
+{
+  "templateId": "modern-blue",
+  "theme": {
+    "primary": "#1f3c88",
+    "secondary": "#f1f5f9",
+    "accent": "#e63946",
+    "text": "#1a1a1a",
+    "font": "Open Sans"
+  },
+  "pages": [
+    { 
+      "type": "cover", 
+      "enabled": true, 
+      "options": { "showPrice": true } 
+    },
+    { "type": "description", "enabled": true },
+    { 
+      "type": "gallery", 
+      "enabled": true, 
+      "columns": 2 
+    },
+    { "type": "features", "enabled": true },
+    { "type": "map", "enabled": true },
+    { "type": "contact", "enabled": true }
+  ]
+}

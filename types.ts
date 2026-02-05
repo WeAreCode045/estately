@@ -81,6 +81,16 @@ export interface Agency {
   bankAccount: string;
   vatCode: string;
   agentIds: string[];
+  brochureSettings?: string; // JSON string of BrochureSettings
+}
+
+export interface BrochureSettings {
+  primaryColor: string;
+  secondaryColor: string;
+  headerText: string;
+  footerText: string;
+  showAgentInfo: boolean;
+  showAgencyLogo: boolean;
 }
 
 export interface TaskTemplate {

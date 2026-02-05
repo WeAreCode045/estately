@@ -1,5 +1,36 @@
 import { jsPDF } from 'jspdf';
-import { Contract, User, Project, FormSubmission, FormDefinition } from '../types';
+import { pdf } from '@react-pdf/renderer';
+import React from 'react';
+import { Contract, User, Project, FormSubmission, FormDefinition, Agency, BrochureSettings } from '../types';
+import { projectService, storage, BUCKETS, ID } from '../services/appwrite';
+import BrochureDocument from '../components/pdf/BrochureDocument';
+import { brochureService } from '../services/brochureService';
+
+const saveBlob = (blob: Blob, fileName: string) => {
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+const getDataUrl = (url: string): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.src = url;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL('image/jpeg'));
+    };
+    img.onerror = reject;
+  });
+};
 
 export const downloadContractPDF = async (contract: Contract, project: Project, allUsers: User[]) => {
   const doc = new jsPDF();
@@ -9,7 +40,7 @@ export const downloadContractPDF = async (contract: Contract, project: Project, 
 
   // Header
   doc.setFontSize(22);
-  doc.setTextColor(15, 23, 42); // slate-900
+  doc.setTextColor(15, 23, 42); 
   doc.text('EstateFlow Pro', margin, cursorY);
   
   doc.setFontSize(10);
@@ -38,7 +69,6 @@ export const downloadContractPDF = async (contract: Contract, project: Project, 
   const splitText = doc.splitTextToSize(contract.content, pageWidth - margin * 2);
   doc.text(splitText, margin, cursorY);
   
-  // Calculate new cursor position based on text height
   cursorY += (splitText.length * 5) + 20;
 
   // Signatures Section
@@ -88,7 +118,6 @@ export const downloadContractPDF = async (contract: Contract, project: Project, 
   const splitNote = doc.splitTextToSize(note, pageWidth - margin * 2);
   doc.text(splitNote, margin, finalY);
 
-  // Download
   doc.save(contract.title.replace(/\s+/g, '_') + "_" + contract.id + ".pdf");
 };
 
@@ -252,6 +281,55 @@ export const downloadFormPDF = async (submission: FormSubmission, definition: Fo
   const splitNote = doc.splitTextToSize(note, pageWidth - margin * 2);
   doc.text(splitNote, margin, cursorY + 10);
 
-  // Download
   doc.save((submission.title || definition.title).replace(/\s+/g, '_') + "_" + submission.id.substring(0,8) + ".pdf");
+};
+
+export const generatePropertyBrochure = async (project: Project, agency: Agency | null, agent: User | null) => {
+  try {
+    // 1. Prepare Data
+    // Ensure we have agency settings. If null, fetch default or mock.
+    let fullAgency: Agency = agency || {
+        id: 'default',
+        name: 'EstateFlow Agency',
+        address: '123 Real Estate Blvd',
+        email: 'info@estateflow.com',
+        phone: '+1 234 567 8900',
+        website: 'www.estateflow.com',
+        brochureSettings: undefined
+    };
+
+    if (!agency) {
+        // Try to fetch default if passed null
+        try {
+            const config = await brochureService.getAgencyBrochureConfig('default');
+            fullAgency = config.agency;
+        } catch (e) {
+            console.warn("Could not fetch default agency config, using fallback.");
+        }
+    }
+
+    // Transform project to PropertyData expected by the PDF kit
+    const propertyData = brochureService.transformProjectToPropertyData(project, agent || undefined);
+
+    // 2. Generate PDF Blob
+    const doc = React.createElement(BrochureDocument, {
+        agency: fullAgency,
+        property: propertyData,
+        settings: fullAgency.brochureSettings
+    });
+
+    const blob = await pdf(doc).toBlob();
+
+    // 3. Save/Download
+    const fileName = `${project.title.replace(/[^a-zA-Z0-9]/g, '_')}_Brochure.pdf`;
+    saveBlob(blob, fileName);
+
+    // 4. Background Upload
+    const file = new File([blob], fileName, { type: 'application/pdf' });
+    await storage.createFile(BUCKETS.PROPERTY_BROCHURES, ID.unique(), file);
+
+  } catch (error) {
+      console.error("PDF Generation Error Details:", error);
+      throw error;
+  }
 };
