@@ -155,12 +155,12 @@ export class GeminiService {
    */
   async generateBrochureTemplateFromPDF(fileBase64: string, mimeType: string = 'application/pdf') {
     const prompt = `
-      You are an expert design system analyzer. 
+      You are an expert design system analyzer.
       Analyze the attached brochure document or image. Extract its design tokens (colors, fonts), structural layout, and visual styling (shapes, cards, backgrounds).
-      
-      Map your findings to the following JSON structure exactly. 
+
+      Map your findings to the following JSON structure exactly.
       Do not include markdown formatting, just the raw JSON object.
-      
+
       {
         "theme": {
           "colors": {
@@ -212,10 +212,10 @@ export class GeminiService {
             temperature: 0.2
         }
       });
-      
+
       const text = response.text;
       if (!text) throw new Error("Empty response from AI - The model may have blocked the content.");
-      
+
       // Clean potential markdown code blocks
       const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
       return JSON.parse(cleanJson);

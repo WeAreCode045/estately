@@ -35,7 +35,7 @@ export interface BrochureSettings {
   pages: PageConfig[];
 }
 
-// Re-defining Agency here to strictly match the PDF needs, 
+// Re-defining Agency here to strictly match the PDF needs,
 // though we usually map from the main application's Agency type.
 export interface Agency {
   id: string;

@@ -1,8 +1,8 @@
+import { Image, Page, Text, View } from '@react-pdf/renderer';
 import React from 'react';
-import { Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer';
-import { ThemeConfig, PropertyData, Agency } from '../types';
-import { createStyles } from '../themes';
 import DocumentFooter from '../components/DocumentFooter';
+import { createStyles } from '../themes';
+import type { Agency, PropertyData, ThemeConfig } from '../types';
 
 interface GalleryPageProps {
   theme: ThemeConfig;
@@ -13,20 +13,20 @@ interface GalleryPageProps {
 
 const GalleryPage: React.FC<GalleryPageProps> = ({ theme, property, agency }) => {
   const styles = createStyles(theme);
-  
+
   // Limiting to 5 images for the specific layout pattern: Big, Small, Small, Big, Small (Wait, 5 fits well)
-  // Layout: 
+  // Layout:
   // 1. Hero (100%)
   // 2. Split (50/50)
   // 3. Hero (100%)
-  const images = property.images.slice(0, 5); 
+  const images = property.images.slice(0, 5);
 
   const getStyleForIndex = (index: number) => {
       // 0 -> Full width
       // 1, 2 -> 50% width
       // 3 -> 60% width
       // 4 -> 40% width
-      
+
       const BaseStyle = {
           height: 200,
           objectFit: 'cover' as const,
@@ -38,7 +38,7 @@ const GalleryPage: React.FC<GalleryPageProps> = ({ theme, property, agency }) =>
       if (index === 1 || index === 2) return { ...BaseStyle, width: '48%', marginRight: index === 1 ? '4%' : 0 };
       if (index === 3) return { ...BaseStyle, width: '63%', marginRight: '2%' }; // Asymmetric
       if (index === 4) return { ...BaseStyle, width: '35%' };
-      
+
       return { ...BaseStyle, width: '100%' };
   };
 
@@ -50,13 +50,13 @@ const GalleryPage: React.FC<GalleryPageProps> = ({ theme, property, agency }) =>
 
       <View style={{ ...styles.section, flex: 1 }}>
         <Text style={styles.h1}>Gallery</Text>
-        
+
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 10 }}>
           {images.map((img, idx) => (
-             <Image 
+             <Image
                 key={idx}
-                src={img} 
-                style={getStyleForIndex(idx)} 
+                src={img}
+                style={getStyleForIndex(idx)}
              />
           ))}
         </View>

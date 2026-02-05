@@ -1,7 +1,7 @@
-import { databases, COLLECTIONS, DATABASE_ID, projectService } from './appwrite';
-import { BrochureSettings, Agency, PropertyData } from '../components/pdf/types';
 import { defaultTheme } from '../components/pdf/themes';
-import { Project, User } from '../types';
+import type { Agency, BrochureSettings, PropertyData } from '../components/pdf/types';
+import type { Project, User } from '../types';
+import { COLLECTIONS, DATABASE_ID, databases, projectService } from './appwrite';
 
 export const brochureService = {
   /**
@@ -11,7 +11,7 @@ export const brochureService = {
   async getAgencyBrochureConfig(agencyId: string): Promise<{ agency: Agency, settings: BrochureSettings }> {
     try {
       const doc = await databases.getDocument(DATABASE_ID, COLLECTIONS.AGENCY, agencyId);
-      
+
       let settings: BrochureSettings = {
         theme: defaultTheme,
         pages: []
@@ -33,7 +33,7 @@ export const brochureService = {
           settings = {
              ...settings,
              ...parsed,
-             theme: { 
+             theme: {
                  colors: { ...defaultTheme.colors, ...(parsed.theme?.colors || {}) },
                  fonts: { ...defaultTheme.fonts, ...(parsed.theme?.fonts || {}) },
                  shapes: { ...defaultTheme.shapes, ...(parsed.theme?.shapes || {}) },
@@ -41,7 +41,7 @@ export const brochureService = {
              },
              pages: parsed.pages || defaultPages
           };
-          
+
           // Auto-migrate legacy default blue theme to new luxury black theme
           // If the user is still using the old default blue (#1f3c88), we assume they want the new default.
           if (settings.theme.colors.primary === '#1f3c88') {
@@ -82,7 +82,7 @@ export const brochureService = {
   transformProjectToPropertyData(project: Project, agent?: User): PropertyData {
     // Collect features from property attributes or description if needed
     // This is a mapping utility
-    
+
     // Resolve cover image
     let coverImage = '';
     if (project.coverImageId) {

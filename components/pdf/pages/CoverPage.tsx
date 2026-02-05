@@ -1,8 +1,7 @@
+import { Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import React from 'react';
-import { Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer';
-import { ThemeConfig, PropertyData, Agency } from '../types';
 import { createStyles } from '../themes';
-import DocumentFooter from '../components/DocumentFooter';
+import type { Agency, PropertyData, ThemeConfig } from '../types';
 
 interface CoverPageProps {
   theme: ThemeConfig;
@@ -12,7 +11,7 @@ interface CoverPageProps {
 
 const CoverPage: React.FC<CoverPageProps> = ({ theme, property, agency }) => {
   const styles = createStyles(theme);
-  
+
   const coverStyles = StyleSheet.create({
     container: {
         width: '100%',
@@ -78,7 +77,7 @@ const CoverPage: React.FC<CoverPageProps> = ({ theme, property, agency }) => {
          {property.coverImage ? (
              <Image src={property.coverImage} style={coverStyles.bgImage} />
          ) : null}
-         
+
          {agency.logo && (
              <View style={coverStyles.logoContainer}>
                 <Image src={agency.logo} style={coverStyles.logo} />

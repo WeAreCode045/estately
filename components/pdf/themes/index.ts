@@ -1,5 +1,5 @@
-import { StyleSheet, Font } from '@react-pdf/renderer';
-import { ThemeConfig } from '../types';
+import { Font, StyleSheet } from '@react-pdf/renderer';
+import type { ThemeConfig } from '../types';
 
 // Register standard fonts
 Font.register({
@@ -14,7 +14,7 @@ Font.register({
 export const defaultTheme: ThemeConfig = {
   colors: {
     primary: '#1a1a1a',    // Black
-    secondary: '#f5f5f5',  // Very Light Grey 
+    secondary: '#f5f5f5',  // Very Light Grey
     accent: '#888888',     // Grey
     text: '#1a1a1a',       // Black
     background: '#ffffff', // White
@@ -49,7 +49,7 @@ export const createStyles = (theme: ThemeConfig = defaultTheme) => {
       paddingHorizontal: 30,
       paddingTop: 30,
       paddingBottom: 20,
-      backgroundColor: 'transparent', 
+      backgroundColor: 'transparent',
     },
     headerText: {
        fontSize: 8,
@@ -103,7 +103,7 @@ export const createStyles = (theme: ThemeConfig = defaultTheme) => {
     body: {
       fontSize: 10,
       lineHeight: 1.6,
-      color: '#444444', 
+      color: '#444444',
       fontFamily: theme.fonts.body,
     },
     label: {

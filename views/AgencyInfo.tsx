@@ -129,7 +129,7 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
     try {
       setUploadingLogo(true);
       const fileId = ID.unique();
-      
+
       // Upload file to bucket
       await storage.createFile(
         BUCKETS.AGENCY,
@@ -139,7 +139,7 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
 
       // Update agency state
       setAgency({ ...agency, logo: fileId });
-      
+
     } catch (error) {
       console.error('Error uploading logo:', error);
       alert('Failed to upload logo.');
@@ -171,17 +171,17 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
       setAnalyzing(true);
       const reader = new FileReader();
       reader.readAsDataURL(file);
-      
+
       reader.onload = async () => {
           try {
              // Extract base64 part properly
              const resultString = reader.result as string;
              // Handle both regular base64 and data URI formats if needed, but split(',') usually works for FileReader
              const base64 = resultString.includes(',') ? resultString.split(',')[1] : resultString;
-             
+
              const gemini = new GeminiService();
              const result = await gemini.generateBrochureTemplateFromPDF(base64, file.type);
-             
+
              if (result) {
                  if (confirm("AI Analysis Complete! We found a matching color scheme and page structure. Do you want to apply these settings? This will overwrite your current configuration.")) {
                      updateBrochureSettings(prev => ({
@@ -228,16 +228,16 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
     if (!agency?.brochureSettings) return defaultBrochureSettings;
     try {
         const parsed = JSON.parse(agency.brochureSettings);
-        
+
         // Auto-migration for legacy blue theme -> luxury black theme
         const isLegacyBlue = parsed.theme?.colors?.primary === '#1f3c88';
         const baseTheme = isLegacyBlue ? defaultTheme : { ...defaultTheme, ...parsed.theme };
-        
+
         // Clean merge with default structure to avoid missing properties on legacy data
         return {
             ...defaultBrochureSettings,
             ...parsed,
-            theme: { 
+            theme: {
                 colors: { ...defaultTheme.colors, ...(isLegacyBlue ? {} : (parsed.theme?.colors || {})) },
                 fonts: { ...defaultTheme.fonts, ...(isLegacyBlue ? {} : (parsed.theme?.fonts || {})) },
                 shapes: { ...(defaultTheme.shapes || {}), ...(isLegacyBlue ? {} : (parsed.theme?.shapes || {})) },
@@ -446,10 +446,10 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
             <div className="relative group mx-auto w-32 h-32 mb-6">
               <div className="w-32 h-32 rounded-[2rem] bg-slate-100 border-4 border-slate-50 overflow-hidden shadow-inner flex items-center justify-center relative">
                 {agency?.logo ? (
-                  <img 
-                    src={agency.logo.startsWith('http') ? agency.logo : storage.getFilePreview({ bucketId: BUCKETS.AGENCY, fileId: agency.logo }).toString()} 
-                    className="w-full h-full object-contain" 
-                    alt="Logo" 
+                  <img
+                    src={agency.logo.startsWith('http') ? agency.logo : storage.getFilePreview({ bucketId: BUCKETS.AGENCY, fileId: agency.logo }).toString()}
+                    className="w-full h-full object-contain"
+                    alt="Logo"
                   />
                 ) : (
                   <Building2 size={40} className="text-slate-300" />
@@ -460,7 +460,7 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
                     </div>
                 )}
               </div>
-              <button 
+              <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadingLogo}
                 className="absolute -bottom-2 -right-2 bg-white p-2.5 rounded-2xl shadow-xl border border-slate-100 text-slate-600 hover:text-blue-600 disabled:opacity-50 transition-all"
@@ -480,7 +480,7 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Col: Page Order */}
         <div className="lg:col-span-2 space-y-6">
-            
+
             {/* AI Import Card */}
             <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-3xl border border-indigo-100 shadow-sm overflow-hidden relative">
                 <div className="p-6 flex items-center justify-between">
@@ -503,7 +503,7 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
                             accept=".pdf, .jpg, .jpeg, .png, .webp"
                             onChange={handlePdfAnalysis}
                         />
-                        <button 
+                        <button
                             onClick={() => pdfInputRef.current?.click()}
                             disabled={analyzing}
                             className="bg-white text-indigo-600 px-5 py-3 rounded-xl font-bold text-sm hover:bg-indigo-50 hover:shadow-md transition-all border border-indigo-100 flex items-center gap-2 disabled:opacity-50"
@@ -549,14 +549,14 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                     <button 
+                                     <button
                                         onClick={() => movePage(index, 'up')}
                                         disabled={index === 0}
                                         className="p-1 hover:bg-white hover:shadow-sm rounded transition disabled:opacity-30 disabled:cursor-not-allowed text-slate-500"
                                      >
                                          <ArrowUp size={16} />
                                      </button>
-                                     <button 
+                                     <button
                                         onClick={() => movePage(index, 'down')}
                                         disabled={index === brochureSettings.pages.length - 1}
                                         className="p-1 hover:bg-white hover:shadow-sm rounded transition disabled:opacity-30 disabled:cursor-not-allowed text-slate-500"
@@ -566,9 +566,9 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
                                 </div>
                                 <div className="h-6 w-px bg-slate-200"></div>
                                 <label className="relative inline-flex items-center cursor-pointer">
-                                    <input 
-                                        type="checkbox" 
-                                        className="sr-only peer" 
+                                    <input
+                                        type="checkbox"
+                                        className="sr-only peer"
                                         checked={page.enabled}
                                         onChange={() => togglePage(index)}
                                     />
@@ -641,7 +641,7 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
                          <div className="space-y-4">
                             <div>
                                 <label className="text-sm font-medium text-slate-700 mb-1 block">Heading Font</label>
-                                <select 
+                                <select
                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none"
                                     value={brochureSettings.theme.fonts.heading}
                                     onChange={e => updateBrochureSettings(prev => ({
@@ -656,7 +656,7 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
                             </div>
                             <div>
                                 <label className="text-sm font-medium text-slate-700 mb-1 block">Body Font</label>
-                                <select 
+                                <select
                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none"
                                     value={brochureSettings.theme.fonts.body}
                                     onChange={e => updateBrochureSettings(prev => ({
@@ -684,7 +684,7 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
                         <div className="absolute inset-0 bg-black/10"></div>
                         <h1 style={{ fontFamily: brochureSettings.theme.fonts.heading }} className="text-white text-lg font-bold z-10">ESTATELY</h1>
                     </div>
-                    
+
                     <div className="flex-1 p-4 space-y-3 bg-white">
                         <div style={{ fontFamily: brochureSettings.theme.fonts.heading, color: brochureSettings.theme.colors.primary }} className="text-xs font-bold uppercase tracking-wider">
                             Property Brochure
@@ -692,7 +692,7 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
                         <div style={{ fontFamily: brochureSettings.theme.fonts.body }} className="text-[10px] text-slate-600 leading-relaxed">
                             This is a preview of your brochure style. The actual content will be populated from your real estate projects.
                         </div>
-                        
+
                         <div className="grid grid-cols-2 gap-2 mt-4">
                             <div className="aspect-square bg-slate-100 rounded-lg"></div>
                             <div className="aspect-square bg-slate-100 rounded-lg"></div>
@@ -702,7 +702,7 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
                              <div style={{ backgroundColor: brochureSettings.theme.colors.secondary }} className="h-1.5 w-1/3 rounded-full"></div>
                         </div>
                     </div>
-                    
+
                     <div style={{ backgroundColor: brochureSettings.theme.colors.primary }} className="h-2 w-full"></div>
                 </div>
                 <p className="text-center mt-6 text-xs text-slate-500 font-medium">

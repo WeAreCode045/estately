@@ -1,7 +1,7 @@
-import React from 'react';
 import { Text, View } from '@react-pdf/renderer';
-import { ThemeConfig } from '../types';
+import React from 'react';
 import { createStyles } from '../themes';
+import type { ThemeConfig } from '../types';
 
 interface DocumentFooterProps {
   theme: ThemeConfig;

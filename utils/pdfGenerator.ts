@@ -1,10 +1,10 @@
-import { jsPDF } from 'jspdf';
 import { pdf } from '@react-pdf/renderer';
+import { jsPDF } from 'jspdf';
 import React from 'react';
-import { Contract, User, Project, FormSubmission, FormDefinition, Agency, BrochureSettings } from '../types';
-import { projectService, storage, BUCKETS, ID } from '../services/appwrite';
 import BrochureDocument from '../components/pdf/BrochureDocument';
+import { BUCKETS, ID, storage } from '../services/appwrite';
 import { brochureService } from '../services/brochureService';
+import type { Agency, Contract, FormDefinition, FormSubmission, Project, User } from '../types';
 
 const saveBlob = (blob: Blob, fileName: string) => {
   const link = document.createElement('a');
@@ -40,9 +40,9 @@ export const downloadContractPDF = async (contract: Contract, project: Project, 
 
   // Header
   doc.setFontSize(22);
-  doc.setTextColor(15, 23, 42); 
+  doc.setTextColor(15, 23, 42);
   doc.text('EstateFlow Pro', margin, cursorY);
-  
+
   doc.setFontSize(10);
   doc.setTextColor(100);
   doc.text(`ID: ${contract.id}`, pageWidth - margin - 40, cursorY);
@@ -68,7 +68,7 @@ export const downloadContractPDF = async (contract: Contract, project: Project, 
   doc.setFont('helvetica', 'normal');
   const splitText = doc.splitTextToSize(contract.content, pageWidth - margin * 2);
   doc.text(splitText, margin, cursorY);
-  
+
   cursorY += (splitText.length * 5) + 20;
 
   // Signatures Section
@@ -78,11 +78,11 @@ export const downloadContractPDF = async (contract: Contract, project: Project, 
   cursorY += 15;
 
   const colWidth = (pageWidth - margin * 2) / 2;
-  
+
   contract.assignees.forEach((uid, index) => {
     const user = allUsers.find(u => u.id === uid);
     const sigData = contract.signatureData?.[uid];
-    
+
     const xPos = margin + (index % 2) * colWidth;
     const yPosStart = cursorY + Math.floor(index / 2) * 60;
 
@@ -139,7 +139,7 @@ export const downloadFormPDF = async (submission: FormSubmission, definition: Fo
   doc.setFontSize(22);
   doc.setTextColor(15, 23, 42); // slate-900
   doc.text('EstateFlow Pro', margin, cursorY);
-  
+
   doc.setFontSize(10);
   doc.setTextColor(100);
   doc.text(`FORM ID: ${submission.id}`, pageWidth - margin - 50, cursorY);
@@ -162,7 +162,7 @@ export const downloadFormPDF = async (submission: FormSubmission, definition: Fo
 
   // Form Data
   const fields = definition.schema?.fields || [];
-  
+
   const renderFields = (fieldsList: any[]) => {
     fieldsList.forEach(field => {
       const fieldName = field.name || field.id;
@@ -190,7 +190,7 @@ export const downloadFormPDF = async (submission: FormSubmission, definition: Fo
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.text(field.label + ":", margin, cursorY);
-        
+
         doc.setFont('helvetica', 'normal');
         let displayValue = '';
         if (value === true) displayValue = 'Yes';
@@ -227,9 +227,9 @@ export const downloadFormPDF = async (submission: FormSubmission, definition: Fo
 
   const signatures: Record<string, string> = meta.signatures || {};
   const signatureMeta: any = meta.signatureMeta || {};
-  
+
   const colWidth = (pageWidth - margin * 2) / 2;
-  
+
   const activeSignatures = Object.entries(signatures);
   if (activeSignatures.length === 0) {
      doc.setFontSize(10);
@@ -242,7 +242,7 @@ export const downloadFormPDF = async (submission: FormSubmission, definition: Fo
       const signerId = role === 'seller' ? project.sellerId : project.buyerId;
       const signer = allUsers.find(u => u.userId === signerId || u.id === signerId);
       const sigTime = signatureMeta[role]?.timestamp || submission.updatedAt || submission.createdAt;
-      
+
       const xPos = margin + (index % 2) * colWidth;
       const yPosStart = cursorY;
 

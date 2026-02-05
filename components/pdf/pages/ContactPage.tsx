@@ -1,7 +1,7 @@
+import { Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import React from 'react';
-import { Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer';
-import { ThemeConfig, PropertyData, Agency } from '../types';
 import { createStyles } from '../themes';
+import type { Agency, PropertyData, ThemeConfig } from '../types';
 
 interface ContactPageProps {
   theme: ThemeConfig;
@@ -84,19 +84,19 @@ const ContactPage: React.FC<ContactPageProps> = ({ theme, property, agency }) =>
        <View style={splitStyles.imageSide}>
            {contactImage ? <Image src={contactImage} style={splitStyles.image} /> : null}
        </View>
-       
+
        <View style={splitStyles.contentSide}>
            {/* Agency Info */}
            {agency.logo && (
-               <View style={{ marginBottom: 40, backgroundColor: '#fff', padding: 5, alignSelf: 'flex-start' }}> 
+               <View style={{ marginBottom: 40, backgroundColor: '#fff', padding: 5, alignSelf: 'flex-start' }}>
                     {/* Background wrapper for logo visibility */}
                    <Image src={agency.logo} style={{ width: 80, height: 40, objectFit: 'contain' }} />
                </View>
            )}
-           
+
            <Text style={splitStyles.subheading}>Presented By</Text>
            <Text style={splitStyles.heading}>{agency.name}</Text>
-           
+
            <Text style={splitStyles.text}>{agency.address}</Text>
            <Text style={splitStyles.text}>{agency.email}</Text>
            <Text style={splitStyles.text}>{agency.phone}</Text>
@@ -108,12 +108,12 @@ const ContactPage: React.FC<ContactPageProps> = ({ theme, property, agency }) =>
            {property.agent && (
                <>
                 <Text style={splitStyles.subheading}>Your Agent</Text>
-                
+
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
                     {property.agent.avatar && (
-                        <Image 
-                            src={property.agent.avatar} 
-                            style={{ width: 50, height: 50, borderRadius: 0, marginRight: 15, backgroundColor: '#333' }} 
+                        <Image
+                            src={property.agent.avatar}
+                            style={{ width: 50, height: 50, borderRadius: 0, marginRight: 15, backgroundColor: '#333' }}
                         />
                     )}
                     <View>
@@ -121,7 +121,7 @@ const ContactPage: React.FC<ContactPageProps> = ({ theme, property, agency }) =>
                         <Text style={{ fontSize: 10, color: '#888' }}>{property.agent.role}</Text>
                     </View>
                 </View>
-                
+
                 <Text style={splitStyles.text}>{property.agent.email}</Text>
                 <Text style={splitStyles.text}>{property.agent.phone}</Text>
                </>

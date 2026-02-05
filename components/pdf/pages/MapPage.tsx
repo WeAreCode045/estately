@@ -1,8 +1,8 @@
+import { Image, Page, Text, View } from '@react-pdf/renderer';
 import React from 'react';
-import { Page, Text, View, Image } from '@react-pdf/renderer';
-import { ThemeConfig, PropertyData, Agency } from '../types';
-import { createStyles } from '../themes';
 import DocumentFooter from '../components/DocumentFooter';
+import { createStyles } from '../themes';
+import type { Agency, PropertyData, ThemeConfig } from '../types';
 
 interface MapPageProps {
   theme: ThemeConfig;
@@ -16,12 +16,12 @@ const MapPage: React.FC<MapPageProps> = ({ theme, property, agency }) => {
   // Silver Map Style
   // https://developers.google.com/maps/documentation/maps-static/styling
   const silverStyle = '&style=feature:all|element:all|saturation:-100|lightness:10';
-  
+
   // Note: Env variable access in client-side bundling
   const apiKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || 'YOUR_API_KEY';
 
-  const mapUrl = property.coordinates ? 
-    `https://maps.googleapis.com/maps/api/staticmap?center=${property.coordinates.lat},${property.coordinates.lng}&zoom=15&size=800x600&markers=color:0x1a1a1a%7C${property.coordinates.lat},${property.coordinates.lng}&key=${apiKey}${silverStyle}` 
+  const mapUrl = property.coordinates ?
+    `https://maps.googleapis.com/maps/api/staticmap?center=${property.coordinates.lat},${property.coordinates.lng}&zoom=15&size=800x600&markers=color:0x1a1a1a%7C${property.coordinates.lat},${property.coordinates.lng}&key=${apiKey}${silverStyle}`
     : null;
 
   return (

@@ -78,7 +78,7 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
       <div className="absolute inset-0 bg-slate-900 rounded-[32px] overflow-hidden shadow-2xl">
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 rounded-full blur-3xl -mr-32 -mt-32"></div>
       </div>
-      
+
       {/* Content Container - Allows overflow for dropdowns */}
       <div className="relative z-10 p-8 md:p-10 text-white">
         <div className="flex flex-col xl:flex-row items-start justify-between gap-8 mb-6">

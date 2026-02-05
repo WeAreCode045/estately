@@ -60,9 +60,9 @@ async function provisionBucket(bucketId, name, publicRead = true) {
                     enabled: true,
                     permissions: publicRead ? [
                         'read("any")',
-                        'write("users")', 
-                        'update("users")', 
-                        'delete("users")' 
+                        'write("users")',
+                        'update("users")',
+                        'delete("users")'
                     ] : []
                 });
                 console.log(`Bucket ${bucketId} created.`);
@@ -70,7 +70,7 @@ async function provisionBucket(bucketId, name, publicRead = true) {
                 throw e;
             }
         }
-        
+
         if (publicRead) {
             console.log(`Ensuring permissions for ${bucketId}...`);
             // Update permissions just in case

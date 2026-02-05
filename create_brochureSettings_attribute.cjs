@@ -45,7 +45,7 @@ async function run() {
     try {
         const response = await request('POST', `/databases/${config.databaseId}/collections/${config.collectionId}/attributes/string`, {
             key: 'brochureSettings',
-            size: 5000, 
+            size: 5000,
             required: false,
             default: null
         });

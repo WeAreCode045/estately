@@ -1,14 +1,14 @@
-import React from 'react';
 import { Document } from '@react-pdf/renderer';
-import { BrochureSettings, Agency, PropertyData } from './types';
+import React from 'react';
 import { defaultTheme } from './themes';
+import type { Agency, BrochureSettings, PropertyData } from './types';
 
+import ContactPage from './pages/ContactPage';
 import CoverPage from './pages/CoverPage';
 import DescriptionPage from './pages/DescriptionPage';
-import GalleryPage from './pages/GalleryPage';
 import FeaturesPage from './pages/FeaturesPage';
+import GalleryPage from './pages/GalleryPage';
 import MapPage from './pages/MapPage';
-import ContactPage from './pages/ContactPage';
 
 interface BrochureDocumentProps {
   settings?: BrochureSettings;

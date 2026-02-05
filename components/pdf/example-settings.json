@@ -8,16 +8,16 @@
     "font": "Open Sans"
   },
   "pages": [
-    { 
-      "type": "cover", 
-      "enabled": true, 
-      "options": { "showPrice": true } 
+    {
+      "type": "cover",
+      "enabled": true,
+      "options": { "showPrice": true }
     },
     { "type": "description", "enabled": true },
-    { 
-      "type": "gallery", 
-      "enabled": true, 
-      "columns": 2 
+    {
+      "type": "gallery",
+      "enabled": true,
+      "columns": 2
     },
     { "type": "features", "enabled": true },
     { "type": "map", "enabled": true },

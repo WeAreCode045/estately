@@ -1,7 +1,7 @@
 import {
-  ArrowLeft,
-  Check,
-  X
+    ArrowLeft,
+    Check,
+    X
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -10,9 +10,8 @@ import DocumentViewer from '../components/DocumentViewer';
 import FormEditor from '../components/FormEditor';
 import FormRenderer from '../components/FormRenderer';
 
-import { AIModal, AddTaskModal, AssignFormModal, BulkSpecsModal, FormTemplatePickerModal, GeneralInfoModal, InviteModal, ProjectDocuments, ProjectHeader, ProjectOverview, ProjectProperty, ProjectTabBar, ProjectTeam, SigningModal, TaskLibraryModal, TemplatePickerModal } from '../components/project';
-import { downloadContractPDF, downloadFormPDF } from '../utils/pdfGenerator';
 import { generateBrochureBlob } from '../components/pdf/utils/brochureGenerator';
+import { AIModal, AddTaskModal, AssignFormModal, BulkSpecsModal, FormTemplatePickerModal, GeneralInfoModal, InviteModal, ProjectDocuments, ProjectHeader, ProjectOverview, ProjectProperty, ProjectTabBar, ProjectTeam, SigningModal, TaskLibraryModal, TemplatePickerModal } from '../components/project';
 import { BUCKETS, COLLECTIONS, DATABASE_ID, ID, client, databases, inviteService, profileService, projectFormsService, projectService, storage } from '../services/appwrite';
 import { documentService } from '../services/documentService';
 import { formDefinitionsService } from '../services/formDefinitionsService';
@@ -20,6 +19,7 @@ import type { GroundingLink } from '../services/geminiService';
 import { GeminiService } from '../services/geminiService';
 import type { Contract, ContractTemplate, FormDefinition, FormSubmission, Project, ProjectTask, TaskTemplate, User, UserDocumentDefinition } from '../types';
 import { ContractStatus, UserRole } from '../types';
+import { downloadContractPDF, downloadFormPDF } from '../utils/pdfGenerator';
 import { useSettings } from '../utils/useSettings';
 
 interface ProjectDetailProps {
@@ -890,18 +890,18 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
         const agRes = await databases.listDocuments(DATABASE_ID, COLLECTIONS.AGENCY);
         // We only need the ID now, as the generator fetches the settings
         const agencyId = agRes.documents.length > 0 ? agRes.documents[0].$id : null;
-        
+
         if (!agencyId) {
             alert('No agency configuration found.');
             return;
         }
 
         const manager = allUsers.find(u => u.id === project?.managerId);
-        
+
         if (project) {
             // Generate Blob using the new React-PDF system
             const blob = await generateBrochureBlob(project, agencyId, manager || user);
-            
+
             // 1. Trigger Download
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');

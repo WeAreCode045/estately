@@ -1,8 +1,8 @@
+import { Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import React from 'react';
-import { Page, Text, View, StyleSheet } from '@react-pdf/renderer';
-import { ThemeConfig, PropertyData, Agency } from '../types';
-import { createStyles } from '../themes';
 import DocumentFooter from '../components/DocumentFooter';
+import { createStyles } from '../themes';
+import type { Agency, PropertyData, ThemeConfig } from '../types';
 
 interface FeaturesPageProps {
   theme: ThemeConfig;
@@ -48,7 +48,7 @@ const FeaturesPage: React.FC<FeaturesPageProps> = ({ theme, property, agency }) 
 
       <View style={{ ...styles.section, flex: 1 }}>
         <Text style={styles.h1}>Features & Amenities</Text>
-        
+
         <View style={gridStyle.container}>
             {/* Core Specs First */}
             <View style={gridStyle.item}>
