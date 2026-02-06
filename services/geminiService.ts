@@ -2,7 +2,7 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import type { FormSchema } from "../components/form-builder/types";
-import { ContractTemplate, Project, User } from "../types";
+import type { ContractTemplate, Project, User } from "../types";
 
 export interface GroundingLink {
   title: string;
@@ -197,13 +197,13 @@ export class GeminiService {
 
     try {
       const response = await this.ai.models.generateContent({
-        model: 'gemini-3-flash-preview', // Updated to match project environment (2026)
+        model: 'gemini-1.5-flash', // Flash is efficient for multimodal analysis
         contents: [
             {
                 role: 'user',
                 parts: [
-                    { inlineData: { mimeType: mimeType, data: fileBase64 } },
-                    { text: prompt }
+                    { text: prompt },
+                    { inlineData: { mimeType, data: fileBase64 } }
                 ]
             }
         ],
@@ -214,16 +214,15 @@ export class GeminiService {
       });
 
       const text = response.text;
-      if (!text) throw new Error("Empty response from AI - The model may have blocked the content.");
+      if (!text) throw new Error("Empty response from AI");
 
-      // Clean potential markdown code blocks
+      // Clean potential markdown code blocks if the model ignores the instruction (though responseMimeType usually prevents this)
       const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
       return JSON.parse(cleanJson);
 
-    } catch (error: any) {
+    } catch (error) {
       console.error("Brochure analysis failed:", error);
-      // Re-throw with more context
-      throw new Error(error.message || "Gemini API Error");
+      throw error;
     }
   }
 

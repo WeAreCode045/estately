@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Wand2, X, Sparkles, Loader2 } from 'lucide-react';
 import { GeminiService } from '../../services/geminiService';
-import { FormSchema } from './types';
+import type { FormSchema } from './types';
 
 interface AIGeneratorModalProps {
   onClose: () => void;

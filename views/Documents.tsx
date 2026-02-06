@@ -1,20 +1,21 @@
 import {
-  Download,
-  Eye,
-  FileText,
-  Filter,
-  Inbox,
-  Loader2,
-  Search,
-  Trash2,
-  Upload,
-  X
+    Download,
+    Eye,
+    FileText,
+    Filter,
+    Inbox,
+    Loader2,
+    Search,
+    Trash2,
+    Upload,
+    X
 } from 'lucide-react';
+/* eslint-env browser */
 import React, { useRef, useState } from 'react';
+import DocumentViewer from '../components/DocumentViewer';
 import { profileService } from '../services/appwrite';
 import { documentService } from '../services/documentService';
-import DocumentViewer from '../components/DocumentViewer';
-import { Project, UploadedDocument, User } from '../types';
+import type { Project, UploadedDocument, User } from '../types';
 
 interface DocumentsViewProps {
   user: User;
@@ -38,7 +39,7 @@ const Documents: React.FC<DocumentsViewProps> = ({ user, projects, onRefresh }) 
 
   const handleOpenViewer = async (provided: any, title?: string) => {
     try {
-      let fileId = provided?.fileId;
+      const fileId = provided?.fileId;
       let documentType = provided?.documentType;
       let url = null;
 
@@ -60,7 +61,7 @@ const Documents: React.FC<DocumentsViewProps> = ({ user, projects, onRefresh }) 
 
       // Generate normalized download URL if we have a fileId
       if (fileId) {
-        let dl = documentService.getFileDownload(fileId);
+        const dl = await documentService.getFileDownload(fileId);
         setViewerDownloadUrl(dl);
       } else {
         setViewerDownloadUrl(null);
@@ -211,13 +212,21 @@ const Documents: React.FC<DocumentsViewProps> = ({ user, projects, onRefresh }) 
                    >
                       <Eye size={18} />
                    </button>
-                   <a
-                     href={documentService.getFileDownload(doc.fileId)}
+                   <button
+                     onClick={async () => {
+                       try {
+                         const dl = await documentService.getFileDownload(doc.fileId);
+                         window.open(dl, '_blank');
+                       } catch (e) {
+                         console.error('Download failed', e);
+                         globalThis.alert?.('Download failed.');
+                       }
+                     }}
                      className="p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
                      title="Download"
                    >
                       <Download size={18} />
-                   </a>
+                   </button>
                    <button
                      onClick={() => handleDelete(doc)}
                      className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"

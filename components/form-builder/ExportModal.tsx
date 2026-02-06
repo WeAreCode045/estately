@@ -1,6 +1,6 @@
 import { Check, Code, Copy, Download, FileJson, X } from 'lucide-react';
 import React, { useState } from 'react';
-import { FormSchema } from './types';
+import type { FormSchema } from './types';
 
 interface ExportModalProps {
   schema: FormSchema;

@@ -1,7 +1,7 @@
 import { CheckCircle, Clock } from 'lucide-react';
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Project, TaskTemplate, User } from '../types';
+import type { Project, TaskTemplate, User } from '../types';
 
 interface AdminTasksWidgetProps {
   user: User;

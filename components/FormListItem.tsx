@@ -1,4 +1,5 @@
 import { CheckCircle2, Clock, Eye, Home, Signature as SignIcon, Trash2, User as UserIcon } from 'lucide-react';
+/* eslint-env browser */
 import React, { useState } from 'react';
 import { projectFormsService } from '../services/appwrite';
 import type { FormSubmission, User } from '../types';
@@ -27,7 +28,7 @@ const FormListItem: React.FC<Props> = ({ submission, onView, onDelete, onUpdate,
       meta = JSON.parse(submission.meta);
     }
   } catch (e) {
-    console.error('Error parsing meta', e);
+    globalThis.console?.error('Error parsing meta', e);
   }
 
   const signatures = meta?.signatures || {};
@@ -51,30 +52,30 @@ const FormListItem: React.FC<Props> = ({ submission, onView, onDelete, onUpdate,
   ) && !signatures?.buyer;
 
   // Determine display status based on user requirements
-  let displayStatus = submission.status || 'draft';
-  let statusColor = "bg-slate-100 text-slate-700";
+    let displayStatus: string = submission.status || 'draft';
+    let statusColor = "bg-slate-100 text-slate-700";
 
-  if (submission.status === 'assigned') {
-    displayStatus = 'assigned';
-    statusColor = "bg-amber-100 text-amber-700";
-  } else if (submission.status === 'submitted') {
-    if (needsSellerSign && needsBuyerSign) {
-      displayStatus = 'submitted/waiting for signature';
-      statusColor = "bg-indigo-100 text-indigo-700 text-[8px]";
-    } else if (needsSellerSign) {
-      displayStatus = 'waiting for seller signature';
-      statusColor = "bg-indigo-100 text-indigo-700 text-[8px]";
-    } else if (needsBuyerSign) {
-      displayStatus = 'waiting for buyer signature';
-      statusColor = "bg-indigo-100 text-indigo-700 text-[8px]";
-    } else {
-      displayStatus = 'submitted';
+    if (submission.status === 'assigned') {
+      displayStatus = 'assigned';
+      statusColor = "bg-amber-100 text-amber-700";
+    } else if (submission.status === 'submitted') {
+      if (needsSellerSign && needsBuyerSign) {
+        displayStatus = 'submitted/waiting for signature';
+        statusColor = "bg-indigo-100 text-indigo-700 text-[8px]";
+      } else if (needsSellerSign) {
+        displayStatus = 'waiting for seller signature';
+        statusColor = "bg-indigo-100 text-indigo-700 text-[8px]";
+      } else if (needsBuyerSign) {
+        displayStatus = 'waiting for buyer signature';
+        statusColor = "bg-indigo-100 text-indigo-700 text-[8px]";
+      } else {
+        displayStatus = 'submitted';
+        statusColor = "bg-emerald-100 text-emerald-700";
+      }
+    } else if (submission.status === 'completed') {
+      displayStatus = 'completed';
       statusColor = "bg-emerald-100 text-emerald-700";
     }
-  } else if (submission.status === 'completed') {
-    displayStatus = 'completed';
-    statusColor = "bg-emerald-100 text-emerald-700";
-  }
 
   const currentRole = (user?.role || '').toString().toUpperCase();
   const canSignAsSeller = currentRole === UserRole.SELLER.toUpperCase() && needsSellerSign;

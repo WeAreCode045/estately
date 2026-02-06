@@ -13,7 +13,7 @@ interface SigningModalProps {
   isProcessing?: boolean;
 }
 
-const SigningModal: React.FC<SigningModalProps> = ({ contract, isOpen, onClose, onSign, user, allUsers, isProcessing }) => {
+const SigningModal: React.FC<SigningModalProps> = ({ contract, isOpen, onClose, onSign, user, allUsers }) => {
   const [showSignaturePad, setShowSignaturePad] = useState(false);
 
   useEffect(() => {

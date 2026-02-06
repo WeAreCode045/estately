@@ -12,7 +12,7 @@ function request(method, path, data) {
     return new Promise((resolve, reject) => {
         const url = new URL(config.endpoint + path);
         const options = {
-            method: method,
+            method,
             hostname: url.hostname,
             path: url.pathname + url.search,
             headers: {

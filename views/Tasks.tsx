@@ -1,14 +1,14 @@
 import { ID } from 'appwrite';
 import {
-  Bell,
-  CheckSquare,
-  Clock,
-  FileText,
-  Inbox,
-  Loader2,
-  Plus,
-  Upload,
-  X
+    Bell,
+    CheckSquare,
+    Clock,
+    FileText,
+    Inbox,
+    Loader2,
+    Plus,
+    Upload,
+    X
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import DocumentViewer from '../components/DocumentViewer';
@@ -51,7 +51,7 @@ const Tasks: React.FC<TasksViewProps> = ({ user, projects, onRefresh }) => {
 
       // Generate normalized download URL if we have a fileId
       if (fileId) {
-        const dl = documentService.getFileDownload(fileId);
+        const dl = await documentService.getFileDownload(fileId);
         setViewerDownloadUrl(dl);
       } else {
         setViewerDownloadUrl(null);

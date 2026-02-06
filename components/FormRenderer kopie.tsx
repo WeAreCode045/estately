@@ -4,8 +4,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { projectFormsService } from '../services/appwrite';
 import { documentService } from '../services/documentService';
 import { formDefinitionsService } from '../services/formDefinitionsService';
-import type { FormDefinition, FormSubmission } from '../types';
-import { Project, User, UserRole } from '../types';
+import type { FormDefinition, FormSubmission , Project, User} from '../types';
+import { UserRole } from '../types';
 import { downloadFormPDF } from '../utils/pdfGenerator';
 import SignaturePad from './SignaturePad';
 
@@ -671,16 +671,22 @@ const FormRenderer: React.FC<Props> = ({ submission, onClose, onUpdate, readOnly
               <h4 className="text-sm font-bold text-slate-900 mb-4">Attachments</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {submission.attachments.map((fid) => (
-                  <a
+                  <button
                     key={fid}
-                    href={documentService.getFileDownload(fid)}
-                    target="_blank"
-                    rel="noreferrer"
+                    onClick={async () => {
+                      try {
+                        const dl = await documentService.getFileDownload(fid);
+                        window.open(dl, '_blank');
+                      } catch (e) {
+                        console.error('Download failed', e);
+                        globalThis.alert?.('Download failed.');
+                      }
+                    }}
                     className="flex items-center justify-between bg-slate-50 hover:bg-slate-100 p-4 rounded-2xl border border-slate-200 transition-all group"
                   >
                     <div className="truncate text-xs font-bold text-slate-600">{fid}</div>
                     <Download size={16} className="text-slate-300 group-hover:text-blue-600 transition-colors" />
-                  </a>
+                  </button>
                 ))}
               </div>
             </div>

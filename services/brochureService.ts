@@ -1,5 +1,5 @@
 import { defaultTheme } from '../components/pdf/themes';
-import type { Agency, BrochureSettings, PropertyData } from '../components/pdf/types';
+import type { Agency, BrochureSettings, PageConfig, PropertyData } from '../components/pdf/types';
 import type { Project, User } from '../types';
 import { COLLECTIONS, DATABASE_ID, databases, projectService } from './appwrite';
 
@@ -19,7 +19,7 @@ export const brochureService = {
 
       if (doc.brochureSettings) {
         try {
-          const defaultPages = [
+          const defaultPages: PageConfig[] = [
             { type: 'cover', enabled: true },
             { type: 'description', enabled: true },
             { type: 'gallery', enabled: true },
@@ -35,18 +35,10 @@ export const brochureService = {
              ...parsed,
              theme: {
                  colors: { ...defaultTheme.colors, ...(parsed.theme?.colors || {}) },
-                 fonts: { ...defaultTheme.fonts, ...(parsed.theme?.fonts || {}) },
-                 shapes: { ...defaultTheme.shapes, ...(parsed.theme?.shapes || {}) },
-                 background: { ...defaultTheme.background, ...(parsed.theme?.background || {}) }
+                 fonts: { ...defaultTheme.fonts, ...(parsed.theme?.fonts || {}) }
              },
-             pages: parsed.pages || defaultPages
+             pages: (parsed.pages as PageConfig[]) || defaultPages
           };
-
-          // Auto-migrate legacy default blue theme to new luxury black theme
-          // If the user is still using the old default blue (#1f3c88), we assume they want the new default.
-          if (settings.theme.colors.primary === '#1f3c88') {
-              settings.theme = defaultTheme;
-          }
 
           if (!settings.pages || settings.pages.length === 0) {
               settings.pages = defaultPages;
@@ -63,7 +55,7 @@ export const brochureService = {
           address: doc.address,
           email: doc.email,
           phone: doc.phone,
-          logo: doc.logo && !doc.logo.startsWith('http') ? projectService.getImagePreview(doc.logo) : doc.logo,
+          logo: doc.logo,
           website: doc.website,
           brochureSettings: settings
       };
@@ -89,18 +81,27 @@ export const brochureService = {
         coverImage = projectService.getImagePreview(project.coverImageId);
     } else if (project.media && project.media.length > 0) {
         const first = project.media[0];
-        coverImage = first.startsWith('http') ? first : projectService.getImagePreview(first);
+        if (first && first.startsWith('http')) {
+          coverImage = first;
+        } else if (first) {
+          coverImage = projectService.getImagePreview(first);
+        }
     } else if (project.property.images && project.property.images.length > 0) {
          const first = project.property.images[0];
-         coverImage = first.startsWith('http') ? first : projectService.getImagePreview(first);
+         if (first && first.startsWith('http')) {
+           coverImage = first;
+         } else if (first) {
+           coverImage = projectService.getImagePreview(first);
+         }
     }
 
     // Resolve images
     // Prefer media (new system) over property.images (legacy)
     const rawImages = (project.media && project.media.length > 0) ? project.media : (project.property.images || []);
-    const images = rawImages
-        .map(img => img.startsWith('http') ? img : projectService.getImagePreview(img))
-        .filter(url => url && url.length > 0);
+    const images = rawImages.map(img => {
+      if (!img) return '';
+      return img.startsWith('http') ? img : projectService.getImagePreview(img);
+    });
 
     return {
       id: project.id,

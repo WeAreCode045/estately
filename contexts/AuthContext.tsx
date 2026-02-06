@@ -167,7 +167,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const register = async (email: string, pass: string, name: string) => {
         try {
             await account.deleteSession('current');
-        } catch (e) {}
+        } catch (e) { /* ignore if no session exists */ }
         await account.create(ID.unique(), email, pass, name);
         await login(email, pass);
 

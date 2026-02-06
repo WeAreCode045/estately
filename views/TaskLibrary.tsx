@@ -1,49 +1,33 @@
-import React, { useState, useEffect } from 'react';
-import {
-  CheckSquare,
-  Plus,
-  Trash2,
-  Edit2,
-  Loader2,
-  Layout,
-  Bell,
-  Users,
-  Search,
-  Filter as FilterIcon,
-  X,
-  FileText,
-  CheckCircle2
-} from 'lucide-react';
-import { User, TaskTemplate, UserRole, Project } from '../types';
-import { databases, DATABASE_ID, COLLECTIONS, profileService, projectService, Query } from '../services/appwrite';
 import { ID } from 'appwrite';
+import {
+    Bell,
+    CheckSquare,
+    Edit2,
+    Loader2,
+    Plus,
+    Trash2,
+    Users,
+    X
+} from 'lucide-react';
+/* eslint-env browser */
+import React, { useEffect, useState } from 'react';
+import { COLLECTIONS, DATABASE_ID, databases, profileService, projectService } from '../services/appwrite';
+import type { Project, TaskTemplate, User } from '../types';
+import { UserRole } from '../types';
 
 interface TaskLibraryProps {
   user: User;
   onRefresh?: () => void;
 }
 
-const TaskLibrary: React.FC<TaskLibraryProps> = ({ user, onRefresh }) => {
+const TaskLibrary: React.FC<TaskLibraryProps> = () => {
   const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>([]);
-  const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [allProjects, setAllProjects] = useState<Project[]>([]);
+  const [, setAllUsers] = useState<User[]>([]);
+  const [, setAllProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<TaskTemplate | null>(null);
-  const [selectedTaskForAssign, setSelectedTaskForAssign] = useState<TaskTemplate | null>(null);
 
-  const [assignFilters, setAssignFilters] = useState({
-    userSelection: 'ALL' as 'ALL' | 'SELECTED',
-    selectedUserIds: [] as string[],
-    scopeLogic: 'AND' as 'AND' | 'OR',
-    roles: [] as UserRole[],
-    roleLogic: 'AND' as 'AND' | 'OR',
-    projectSelection: 'IGNORE' as 'IGNORE' | 'ACTIVE' | 'SELECTED',
-    selectedProjectIds: [] as string[],
-    projectLogic: 'AND' as 'AND' | 'OR',
-    checkVault: true
-  });
 
   const [templateData, setTemplateData] = useState<Partial<TaskTemplate>>({
     title: '',
@@ -273,8 +257,9 @@ const TaskLibrary: React.FC<TaskLibraryProps> = ({ user, onRefresh }) => {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">Task Title</label>
+                    <label htmlFor="template-title" className="text-sm font-bold text-slate-700">Task Title</label>
                     <input
+                      id="template-title"
                       required type="text" value={templateData.title || ''}
                       onChange={e => setTemplateData({...templateData, title: e.target.value})}
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm"
@@ -282,8 +267,9 @@ const TaskLibrary: React.FC<TaskLibraryProps> = ({ user, onRefresh }) => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">Description</label>
+                    <label htmlFor="template-description" className="text-sm font-bold text-slate-700">Description</label>
                     <textarea
+                      id="template-description"
                       value={templateData.description || ''}
                       onChange={e => setTemplateData({...templateData, description: e.target.value})}
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm h-32 resize-none"
@@ -291,8 +277,9 @@ const TaskLibrary: React.FC<TaskLibraryProps> = ({ user, onRefresh }) => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">Category</label>
+                    <label htmlFor="template-category" className="text-sm font-bold text-slate-700">Category</label>
                     <select
+                      id="template-category"
                       value={templateData.category}
                       onChange={e => setTemplateData({...templateData, category: e.target.value as any})}
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm"
@@ -306,8 +293,8 @@ const TaskLibrary: React.FC<TaskLibraryProps> = ({ user, onRefresh }) => {
                   </div>
                 </div>
                 <div className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">Assignee Roles</label>
+                  <fieldset className="space-y-2">
+                    <legend className="text-sm font-bold text-slate-700">Assignee Roles</legend>
                     <div className="flex flex-wrap gap-2">
                       {Object.values(UserRole).map(role => (
                         <button
@@ -331,13 +318,18 @@ const TaskLibrary: React.FC<TaskLibraryProps> = ({ user, onRefresh }) => {
                         </button>
                       ))}
                     </div>
-                  </div>
+                  </fieldset>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <label className="text-sm font-bold text-slate-700">Deadline Type</label>
+                      <label htmlFor="template-deadlineType" className="text-sm font-bold text-slate-700">Deadline Type</label>
                       <select
+                        id="template-deadlineType"
                         value={templateData.deadlineType}
-                        onChange={e => setTemplateData({...templateData, deadlineType: e.target.value as 'RELATIVE' | 'FIXED'})}
+                        onChange={e => {
+                          const raw = e.target.value;
+                          const mapped = raw === 'FIXED' ? 'SPECIFIC' : (raw as 'RELATIVE' | 'SPECIFIC');
+                          setTemplateData({...templateData, deadlineType: mapped});
+                        }}
                         className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm"
                       >
                         <option value="RELATIVE">Days</option>
@@ -345,17 +337,19 @@ const TaskLibrary: React.FC<TaskLibraryProps> = ({ user, onRefresh }) => {
                       </select>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-bold text-slate-700">
+                      <label htmlFor="template-deadlineValue" className="text-sm font-bold text-slate-700">
                         {templateData.deadlineType === 'RELATIVE' ? 'Days' : 'Date'}
                       </label>
                       {templateData.deadlineType === 'RELATIVE' ? (
                         <input
+                          id="template-deadlineValue"
                           type="number" value={templateData.deadlineDays || 0}
                           onChange={e => setTemplateData({...templateData, deadlineDays: parseInt(e.target.value)})}
                           className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm"
                         />
                       ) : (
                         <input
+                          id="template-deadlineValue"
                           type="date" value={templateData.deadlineDate || ''}
                           onChange={e => setTemplateData({...templateData, deadlineDate: e.target.value})}
                           className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm"

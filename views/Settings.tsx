@@ -1,7 +1,8 @@
 import { Bell, Globe, Key, Loader2, Save, Shield, User as UserIcon } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { configService, profileService } from '../services/appwrite';
-import { User, UserRole } from '../types';
+import type { User} from '../types';
+import { UserRole } from '../types';
 
 interface SettingsProps {
   user: User;

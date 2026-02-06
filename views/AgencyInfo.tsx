@@ -1,3 +1,4 @@
+/* eslint-env browser */
 import {
     ArrowDown,
     ArrowUp,
@@ -16,18 +17,20 @@ import {
     Users
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
-import { BUCKETS, COLLECTIONS, DATABASE_ID, ID, databases, storage } from '../services/appwrite';
-import { Agency, User, UserRole } from '../types';
-import { BrochureSettings, PageConfig, PageType } from '../components/pdf/types';
 import { defaultTheme } from '../components/pdf/themes';
+import type { BrochureSettings } from '../components/pdf/types';
+import { COLLECTIONS, DATABASE_ID, ID, databases } from '../services/appwrite';
 import { GeminiService } from '../services/geminiService';
+import { s3Service } from '../services/s3Service';
+import type { Agency, User } from '../types';
+import { UserRole } from '../types';
 
 interface AgencyInfoProps {
   user: User;
   allUsers: User[];
 }
 
-const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
+const AgencyInfo: React.FC<AgencyInfoProps> = ({ allUsers }) => {
   const [agency, setAgency] = useState<Agency | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -37,6 +40,7 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
   const [analyzing, setAnalyzing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
+  const [agencyLogoUrl, setAgencyLogoUrl] = useState<string>('');
 
   const defaultBrochureSettings: BrochureSettings = {
     theme: defaultTheme,
@@ -51,6 +55,17 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
   };
 
   useEffect(() => {
+    const resolveLogo = async () => {
+      if (!agency?.logo) return setAgencyLogoUrl('');
+      if (agency.logo.startsWith('http')) return setAgencyLogoUrl(agency.logo);
+      try {
+        const url = await s3Service.getPresignedUrl(agency.logo);
+        setAgencyLogoUrl(url);
+      } catch {
+        setAgencyLogoUrl('');
+      }
+    };
+    resolveLogo();
     const fetchAgency = async () => {
       try {
         const response = await databases.listDocuments(DATABASE_ID, COLLECTIONS.AGENCY);
@@ -128,17 +143,8 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
 
     try {
       setUploadingLogo(true);
-      const fileId = ID.unique();
-
-      // Upload file to bucket
-      await storage.createFile(
-        BUCKETS.AGENCY,
-        fileId,
-        file
-      );
-
-      // Update agency state
-      setAgency({ ...agency, logo: fileId });
+      const uploaded = await s3Service.uploadAgencyFile(agency.id || 'agency', 'logo', file);
+      setAgency({ ...agency, logo: uploaded.key });
 
     } catch (error) {
       console.error('Error uploading logo:', error);
@@ -162,28 +168,25 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
         return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-        alert("File is too large. Please upload a file smaller than 10MB.");
-        return;
-    }
-
     try {
-      setAnalyzing(true);
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
+        setAnalyzing(true);
+        const reader = new FileReader();
+        const mimeType = file.type;
+        reader.readAsDataURL(file);
 
-      reader.onload = async () => {
+        reader.onload = async () => {
           try {
              // Extract base64 part properly
              const resultString = reader.result as string;
              // Handle both regular base64 and data URI formats if needed, but split(',') usually works for FileReader
              const base64 = resultString.includes(',') ? resultString.split(',')[1] : resultString;
 
-             const gemini = new GeminiService();
-             const result = await gemini.generateBrochureTemplateFromPDF(base64, file.type);
+                         const gemini = new GeminiService();
+                                      const safeMime: string = mimeType || 'application/octet-stream';
+                                      const result = await (gemini as any).generateBrochureTemplateFromPDF(base64, safeMime);
 
              if (result) {
-                 if (confirm("AI Analysis Complete! We found a matching color scheme and page structure. Do you want to apply these settings? This will overwrite your current configuration.")) {
+                 if (globalThis.confirm?.("AI Analysis Complete! We found a matching color scheme and page structure. Do you want to apply these settings? This will overwrite your current configuration.")) {
                      updateBrochureSettings(prev => ({
                          ...prev,
                          theme: {
@@ -196,9 +199,9 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
                      }));
                  }
              }
-          } catch (e: any) {
+          } catch (e) {
               console.error("AI Analysis Error", e);
-              alert(`Failed to analyze file. Error: ${e.message || "Unknown error"}. Please try a simpler file.`);
+              alert("Failed to analyze PDF. Please try a simpler file or smaller size.");
           } finally {
               setAnalyzing(false);
           }
@@ -227,26 +230,19 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
   const getBrochureSettings = (): BrochureSettings => {
     if (!agency?.brochureSettings) return defaultBrochureSettings;
     try {
-        const parsed = JSON.parse(agency.brochureSettings);
-
-        // Auto-migration for legacy blue theme -> luxury black theme
-        const isLegacyBlue = parsed.theme?.colors?.primary === '#1f3c88';
-        const baseTheme = isLegacyBlue ? defaultTheme : { ...defaultTheme, ...parsed.theme };
-
-        // Clean merge with default structure to avoid missing properties on legacy data
-        return {
-            ...defaultBrochureSettings,
-            ...parsed,
-            theme: {
-                colors: { ...defaultTheme.colors, ...(isLegacyBlue ? {} : (parsed.theme?.colors || {})) },
-                fonts: { ...defaultTheme.fonts, ...(isLegacyBlue ? {} : (parsed.theme?.fonts || {})) },
-                shapes: { ...(defaultTheme.shapes || {}), ...(isLegacyBlue ? {} : (parsed.theme?.shapes || {})) },
-                background: { ...(defaultTheme.background || {}), ...(isLegacyBlue ? {} : (parsed.theme?.background || {})) }
-            },
-            pages: parsed.pages || defaultBrochureSettings.pages
-        };
-    } catch {
-        return defaultBrochureSettings;
+      const parsed = typeof agency.brochureSettings === 'string'
+        ? JSON.parse(agency.brochureSettings)
+        : agency.brochureSettings;
+      // Merge with defaults to ensure required structure
+      return {
+        ...defaultBrochureSettings,
+        ...parsed,
+        theme: { ...defaultBrochureSettings.theme, ...(parsed.theme || {}) },
+        pages: parsed.pages || defaultBrochureSettings.pages
+      } as BrochureSettings;
+    } catch (e) {
+      console.error('Failed to parse brochureSettings, using defaults', e);
+      return defaultBrochureSettings;
     }
   };
 
@@ -258,29 +254,37 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
   };
 
   // Helper for direct object updates (legacy compatibility if needed, but updater pattern preferred)
-  const updateBrochureObject = (updates: Partial<BrochureSettings>) => {
-      updateBrochureSettings(prev => ({ ...prev, ...updates }));
-  };
+  // (removed unused function to satisfy linting)
 
-  const movePage = (index: number, direction: 'up' | 'down') => {
+    const movePage = (index: number, direction: 'up' | 'down') => {
       updateBrochureSettings(prev => {
-          const newPages = [...prev.pages];
-          if (direction === 'up' && index > 0) {
-              [newPages[index], newPages[index - 1]] = [newPages[index - 1], newPages[index]];
-          } else if (direction === 'down' && index < newPages.length - 1) {
-              [newPages[index], newPages[index + 1]] = [newPages[index + 1], newPages[index]];
-          }
-          return { ...prev, pages: newPages };
+        const newPages = [...prev.pages];
+        if (direction === 'up' && index > 0) {
+          const a = newPages[index];
+          const b = newPages[index - 1];
+          if (!a || !b) return prev;
+          newPages[index] = b;
+          newPages[index - 1] = a;
+        } else if (direction === 'down' && index < newPages.length - 1) {
+          const a = newPages[index];
+          const b = newPages[index + 1];
+          if (!a || !b) return prev;
+          newPages[index] = b;
+          newPages[index + 1] = a;
+        }
+        return { ...prev, pages: newPages };
       });
-  };
+    };
 
-  const togglePage = (index: number) => {
+    const togglePage = (index: number) => {
       updateBrochureSettings(prev => {
-          const newPages = [...prev.pages];
-          newPages[index] = { ...newPages[index], enabled: !newPages[index].enabled };
-          return { ...prev, pages: newPages };
+        const newPages = [...prev.pages];
+        const page = newPages[index];
+        if (!page) return prev;
+        newPages[index] = { ...page, enabled: !page.enabled };
+        return { ...prev, pages: newPages };
       });
-  };
+    };
 
   if (loading) {
     return (
@@ -340,8 +344,9 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
             <div className="p-8 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Agency Name</label>
+                  <label htmlFor="agency-name" className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Agency Name</label>
                   <input
+                    id="agency-name"
                     type="text"
                     value={agency?.name}
                     onChange={e => setAgency({ ...agency!, name: e.target.value })}
@@ -350,10 +355,11 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">VAT / Tax Code</label>
+                  <label htmlFor="agency-vat" className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">VAT / Tax Code</label>
                   <div className="relative">
                     <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                     <input
+                      id="agency-vat"
                       type="text"
                       value={agency?.vatCode}
                       onChange={e => setAgency({ ...agency!, vatCode: e.target.value })}
@@ -365,10 +371,11 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Physical Address</label>
+                <label htmlFor="agency-address" className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Physical Address</label>
                 <div className="relative">
                   <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   <input
+                    id="agency-address"
                     type="text"
                     value={agency?.address}
                     onChange={e => setAgency({ ...agency!, address: e.target.value })}
@@ -379,10 +386,11 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Bank Account (IBAN)</label>
+                <label htmlFor="agency-bank" className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Bank Account (IBAN)</label>
                 <div className="relative">
                   <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   <input
+                    id="agency-bank"
                     type="text"
                     value={agency?.bankAccount}
                     onChange={e => setAgency({ ...agency!, bankAccount: e.target.value })}
@@ -407,14 +415,17 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
             <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-4">
               {agents.map(agent => (
                 <div
-                  key={agent.id}
-                  onClick={() => toggleAgent(agent.id)}
-                  className={`flex items-center gap-3 p-4 rounded-2xl border cursor-pointer transition-all ${
-                    agency?.agentIds?.includes(agent.id)
-                    ? 'bg-blue-50 border-blue-200'
-                    : 'bg-white border-slate-100 hover:border-slate-200'
-                  }`}
-                >
+                    key={agent.id}
+                    onClick={() => toggleAgent(agent.id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAgent(agent.id); } }}
+                    className={`flex items-center gap-3 p-4 rounded-2xl border cursor-pointer transition-all ${
+                      agency?.agentIds?.includes(agent.id)
+                      ? 'bg-blue-50 border-blue-200'
+                      : 'bg-white border-slate-100 hover:border-slate-200'
+                    }`}
+                  >
                   <img src={agent.avatar || `https://ui-avatars.com/api/?name=${agent.name}`} className="w-10 h-10 rounded-xl object-cover" alt={agent.name} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-slate-900 truncate">{agent.name}</p>
@@ -437,17 +448,19 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
           <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-8 text-center">
             <h3 className="text-sm font-bold text-slate-900 mb-6 uppercase tracking-widest text-slate-400">Agency Logo</h3>
             <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                accept="image/*"
-                onChange={handleLogoUpload}
+              id="agency-logo-input"
+              type="file"
+              aria-label="Upload agency logo"
+              ref={fileInputRef}
+              className="hidden"
+              accept="image/*"
+              onChange={handleLogoUpload}
             />
             <div className="relative group mx-auto w-32 h-32 mb-6">
               <div className="w-32 h-32 rounded-[2rem] bg-slate-100 border-4 border-slate-50 overflow-hidden shadow-inner flex items-center justify-center relative">
                 {agency?.logo ? (
                   <img
-                    src={agency.logo.startsWith('http') ? agency.logo : storage.getFilePreview({ bucketId: BUCKETS.AGENCY, fileId: agency.logo }).toString()}
+                    src={agencyLogoUrl}
                     className="w-full h-full object-contain"
                     alt="Logo"
                   />
@@ -497,11 +510,13 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
                     </div>
                     <div>
                         <input
-                            type="file"
-                            ref={pdfInputRef}
-                            className="hidden"
-                            accept=".pdf, .jpg, .jpeg, .png, .webp"
-                            onChange={handlePdfAnalysis}
+                          id="ai-pdf-input"
+                          type="file"
+                          aria-label="Upload brochure or image for AI analysis"
+                          ref={pdfInputRef}
+                          className="hidden"
+                          accept=".pdf, .jpg, .jpeg, .png, .webp"
+                          onChange={handlePdfAnalysis}
                         />
                         <button
                             onClick={() => pdfInputRef.current?.click()}
@@ -587,67 +602,71 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
                 </div>
                 <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Colors</label>
+                        <div className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Colors</div>
                         <div className="space-y-4">
-                            <div className="flex items-center gap-3">
-                                <input
-                                    type="color"
-                                    value={brochureSettings.theme.colors.primary}
-                                    onChange={e => updateBrochureSettings(prev => ({
-                                        ...prev,
-                                        theme: { ...prev.theme, colors: { ...prev.theme.colors, primary: e.target.value } }
-                                    }))}
-                                    className="h-10 w-10 rounded-lg border border-slate-200 cursor-pointer overflow-hidden p-0"
-                                />
-                                <div>
-                                    <div className="text-sm font-bold text-slate-700">Primary Color</div>
-                                    <div className="text-xs text-slate-400">Headings, accents, branding</div>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <input
-                                    type="color"
-                                    value={brochureSettings.theme.colors.secondary}
-                                    onChange={e => updateBrochureSettings(prev => ({
-                                        ...prev,
-                                        theme: { ...prev.theme, colors: { ...prev.theme.colors, secondary: e.target.value } }
-                                    }))}
-                                    className="h-10 w-10 rounded-lg border border-slate-200 cursor-pointer overflow-hidden p-0"
-                                />
-                                <div>
-                                    <div className="text-sm font-bold text-slate-700">Secondary Color</div>
-                                    <div className="text-xs text-slate-400">Backgrounds, secondary elements</div>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <input
-                                    type="color"
-                                    value={brochureSettings.theme.colors.accent}
-                                    onChange={e => updateBrochureSettings(prev => ({
-                                        ...prev,
-                                        theme: { ...prev.theme, colors: { ...prev.theme.colors, accent: e.target.value } }
-                                    }))}
-                                    className="h-10 w-10 rounded-lg border border-slate-200 cursor-pointer overflow-hidden p-0"
-                                />
-                                <div>
-                                    <div className="text-sm font-bold text-slate-700">Accent Color</div>
-                                    <div className="text-xs text-slate-400">Highlights, calls to action</div>
-                                </div>
-                            </div>
+                            <label htmlFor="primary-color" className="flex items-center gap-3 cursor-pointer">
+                              <input
+                                id="primary-color"
+                                type="color"
+                                value={brochureSettings.theme.colors.primary}
+                                onChange={e => updateBrochureSettings(prev => ({
+                                  ...prev,
+                                  theme: { ...prev.theme, colors: { ...prev.theme.colors, primary: e.target.value } }
+                                }))}
+                                className="h-10 w-10 rounded-lg border border-slate-200 cursor-pointer overflow-hidden p-0"
+                              />
+                              <div>
+                                <div className="text-sm font-bold text-slate-700">Primary Color</div>
+                                <div className="text-xs text-slate-400">Headings, accents, branding</div>
+                              </div>
+                            </label>
+                            <label htmlFor="secondary-color" className="flex items-center gap-3 cursor-pointer">
+                              <input
+                                id="secondary-color"
+                                type="color"
+                                value={brochureSettings.theme.colors.secondary}
+                                onChange={e => updateBrochureSettings(prev => ({
+                                  ...prev,
+                                  theme: { ...prev.theme, colors: { ...prev.theme.colors, secondary: e.target.value } }
+                                }))}
+                                className="h-10 w-10 rounded-lg border border-slate-200 cursor-pointer overflow-hidden p-0"
+                              />
+                              <div>
+                                <div className="text-sm font-bold text-slate-700">Secondary Color</div>
+                                <div className="text-xs text-slate-400">Backgrounds, secondary elements</div>
+                              </div>
+                            </label>
+                            <label htmlFor="accent-color" className="flex items-center gap-3 cursor-pointer">
+                              <input
+                                id="accent-color"
+                                type="color"
+                                value={brochureSettings.theme.colors.accent}
+                                onChange={e => updateBrochureSettings(prev => ({
+                                  ...prev,
+                                  theme: { ...prev.theme, colors: { ...prev.theme.colors, accent: e.target.value } }
+                                }))}
+                                className="h-10 w-10 rounded-lg border border-slate-200 cursor-pointer overflow-hidden p-0"
+                              />
+                              <div>
+                                <div className="text-sm font-bold text-slate-700">Accent Color</div>
+                                <div className="text-xs text-slate-400">Highlights, calls to action</div>
+                              </div>
+                            </label>
                         </div>
                      </div>
                      <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Fonts</label>
+                        <div className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Fonts</div>
                          <div className="space-y-4">
                             <div>
-                                <label className="text-sm font-medium text-slate-700 mb-1 block">Heading Font</label>
+                                <label htmlFor="heading-font" className="text-sm font-medium text-slate-700 mb-1 block">Heading Font</label>
                                 <select
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none"
-                                    value={brochureSettings.theme.fonts.heading}
-                                    onChange={e => updateBrochureSettings(prev => ({
-                                        ...prev,
-                                        theme: { ...prev.theme, fonts: { ...prev.theme.fonts, heading: e.target.value } }
-                                    }))}
+                                  id="heading-font"
+                                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none"
+                                  value={brochureSettings.theme.fonts.heading}
+                                  onChange={e => updateBrochureSettings(prev => ({
+                                    ...prev,
+                                    theme: { ...prev.theme, fonts: { ...prev.theme.fonts, heading: e.target.value } }
+                                  }))}
                                 >
                                     <option value="Helvetica">Helvetica (Clean)</option>
                                     <option value="Times-Roman">Times New Roman (Serif)</option>
@@ -655,14 +674,15 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ user, allUsers }) => {
                                 </select>
                             </div>
                             <div>
-                                <label className="text-sm font-medium text-slate-700 mb-1 block">Body Font</label>
+                                <label htmlFor="body-font" className="text-sm font-medium text-slate-700 mb-1 block">Body Font</label>
                                 <select
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none"
-                                    value={brochureSettings.theme.fonts.body}
-                                    onChange={e => updateBrochureSettings(prev => ({
-                                        ...prev,
-                                        theme: { ...prev.theme, fonts: { ...prev.theme.fonts, body: e.target.value } }
-                                    }))}
+                                  id="body-font"
+                                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none"
+                                  value={brochureSettings.theme.fonts.body}
+                                  onChange={e => updateBrochureSettings(prev => ({
+                                    ...prev,
+                                    theme: { ...prev.theme, fonts: { ...prev.theme.fonts, body: e.target.value } }
+                                  }))}
                                 >
                                     <option value="Helvetica">Helvetica</option>
                                     <option value="Times-Roman">Times New Roman</option>

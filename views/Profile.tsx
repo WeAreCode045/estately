@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   User as UserIcon
 } from 'lucide-react';
+/* eslint-env browser */
 import React, { useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import AddressAutocomplete from '../components/AddressAutocomplete';
@@ -22,16 +23,26 @@ import DocumentViewer from '../components/DocumentViewer';
 import { useAuth } from '../contexts/AuthContext';
 import { profileService } from '../services/appwrite';
 import { documentService } from '../services/documentService';
-import type { Project, User } from '../types';
+import type { Project, UploadedDocument, User } from '../types';
 import { UserRole } from '../types';
 import { useSettings } from '../utils/useSettings';
+
+interface TaskTemplate {
+  id: string;
+  title: string;
+}
+
+interface DocumentDefinition {
+  id: string;
+  title: string;
+}
 
 interface ProfileProps {
   user: User;
   projects: Project[];
   allUsers: User[];
-  taskTemplates: any[];
-  docDefinitions: any[];
+  taskTemplates: TaskTemplate[];
+  docDefinitions: DocumentDefinition[];
 }
 
 const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplates, docDefinitions }) => {
@@ -40,52 +51,20 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
   const isOwnProfile = !userId || userId === user.id;
   const isAdminOrAgent = user.role === UserRole.ADMIN;
 
-  // Access control: only self or admin
-  if (!isOwnProfile && !isAdminOrAgent) {
-    return <Navigate to="/profile" replace />;
-  }
-
-  // Determine which user data to display
-  const displayUser = !isOwnProfile ? (allUsers.find(u => u.id === userId) || user) : user;
-
+  // All hooks must be called unconditionally, before any early returns
   const { googleApiKey } = useSettings();
   const [activeSubTab, setActiveSubTab] = useState<'details' | 'tasks' | 'documents' | 'security'>('details');
   const [loading, setLoading] = useState(false);
-  const [requiredDocs, setRequiredDocs] = React.useState<any[]>([]);
+  const [requiredDocs, setRequiredDocs] = React.useState<DocumentDefinition[]>([]);
   const [viewerUrl, setViewerUrl] = React.useState<string | null>(null);
   const [viewerTitle, setViewerTitle] = React.useState<string | null>(null);
   const [viewerError, setViewerError] = React.useState<string | null>(null);
   const [viewerDownloadUrl, setViewerDownloadUrl] = React.useState<string | null>(null);
-  const handleOpenViewer = async (provided: any, title?: string) => {
-    try {
-      let url = provided?.url;
-      if (!url && provided?.fileId) {
-        url = await documentService.getFileUrl(provided.fileId);
-      }
-      if (!url) throw new Error('No URL available');
 
-      // Ensure mode=admin is present
-      if (!url.includes('mode=admin')) {
-        url = url.includes('?') ? `${url}&mode=admin` : `${url}?mode=admin`;
-      }
+  // Determine which user data to display early (before hooks that depend on it)
+  const displayUser = !isOwnProfile ? (allUsers.find(u => u.id === userId) || user) : user;
 
-      setViewerError(null);
-      setViewerUrl(url);
-      setViewerTitle(title || provided?.name || 'Document');
-      setViewerDownloadUrl(provided?.fileId ? documentService.getFileDownload(provided.fileId) : null);
-    } catch (e) {
-      console.error('Error opening viewer:', e);
-      alert('Could not load document for viewing.');
-    }
-  };
-
-  const handleCloseViewer = () => {
-    setViewerUrl(null);
-    setViewerTitle(null);
-    setViewerError(null);
-    setViewerDownloadUrl(null);
-  };
-
+  // Additional hooks that depend on displayUser
   const [formData, setFormData] = useState({
     name: displayUser.name || '',
     firstName: displayUser.firstName || '',
@@ -100,11 +79,10 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
     birthPlace: displayUser.birthPlace || '',
     idNumber: displayUser.idNumber || '',
     vatNumber: displayUser.vatNumber || '',
-    bankAccount: (displayUser as any).bankAccount || '',
+    bankAccount: (displayUser as unknown as { bankAccount?: string }).bankAccount || '',
   });
 
-  // Track the ID to avoid resetting when profile finishes loading (Account -> Profile)
-  const lastUserId = React.useRef(displayUser.id);
+  const lastUserId = React.useRef<string>(displayUser.id);
 
   // Sync form data when displayUser changes
   React.useEffect(() => {
@@ -123,7 +101,7 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
         birthPlace: displayUser.birthPlace || '',
         idNumber: displayUser.idNumber || '',
         vatNumber: displayUser.vatNumber || '',
-        bankAccount: (displayUser as any).bankAccount || '',
+        bankAccount: (displayUser as unknown as { bankAccount?: string }).bankAccount || '',
       });
       lastUserId.current = displayUser.id;
     }
@@ -134,9 +112,9 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
     let mounted = true;
     (async () => {
       try {
-        const res = await documentService.listDefinitions();
+        const res = await documentService.listDefinitions() as { documents?: Array<{ $id: string; title: string }> };
         if (!mounted) return;
-        const mapped = (res.documents || []).map((d: any) => ({ id: d.$id, title: d.title }));
+        const mapped = (res.documents || []).map((d: { $id: string; title: string }) => ({ id: d.$id, title: d.title }));
         setRequiredDocs(mapped);
       } catch (e) {
         console.error('Failed to load required docs:', e);
@@ -145,8 +123,45 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
     return () => { mounted = false; };
   }, []);
 
+  // Access control: only self or admin (now comes after all hooks)
+  if (!isOwnProfile && !isAdminOrAgent) {
+    return <Navigate to="/profile" replace />;
+  }
+
+  type ViewerDoc = { fileId?: string; name?: string; userDocumentDefinitionId?: string; uploadedAt?: string; projectId?: string };
+
+  const handleOpenViewer = async (provided: ViewerDoc | null, title?: string) => {
+    try {
+      let url = provided?.url;
+      if (!url && provided?.fileId) {
+        url = await documentService.getFileUrl(provided.fileId);
+      }
+      if (!url) throw new Error('No URL available');
+
+      // Ensure mode=admin is present
+      if (!url.includes('mode=admin')) {
+        url = url.includes('?') ? `${url}&mode=admin` : `${url}?mode=admin`;
+      }
+
+      setViewerError(null);
+      setViewerUrl(url);
+      setViewerTitle(title || provided?.name || 'Document');
+      setViewerDownloadUrl(provided?.fileId ? await documentService.getFileDownload(provided.fileId) : null);
+    } catch (e) {
+      console.error('Error opening viewer:', e);
+      alert('Could not load document for viewing.');
+    }
+  };
+
+  const handleCloseViewer = () => {
+    setViewerUrl(null);
+    setViewerTitle(null);
+    setViewerError(null);
+    setViewerDownloadUrl(null);
+  };
+
   const handleSave = async () => {
-    let docId = (displayUser as any).$id;
+    let docId = (displayUser as unknown as { $id?: string }).$id;
 
     // Fallback: If profile doc ID missing, try direct fetch
     if (!docId) {
@@ -197,9 +212,10 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
         await refreshProfile();
       }
       alert('Profile updated successfully!');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating profile:', error);
-      alert(`Error updating profile: ${error.message || 'Unknown error'}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Error updating profile: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -321,7 +337,7 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
               <ProfileField
                 icon={<Clock size={18}/>}
                 label="Date of Birth"
-                value={formData.birthday}
+                value={formData.birthday || ''}
                 onChange={(v) => setFormData({...formData, birthday: v})}
                 editable
                 type="date"
@@ -362,9 +378,9 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
                 editable
               />
 
-              <div className="md:col-span-2 space-y-4 pt-4 border-t border-slate-100">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Notification Preferences</label>
-                <div className="flex flex-wrap gap-4">
+              <fieldset className="md:col-span-2 space-y-4 pt-4 border-t border-slate-100">
+                <legend className="text-xs font-bold text-slate-400 uppercase tracking-widest">Notification Preferences</legend>
+                <div role="radiogroup" aria-label="Notification Preferences" className="flex flex-wrap gap-4">
                   {[
                     { id: 'EMAIL', label: 'Email Only', icon: <Mail size={16}/> },
                     { id: 'APP', label: 'App Only', icon: <ShieldCheck size={16}/> },
@@ -372,7 +388,10 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
                   ].map((opt) => (
                     <button
                       key={opt.id}
-                      onClick={() => setFormData({...formData, notificationPreference: opt.id as any})}
+                      type="button"
+                      role="radio"
+                      aria-checked={formData.notificationPreference === opt.id}
+                      onClick={() => setFormData({...formData, notificationPreference: opt.id as 'EMAIL' | 'APP' | 'BOTH'})}
                       className={`flex items-center gap-2 px-6 py-3 rounded-2xl border-2 transition-all font-bold text-sm ${
                         formData.notificationPreference === opt.id
                           ? 'border-blue-600 bg-blue-50 text-blue-600'
@@ -384,7 +403,7 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
                     </button>
                   ))}
                 </div>
-              </div>
+              </fieldset>
             </div>
           )}
 
@@ -425,10 +444,10 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
                           {(() => {
                             const userDocs = displayUser.userDocuments ? (typeof displayUser.userDocuments === 'string' ? JSON.parse(displayUser.userDocuments) : displayUser.userDocuments) : [];
                             const matchTitlePrefix = "Upload Document: ";
-                            const isDocTask = task.title?.startsWith(matchTitlePrefix);
-                            const docTitle = isDocTask ? task.title.replace(matchTitlePrefix, "") : "";
+                            const isDocTask = (task.title || '').startsWith(matchTitlePrefix);
+                            const docTitle = isDocTask ? (task.title || '').replace(matchTitlePrefix, "") : "";
                             const req = docTitle ? requiredDocs.find(d => d.title === docTitle) : null;
-                            const userDoc = req ? userDocs.find((ud: any) => ud.userDocumentDefinitionId === req.id && ud.projectId === task.projectId) : null;
+                            const userDoc = req ? userDocs.find((ud: UploadedDocument) => ud.userDocumentDefinitionId === req.id && ud.projectId === task.projectId) : null;
                             if (userDoc) {
                               return (
                                 <button onClick={() => handleOpenViewer(userDoc, template?.title || 'Document')} className="mt-2 inline-flex items-center gap-2 text-xs font-bold text-slate-700 hover:underline">

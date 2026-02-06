@@ -1,8 +1,9 @@
 import { ChevronRight, Edit2, MapPin } from 'lucide-react';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { projectService } from '../services/appwrite';
-import { Project, ProjectStatus } from '../types';
+import type { Project} from '../types';
+import { ProjectStatus } from '../types';
 
 interface ProjectSummaryCardProps {
   project: Project;
@@ -29,27 +30,56 @@ const ProjectSummaryCard: React.FC<ProjectSummaryCardProps> = ({ project, isAdmi
     if (project.media && project.media.length > 0) {
       const id = project.media[0];
       // Ensure it's an ID and not a URL (though type is string[])
-      if (!id.startsWith('http')) {
+      if (id && !id.startsWith('http')) {
         return projectService.getImagePreview(id);
       }
       return id;
     }
 
     // 3. First image from 'property.images' (legacy/fallback)
-    if (project.property?.images && project.property.images.length > 0) {
+     if (project.property?.images && project.property.images.length > 0) {
        const img = project.property.images[0];
        // Ensure ID
-       if (!img.startsWith('http')) {
-          return projectService.getImagePreview(img);
+       if (img && !img.startsWith('http')) {
+         return projectService.getImagePreview(img);
        }
        return img;
-    }
+     }
 
     // 4. Default placeholder
     return 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80';
   };
 
   const coverImage = getCoverImageUrl();
+  const [coverUrl, setCoverUrl] = useState<string>('');
+
+  useEffect(() => {
+    let mounted = true;
+
+    const resolve = async () => {
+      try {
+        if (!coverImage) {
+          setCoverUrl('https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80');
+          return;
+        }
+
+        // If the returned value is a thenable (Promise), await it.
+        const maybeThenable = coverImage as any;
+        if (maybeThenable && typeof maybeThenable.then === 'function') {
+          const resolved = await maybeThenable;
+          if (mounted) setCoverUrl(resolved || '');
+        } else {
+          if (mounted) setCoverUrl(coverImage as string);
+        }
+      } catch (e) {
+        if (mounted) setCoverUrl('');
+      }
+    };
+
+    resolve();
+
+    return () => { mounted = false; };
+  }, [coverImage]);
 
   return (
     <div className="group relative">
@@ -57,7 +87,7 @@ const ProjectSummaryCard: React.FC<ProjectSummaryCardProps> = ({ project, isAdmi
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden group-hover:shadow-md transition-all group-hover:-translate-y-1">
           <div className="relative h-44">
             <img
-              src={coverImage}
+              src={coverUrl}
               alt={project.title}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />

@@ -1,19 +1,7 @@
-import { pdf } from '@react-pdf/renderer';
 import { jsPDF } from 'jspdf';
-import React from 'react';
-import BrochureDocument from '../components/pdf/BrochureDocument';
-import { BUCKETS, ID, storage } from '../services/appwrite';
-import { brochureService } from '../services/brochureService';
+import { projectService } from '../services/appwrite';
+import { s3Service } from '../services/s3Service';
 import type { Agency, Contract, FormDefinition, FormSubmission, Project, User } from '../types';
-
-const saveBlob = (blob: Blob, fileName: string) => {
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
 
 const getDataUrl = (url: string): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -40,7 +28,7 @@ export const downloadContractPDF = async (contract: Contract, project: Project, 
 
   // Header
   doc.setFontSize(22);
-  doc.setTextColor(15, 23, 42);
+  doc.setTextColor(15, 23, 42); // slate-900
   doc.text('EstateFlow Pro', margin, cursorY);
 
   doc.setFontSize(10);
@@ -69,6 +57,7 @@ export const downloadContractPDF = async (contract: Contract, project: Project, 
   const splitText = doc.splitTextToSize(contract.content, pageWidth - margin * 2);
   doc.text(splitText, margin, cursorY);
 
+  // Calculate new cursor position based on text height
   cursorY += (splitText.length * 5) + 20;
 
   // Signatures Section
@@ -118,6 +107,7 @@ export const downloadContractPDF = async (contract: Contract, project: Project, 
   const splitNote = doc.splitTextToSize(note, pageWidth - margin * 2);
   doc.text(splitNote, margin, finalY);
 
+  // Download
   doc.save(contract.title.replace(/\s+/g, '_') + "_" + contract.id + ".pdf");
 };
 
@@ -223,7 +213,7 @@ export const downloadFormPDF = async (submission: FormSubmission, definition: Fo
     } else if (typeof submission.meta === 'string' && (submission.meta as string).trim()) {
       meta = JSON.parse(submission.meta as string);
     }
-  } catch (e) {}
+  } catch (e) { globalThis.console?.error(e); }
 
   const signatures: Record<string, string> = meta.signatures || {};
   const signatureMeta: any = meta.signatureMeta || {};
@@ -281,55 +271,214 @@ export const downloadFormPDF = async (submission: FormSubmission, definition: Fo
   const splitNote = doc.splitTextToSize(note, pageWidth - margin * 2);
   doc.text(splitNote, margin, cursorY + 10);
 
+  // Download
   doc.save((submission.title || definition.title).replace(/\s+/g, '_') + "_" + submission.id.substring(0,8) + ".pdf");
 };
 
 export const generatePropertyBrochure = async (project: Project, agency: Agency | null, agent: User | null) => {
-  try {
-    // 1. Prepare Data
-    // Ensure we have agency settings. If null, fetch default or mock.
-    let fullAgency: Agency = agency || {
-        id: 'default',
-        name: 'EstateFlow Agency',
-        address: '123 Real Estate Blvd',
-        email: 'info@estateflow.com',
-        phone: '+1 234 567 8900',
-        website: 'www.estateflow.com',
-        brochureSettings: undefined
-    };
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 20;
 
-    if (!agency) {
-        // Try to fetch default if passed null
-        try {
-            const config = await brochureService.getAgencyBrochureConfig('default');
-            fullAgency = config.agency;
-        } catch (e) {
-            console.warn("Could not fetch default agency config, using fallback.");
-        }
+  // Defaults
+  let primaryColor = '#2563eb';
+  let headerText = '';
+  let footerText = '';
+  let showAgent = true;
+  let showLogo = true;
+
+  if (agency?.brochureSettings) {
+      try {
+          const settings = JSON.parse(agency.brochureSettings);
+          primaryColor = settings.primaryColor || primaryColor;
+          headerText = settings.headerText || '';
+          footerText = settings.footerText || '';
+          showAgent = settings.showAgentInfo ?? true;
+          showLogo = settings.showAgencyLogo ?? true;
+      } catch (e) { globalThis.console?.error(e); }
+  }
+
+  // --- COVER PAGE ---
+
+  // Background Header
+  doc.setFillColor(primaryColor);
+  doc.rect(0, 0, pageWidth, 60, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(24);
+  doc.setFont('helvetica', 'bold');
+  if (headerText) {
+      doc.text(headerText.toUpperCase(), pageWidth / 2, 40, { align: 'center' });
+  } else {
+      doc.text("PROPERTY BROCHURE", pageWidth / 2, 40, { align: 'center' });
+  }
+
+  // Cover Image
+    if (project.coverImageId) {
+      try {
+        const coverId = project.coverImageId;
+        const coverUrl = coverId && coverId.startsWith('http') ? coverId : (coverId ? projectService.getImagePreview(coverId) : '');
+        const dataUrl = await getDataUrl(coverUrl);
+        // Calculate aspect ratio or fit
+        doc.addImage(dataUrl, 'JPEG', margin, 70, pageWidth - (margin*2), 120, undefined, 'FAST');
+      } catch (e) {
+        console.error("Failed to load cover", e);
+      }
     }
 
-    // Transform project to PropertyData expected by the PDF kit
-    const propertyData = brochureService.transformProjectToPropertyData(project, agent || undefined);
+  // Title & Price
+  doc.setTextColor(0);
+  doc.setFontSize(22);
+  doc.setFont('helvetica', 'bold');
+  doc.text(project.title, pageWidth / 2, 210, { align: 'center' });
 
-    // 2. Generate PDF Blob
-    const doc = React.createElement(BrochureDocument, {
-        agency: fullAgency,
-        property: propertyData,
-        settings: fullAgency.brochureSettings
-    });
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100);
+  doc.text(project.property.address, pageWidth / 2, 220, { align: 'center' });
 
-    const blob = await pdf(doc).toBlob();
+  doc.setFontSize(26);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(primaryColor);
+  doc.text(`€${(project.property.price || 0).toLocaleString()}`, pageWidth / 2, 240, { align: 'center' });
 
-    // 3. Save/Download
-    const fileName = `${project.title.replace(/[^a-zA-Z0-9]/g, '_')}_Brochure.pdf`;
-    saveBlob(blob, fileName);
+  // Specs
+  doc.setFontSize(12);
+  doc.setTextColor(80);
+  doc.setFont('helvetica', 'normal');
+  const specs = [
+      `${project.property.bedrooms || 0} Beds`,
+      `${project.property.bathrooms || 0} Baths`,
+      `${project.property.sqft || 0} SqFt`,
+      project.property.buildYear ? `Built ${project.property.buildYear}` : ''
+  ].filter(Boolean).join('  |  ');
+  doc.text(specs, pageWidth / 2, 255, { align: 'center' });
 
-    // 4. Background Upload
-    const file = new File([blob], fileName, { type: 'application/pdf' });
-    await storage.createFile(BUCKETS.PROPERTY_BROCHURES, ID.unique(), file);
 
+  // --- PAGE 2: DESCRIPTION ---
+  doc.addPage();
+
+  doc.setFontSize(18);
+  doc.setTextColor(0);
+  doc.text("About this property", margin, 30);
+
+  doc.setFontSize(11);
+  doc.setTextColor(60);
+  doc.setFont('helvetica', 'normal');
+  // Clean text a bit
+  const cleanDesc = (project.property.description || "No description available.").replace(/<[^>]*>?/gm, '');
+  const descText = doc.splitTextToSize(cleanDesc, pageWidth - (margin * 2));
+  doc.text(descText, margin, 45);
+
+  let cursorY = 45 + (descText.length * 6) + 20;
+
+  // Gallery
+  const media = project.media && project.media.length > 0 ? project.media : (project.property.images || []);
+  if (media.length > 0) {
+       doc.setFontSize(18);
+       doc.setTextColor(0);
+       doc.text("Gallery", margin, cursorY);
+       cursorY += 15;
+
+       const imgW = (pageWidth - (margin * 2) - 10) / 2;
+       const imgH = 60;
+
+       let xOffset = margin;
+
+       const galleryImages = media.slice(0, 4);
+         for (let i = 0; i < galleryImages.length; i++) {
+           try {
+               const imgId = galleryImages[i];
+             if (!imgId) continue;
+             const url = imgId.startsWith('http') ? imgId : projectService.getImagePreview(imgId);
+             const data = await getDataUrl(url);
+
+               doc.addImage(data, 'JPEG', xOffset, cursorY, imgW, imgH, undefined, 'FAST');
+
+               if (i % 2 === 0) {
+                   xOffset += imgW + 10;
+               } else {
+                   xOffset = margin;
+                   cursorY += imgH + 10;
+                   if (cursorY > pageHeight - 50) {
+                       doc.addPage();
+                       cursorY = 20;
+                   }
+               }
+           } catch (e) {
+             // Continue
+           }
+       }
+  }
+
+
+  // --- FOOTER / CONTACT ---
+  const footerHeight = 70;
+  if (cursorY > pageHeight - footerHeight) {
+      doc.addPage();
+      cursorY = 20;
+  }
+
+  const footerY = pageHeight - footerHeight;
+
+  if (showAgent && agent) {
+      doc.setDrawColor(200);
+      doc.line(margin, footerY, pageWidth - margin, footerY);
+
+      doc.setFontSize(14);
+      doc.setTextColor(0);
+      doc.text("Presented By", margin, footerY + 15);
+
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text(agent.name, margin, footerY + 25);
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100);
+      doc.text(agent.email, margin, footerY + 30);
+      if (agent.phone) doc.text(agent.phone, margin, footerY + 35);
+  }
+
+  if (showLogo && agency && agency.logo) {
+       try {
+           let logoUrl = agency.logo;
+             if (!logoUrl.startsWith('http')) {
+               logoUrl = await s3Service.getPresignedUrl(logoUrl);
+             }
+             const logodata = await getDataUrl(logoUrl);
+           const logoW = 30;
+           const logoH = 30;
+           doc.addImage(logodata, 'PNG', pageWidth - margin - logoW, footerY + 10, logoW, logoH, undefined, 'FAST');
+      } catch (e) { globalThis.console?.error(e); }
+  }
+
+  if (agency) {
+      doc.setFontSize(10);
+      doc.setTextColor(100);
+      const textX = pageWidth - margin;
+      const align = 'right';
+
+      doc.text(agency.name, textX, footerY + 50, { align });
+      doc.text(agency.address, textX, footerY + 55, { align });
+  }
+
+  if (footerText) {
+      doc.setFontSize(8);
+      doc.setTextColor(150);
+      doc.text(footerText, pageWidth/2, pageHeight - 10, { align: 'center'});
+  }
+
+  const fileName = `${project.title.replace(/\s+/g, '_')}_Brochure.pdf`;
+  doc.save(fileName);
+
+  try {
+    const pdfBlob = doc.output('blob');
+    const file = new File([pdfBlob], fileName, { type: 'application/pdf' });
+    // Upload brochure in project property-files folder
+    await s3Service.uploadProjectFile(project.id, 'property-files', file);
   } catch (error) {
-      console.error("PDF Generation Error Details:", error);
-      throw error;
+    console.error('Error uploading brochure to storage:', error);
   }
 };

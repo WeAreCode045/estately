@@ -1,5 +1,6 @@
 import React from 'react';
-import { FormSchema, FormField, FieldType } from './types';
+import type { FormSchema, FormField} from './types';
+import { FieldType } from './types';
 import { GripVertical, Copy, Trash2, ArrowUp, ArrowDown, ChevronRight, ChevronDown, Layout } from 'lucide-react';
 
 interface CanvasProps {

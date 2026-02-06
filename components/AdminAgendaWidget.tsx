@@ -1,5 +1,5 @@
 import React from 'react';
-import { Project } from '../types';
+import type { Project } from '../types';
 
 interface AdminAgendaWidgetProps {
   projects: Project[];

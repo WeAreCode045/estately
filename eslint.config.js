@@ -5,6 +5,10 @@ import jsxA11y from 'eslint-plugin-jsx-a11y';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default [
   {
@@ -30,12 +34,20 @@ export default [
         ecmaFeatures: {
           jsx: true,
         },
+        tsconfigRootDir: __dirname,
         project: './tsconfig.json',
       },
       globals: {
-        browser: true,
-        es2022: true,
-        node: true,
+        console: 'readonly',
+        alert: 'readonly',
+        confirm: 'readonly',
+        window: 'readonly',
+        document: 'readonly',
+        navigator: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        localStorage: 'readonly',
+        sessionStorage: 'readonly'
       },
     },
     plugins: {

@@ -43,7 +43,7 @@ export default async ({ req, res, log, error }) => {
     }
 
     // 2. Ensure "Agency" Team exists (or use a default)
-    let teamId = 'agency';
+    const teamId = 'agency';
     try {
       await teams.get(teamId);
     } catch (e) {

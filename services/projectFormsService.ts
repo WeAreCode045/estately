@@ -1,7 +1,8 @@
 import { ID } from 'appwrite';
 import type { CreateSubmissionParams, FormDefinition, FormStatus, FormSubmission, FormSubmissionPatch, ProjectTask } from '../types';
-import { BUCKETS, COLLECTIONS, DATABASE_ID, databases, profileService, projectService, Query, storage } from './appwrite';
+import { COLLECTIONS, DATABASE_ID, databases, profileService, projectService, Query } from './appwrite';
 import { formDefinitionsService } from './formDefinitionsService';
+import { s3Service } from './s3Service';
 
 function parseSubmissionDoc(doc: any): FormSubmission {
   return {
@@ -91,7 +92,7 @@ export const projectFormsService = {
 
     for (const fileId of attachments) {
       try {
-        await storage.deleteFile(BUCKETS.DOCUMENTS, fileId);
+        await s3Service.deleteObject(fileId);
       } catch (err) {
         console.warn('Failed to delete attachment', fileId, err);
       }
@@ -103,7 +104,7 @@ export const projectFormsService = {
   async assignFormToUser(def: FormDefinition, projectId: string, targetProfileId: string) {
     // 1. Create Form Submission
     await this.createSubmission({
-      projectId: projectId,
+      projectId,
       formKey: def.key,
       title: def.title || '',
       data: def.defaultData || {},
@@ -144,7 +145,7 @@ export const projectFormsService = {
         title: newTask.title,
         description: newTask.description,
         dueDate: dueDateIso,
-        projectId: projectId,
+        projectId,
         status: 'PENDING'
       });
     }
@@ -170,7 +171,7 @@ export const projectFormsService = {
         } else {
           // Add without assignment if no auto-assign roles set but auto-add is true
           await this.createSubmission({
-            projectId: projectId,
+            projectId,
             formKey: def.key,
             title: def.title,
             data: def.defaultData || {},

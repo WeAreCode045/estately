@@ -1,6 +1,7 @@
 import { ID } from 'appwrite';
-import { ProjectTask, UserDocumentDefinition } from '../types';
-import { BUCKETS, COLLECTIONS, DATABASE_ID, databases, profileService, projectService, storage } from './appwrite';
+import type { ProjectTask, UserDocumentDefinition } from '../types';
+import { COLLECTIONS, DATABASE_ID, databases, profileService, projectService } from './appwrite';
+import { s3Service } from './s3Service';
 
 export const documentService = {
   async listDefinitions() {
@@ -64,7 +65,7 @@ export const documentService = {
           title: newTask.title,
           description: newTask.description,
           dueDate: newTask.dueDate,
-          projectId: projectId,
+          projectId,
           status: 'PENDING'
         });
       }
@@ -75,42 +76,24 @@ export const documentService = {
   },
 
   getFileView(fileId: string) {
-    const url = storage.getFileView({
-      bucketId: BUCKETS.DOCUMENTS,
-      fileId: fileId
-    });
-    const finalUrl = url.toString();
-    return finalUrl.includes('mode=admin') ? finalUrl : (finalUrl.includes('?') ? `${finalUrl}&mode=admin` : `${finalUrl}?mode=admin`);
+    return s3Service.getPresignedUrl(fileId);
   },
 
   getFilePreview(fileId: string) {
-    const url = storage.getFilePreview({
-      bucketId: BUCKETS.DOCUMENTS,
-      fileId: fileId
-    });
-    const finalUrl = url.toString();
-    return finalUrl.includes('mode=admin') ? finalUrl : (finalUrl.includes('?') ? `${finalUrl}&mode=admin` : `${finalUrl}?mode=admin`);
+    return s3Service.getPresignedUrl(fileId);
   },
 
   getFileDownload(fileId: string) {
-    const url = storage.getFileDownload({
-      bucketId: BUCKETS.DOCUMENTS,
-      fileId: fileId
-    });
-    const finalUrl = url.toString();
-    return finalUrl.includes('mode=admin') ? finalUrl : (finalUrl.includes('?') ? `${finalUrl}&mode=admin` : `${finalUrl}?mode=admin`);
+    return s3Service.getPresignedUrl(fileId);
   },
 
   async getFileUrl(fileId: string) {
     try {
       // 1. Get file metadata to determine type
       const file = await this.getFile(fileId);
-      const isImage = file.mimeType.startsWith('image/');
+      const isImage = (file?.mimeType || '').startsWith('image/');
 
-      // 2. Return preview for images, view for others
-      if (isImage) {
-        return this.getFilePreview(fileId);
-      }
+      if (isImage) return this.getFilePreview(fileId);
       return this.getFileView(fileId);
     } catch (e) {
       // Fallback
@@ -119,15 +102,21 @@ export const documentService = {
   },
 
   async getFile(fileId: string) {
-    return await storage.getFile(BUCKETS.DOCUMENTS, fileId);
+    try {
+      const head = await s3Service.headObject(fileId);
+      const name = fileId.split('/').pop() || fileId;
+      return { $id: fileId, mimeType: head.ContentType, name };
+    } catch (e) {
+      throw e;
+    }
   },
 
   async deleteDocument(fileId: string) {
     // 1. Delete from storage
     try {
-        await storage.deleteFile(BUCKETS.DOCUMENTS, fileId);
+      await s3Service.deleteObject(fileId);
     } catch (e) {
-        console.error('File storage deletion failed (maybe already gone):', e);
+      console.error('File storage deletion failed (maybe already gone):', e);
     }
 
     // 2. Find which profile has this file and remove reference
@@ -189,11 +178,11 @@ export const documentService = {
     const storageName = overrideName ? `${overrideName}_${userId}.${extension}` : file.name;
     const renamedFile = new File([file], storageName, { type: file.type });
 
-    // 2. Upload to storage
-    const uploadedFile = await storage.createFile(BUCKETS.DOCUMENTS, ID.unique(), renamedFile);
-
-    // 3. Get the file URL
-    const fileUrl = this.getFileView(uploadedFile.$id);
+    // 2. Upload to S3 under project/{projectId}/user-files
+    const folder = 'user-files';
+    const uploaded = await s3Service.uploadProjectFile(projectId, folder as any, renamedFile);
+    const uploadedFile: any = { $id: uploaded.key, name: storageName };
+    const fileUrl = uploaded.url;
 
     // 4. Update User Profile
     try {
@@ -202,7 +191,7 @@ export const documentService = {
           name: storageName,
           userDocumentDefinitionId: definitionId,
           documentType,
-          projectId: projectId,
+          projectId,
           url: fileUrl
       });
 

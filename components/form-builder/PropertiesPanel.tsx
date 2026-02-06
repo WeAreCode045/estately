@@ -1,6 +1,6 @@
 import { Plus, Trash2, X } from 'lucide-react';
 import React from 'react';
-import { FormField, SelectOption } from './types';
+import type { FormField, SelectOption } from './types';
 
 interface PropertiesPanelProps {
   field: FormField | undefined;
@@ -31,7 +31,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ field, onUpdate, onDe
     if (key === 'label') {
       newOptions[index] = { ...current, label: value };
     } else {
-      newOptions[index] = { ...current, value: value };
+      newOptions[index] = { ...current, value };
     }
     handleChange('options', newOptions);
   };

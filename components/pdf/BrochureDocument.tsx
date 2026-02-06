@@ -17,12 +17,6 @@ interface BrochureDocumentProps {
 }
 
 const BrochureDocument: React.FC<BrochureDocumentProps> = ({ settings, agency, property }) => {
-  // Safety check for critical data
-  if (!property || !agency) {
-      console.error("BrochureDocument received null property or agency");
-      return <Document><Page><Text>Error: Missing Data</Text></Page></Document>;
-  }
-
   const theme = settings?.theme || defaultTheme;
   const pages = settings?.pages || [
       { type: 'cover', enabled: true },

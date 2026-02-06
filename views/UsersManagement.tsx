@@ -1,19 +1,21 @@
 import {
-  Building2,
-  CheckCircle2,
-  Clock,
-  Filter,
-  Mail,
-  Search,
-  Trash2,
-  UserPlus,
-  Users as UsersIcon
+    Building2,
+    CheckCircle2,
+    Clock,
+    Filter,
+    Mail,
+    Search,
+    Trash2,
+    UserPlus,
+    Users as UsersIcon
 } from 'lucide-react';
+/* eslint-env browser */
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { inviteService, profileService, projectService } from '../services/appwrite';
-import { Project, User, UserRole } from '../types';
+import type { Project, User } from '../types';
+import { UserRole } from '../types';
 
 interface UsersManagementProps {
   user: User;
@@ -326,8 +328,9 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
             </div>
             <form onSubmit={handleInvite} className="p-6 space-y-4">
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-400 uppercase">Full Name</label>
+                <label htmlFor="invite-name" className="text-xs font-bold text-slate-400 uppercase">Full Name</label>
                 <input
+                  id="invite-name"
                   type="text"
                   required
                   value={newUserInfo.name}
@@ -337,8 +340,9 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-400 uppercase">Email Address</label>
+                <label htmlFor="invite-email" className="text-xs font-bold text-slate-400 uppercase">Email Address</label>
                 <input
+                  id="invite-email"
                   type="email"
                   required
                   value={newUserInfo.email}
@@ -348,8 +352,9 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-400 uppercase">Role</label>
+                <label htmlFor="invite-role" className="text-xs font-bold text-slate-400 uppercase">Role</label>
                 <select
+                  id="invite-role"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm"
                   value={newUserInfo.role}
                   onChange={e => setNewUserInfo({...newUserInfo, role: e.target.value as UserRole})}
@@ -362,8 +367,9 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
 
               {(newUserInfo.role as any) !== UserRole.ADMIN && (
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-400 uppercase">Link to Property</label>
+                  <label htmlFor="invite-project" className="text-xs font-bold text-slate-400 uppercase">Link to Property</label>
                   <select
+                    id="invite-project"
                     required={(newUserInfo.role as any) !== UserRole.ADMIN}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm"
                     value={newUserInfo.projectId}

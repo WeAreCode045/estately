@@ -145,19 +145,6 @@ export const createStyles = (theme: ThemeConfig = defaultTheme) => {
     primaryBg: {
       backgroundColor: theme.colors.primary,
       color: '#ffffff',
-    },
-    footer: {
-        position: 'absolute',
-        bottom: 30,
-        left: 30,
-        right: 30,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-    },
-    footerText: {
-        fontSize: 8,
-        color: '#888888',
-        fontFamily: theme.fonts.body,
     }
   });
 };

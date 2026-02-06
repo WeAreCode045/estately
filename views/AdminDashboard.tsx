@@ -24,6 +24,7 @@ import { COLLECTIONS, DATABASE_ID, databases, projectService, Query } from '../s
 import { contractTemplatesService } from '../services/contractTemplatesService';
 import { documentService } from '../services/documentService';
 import { projectFormsService } from '../services/projectFormsService';
+import { s3Service } from '../services/s3Service';
 import type { FormSubmission, Project, TaskTemplate, User } from '../types';
 import { ProjectStatus } from '../types';
 import { useSettings } from '../utils/useSettings';
@@ -203,7 +204,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       let coverImageId = '';
       if (coverImage) {
         const upload = await projectService.uploadImage(coverImage);
-        coverImageId = upload.$id;
+        coverImageId = (upload as any).key || '';
       }
 
       const data = {
@@ -226,25 +227,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       const newProject = await projectService.create(data);
 
       try {
-        await documentService.syncProjectRequirements(newProject.$id, 'PROJECT_CREATION');
+        if (typeof (documentService as any).syncProjectRequirements === 'function') {
+          await (documentService as any).syncProjectRequirements(newProject.$id, 'PROJECT_CREATION');
+        }
       } catch (syncError) {
         console.error('Error syncing initial document requirements:', syncError);
       }
 
       try {
-        await projectFormsService.autoProvisionForms(newProject.$id, {
-          ...data,
-          id: newProject.$id
-        });
+        if (typeof (projectFormsService as any).autoProvisionForms === 'function') {
+          await (projectFormsService as any).autoProvisionForms(newProject.$id, {
+            ...data,
+            id: newProject.$id
+          });
+        }
       } catch (formError) {
         console.error('Error auto-provisioning forms:', formError);
       }
 
       try {
-        await contractTemplatesService.autoProvisionContracts(newProject.$id, {
-          ...data,
-          id: newProject.$id
-        });
+        if (typeof (contractTemplatesService as any).autoProvisionContracts === 'function') {
+          await (contractTemplatesService as any).autoProvisionContracts(newProject.$id, {
+            ...data,
+            id: newProject.$id
+          });
+        }
       } catch (contractError) {
         console.error('Error auto-provisioning contracts:', contractError);
       }
@@ -253,7 +260,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setShowNewProjectModal(false);
       setCoverImage(null);
       setProjectAddress('');
-      alert('Project launched successfully!');
+      try {
+        // Ensure S3 project folder structure exists (create placeholder files)
+        const placeholder = new File([new Blob([])], '.placeholder.txt', { type: 'text/plain' });
+        await s3Service.uploadProjectFile(newProject.$id, 'property-files', placeholder);
+        await s3Service.uploadProjectFile(newProject.$id, 'user-files', placeholder);
+      } catch (s3err) {
+        globalThis.console?.error('Failed to create S3 project folders:', s3err);
+      }
+
+      globalThis.alert('Project launched successfully!');
     } catch (error: any) {
       console.error('Error creating project:', error);
       alert(`Failed to launch project: ${error.message || 'Unknown error'}`);
@@ -274,7 +290,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       let coverImageId = editingProject.coverImageId || '';
       if (coverImage) {
         const upload = await projectService.uploadImage(coverImage);
-        coverImageId = upload.$id;
+        coverImageId = (upload as any).key || '';
       }
 
       const updates = {

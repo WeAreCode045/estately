@@ -3,6 +3,7 @@ import {
     Check,
     X
 } from 'lucide-react';
+/* eslint-env browser */
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -12,11 +13,12 @@ import FormRenderer from '../components/FormRenderer';
 
 import { generateBrochureBlob } from '../components/pdf/utils/brochureGenerator';
 import { AIModal, AddTaskModal, AssignFormModal, BulkSpecsModal, FormTemplatePickerModal, GeneralInfoModal, InviteModal, ProjectDocuments, ProjectHeader, ProjectOverview, ProjectProperty, ProjectTabBar, ProjectTeam, SigningModal, TaskLibraryModal, TemplatePickerModal } from '../components/project';
-import { BUCKETS, COLLECTIONS, DATABASE_ID, ID, client, databases, inviteService, profileService, projectFormsService, projectService, storage } from '../services/appwrite';
+import { COLLECTIONS, DATABASE_ID, ID, client, databases, inviteService, profileService, projectFormsService, projectService } from '../services/appwrite';
 import { documentService } from '../services/documentService';
 import { formDefinitionsService } from '../services/formDefinitionsService';
 import type { GroundingLink } from '../services/geminiService';
 import { GeminiService } from '../services/geminiService';
+import { s3Service } from '../services/s3Service';
 import type { Contract, ContractTemplate, FormDefinition, FormSubmission, Project, ProjectTask, TaskTemplate, User, UserDocumentDefinition } from '../types';
 import { ContractStatus, UserRole } from '../types';
 import { downloadContractPDF, downloadFormPDF } from '../utils/pdfGenerator';
@@ -44,7 +46,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
   const [activeTab, setActiveTab] = useState<'overview' | 'team' | 'documents' | 'property'>('overview');
   const [isGenerating, setIsGenerating] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
-  const [aiInsight, setAiInsight] = useState<string | null>(null);
+  const [insight, setInsight] = useState<string | null>(null);
   const [showAIModal, setShowAIModal] = useState(false);
   const [locationInsights, setLocationInsights] = useState<{ text: string, links: GroundingLink[] } | null>(null);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
@@ -99,15 +101,15 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
 
             if (fileId) {
               try {
-                  const file = await documentService.getFile(fileId);
-                  const isImage = file.mimeType.startsWith('image/');
-                  url = isImage ? documentService.getFilePreview(fileId) : documentService.getFileView(fileId);
-                  documentType = file.mimeType;
-                  if (!item.name) item.name = file.name;
-                  downloadUrl = documentService.getFileDownload(fileId);
+                const file = await documentService.getFile(fileId);
+                const isImage = file.mimeType.startsWith('image/');
+                url = isImage ? await documentService.getFilePreview(fileId) : await documentService.getFileView(fileId);
+                documentType = file.mimeType;
+                if (!item.name) item.name = file.name;
+                downloadUrl = await documentService.getFileDownload(fileId);
               } catch(e) {
-                 url = await documentService.getFileUrl(fileId);
-                 downloadUrl = documentService.getFileDownload(fileId);
+               url = await documentService.getFileUrl(fileId);
+               downloadUrl = await documentService.getFileDownload(fileId);
               }
             } else {
               url = item.url;
@@ -360,11 +362,11 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
     }
   };
 
-  const handleSaveBulkSpecs = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveBulkSpecs = async (e: React.FormEvent<Element>) => {
     e.preventDefault();
     if (!project) return;
     setIsProcessing(true);
-    const formData = new FormData(e.currentTarget);
+    const formData = new FormData(e.currentTarget as HTMLFormElement);
     try {
       const updates: any = {
         bedrooms: parseInt(formData.get('bedrooms') as string) || 0,
@@ -385,11 +387,11 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
     }
   };
 
-  const handleSaveGeneralInfo = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveGeneralInfo = async (e: React.FormEvent<Element>) => {
     e.preventDefault();
     if (!project) return;
     setIsProcessing(true);
-    const formData = new FormData(e.currentTarget);
+    const formData = new FormData(e.currentTarget as HTMLFormElement);
     try {
       const updates: any = {
         title: formData.get('title') as string,
@@ -432,7 +434,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
   useEffect(() => {
     if (!id) return;
     loadForms();
-    const unsubscribe = client.subscribe(`databases.${DATABASE_ID}.collections.${COLLECTIONS.MESSAGES}.documents`, response => {
+    const unsubscribe = client.subscribe(`databases.${DATABASE_ID}.collections.${COLLECTIONS.MESSAGES}.documents`, () => {
       // Chat removed
     });
     return () => unsubscribe();
@@ -549,12 +551,12 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
   const fetchInsights = async () => {
     if (!project) return;
     setShowAIModal(true);
-    setAiInsight('Thinking...');
+    setInsight('Thinking...');
     try {
       const result = await gemini.getProjectInsights(project);
-      setAiInsight(result);
+      setInsight(result);
     } catch (e) {
-      setAiInsight('Error generating insights.');
+      setInsight('Error generating insights.');
     }
   };
 
@@ -889,7 +891,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
     try {
         const agRes = await databases.listDocuments(DATABASE_ID, COLLECTIONS.AGENCY);
         // We only need the ID now, as the generator fetches the settings
-        const agencyId = agRes.documents.length > 0 ? agRes.documents[0].$id : null;
+        const agencyId = agRes.documents?.[0]?.$id ?? null;
 
         if (!agencyId) {
             alert('No agency configuration found.');
@@ -913,12 +915,13 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
             URL.revokeObjectURL(url);
 
             // 2. Upload to Storage (Property Brochures Bucket)
+            // 2. Upload to S3 under project property-files
             const file = new File([blob], `${project.title}_Brochure.pdf`, { type: 'application/pdf' });
-            await storage.createFile(BUCKETS.PROPERTY_BROCHURES, ID.unique(), file);
+            await s3Service.uploadProjectFile((project as any).$id || project.id, 'property-files', file);
         }
-    } catch(e: any) {
+    } catch(e) {
         console.error(e);
-        alert(`Failed to generate brochure: ${e.message || e}`);
+        alert('Failed to generate brochure');
     } finally {
         setIsGenerating(false);
     }
@@ -1043,13 +1046,13 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
             )}
 
             {activeTab === 'team' && isAdmin && (
-               <ProjectTeam
+              <ProjectTeam
                   project={project}
                   seller={seller}
                   buyer={buyer}
                   agent={agent}
                   allUsers={allUsers}
-                  defaultAgentId={defaultAgentId}
+                defaultAgentId={defaultAgentId ?? undefined}
                   onSwitchUser={onSwitchUser}
                   assignUser={assignUser}
                   setShowInviteModal={setShowInviteModal}
@@ -1072,10 +1075,12 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
       )}
 
       <TaskLibraryModal
-        isOpen={isTaskLibraryOpen}
-        onClose={() => setIsTaskLibraryOpen(false)}
-        taskTemplates={taskTemplates}
-        onSelectTemplate={addFromTemplate}
+        {...({
+          isOpen: isTaskLibraryOpen,
+          onClose: () => setIsTaskLibraryOpen(false),
+          taskTemplates,
+          onSelectTemplate: addFromTemplate
+        } as any)}
       />
 
       <AddTaskModal
@@ -1105,9 +1110,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
         isOpen={isAssigningForm}
         selectedTemplate={selectedTemplate}
         onClose={() => setIsAssigningForm(false)}
-        onAssign={executeFormAssignment}
-        project={project}
-        allUsers={allUsers}
+        onAssign={(userId: string) => { if (selectedTemplate) void executeFormAssignment(selectedTemplate, userId); }}
+        users={allUsers}
       />
 
       <InviteModal
@@ -1148,7 +1152,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
         isOpen={showTemplatePicker}
         onClose={() => setShowTemplatePicker(false)}
         templates={templates}
-        onGenerate={handleGenerateContract}
+        onGenerateScratch={() => handleGenerateContract()}
+        onGenerateTemplate={(tmpl) => handleGenerateContract(tmpl)}
       />
 
       <FormTemplatePickerModal
@@ -1162,7 +1167,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
       <AIModal
         isOpen={showAIModal}
         onClose={() => setShowAIModal(false)}
-        aiInsight={aiInsight}
+        insight={insight || ''}
       />
 
     </div>

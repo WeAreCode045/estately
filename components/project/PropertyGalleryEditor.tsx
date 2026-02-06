@@ -1,4 +1,5 @@
 import { CheckCircle2, Loader2, Star, Trash2, Upload } from 'lucide-react';
+/* eslint-env browser */
 import React, { useRef, useState } from 'react';
 import { projectService } from '../../services/appwrite';
 
@@ -29,13 +30,15 @@ const PropertyGalleryEditor: React.FC<PropertyGalleryEditorProps> = ({
       try {
         for (let i = 0; i < e.target.files.length; i++) {
           const file = e.target.files[i];
+          if (!file) continue;
           const response = await projectService.uploadPropertyImage(projectId, file);
-          newIds.push(response.$id);
+          // s3Service returns { key, url }
+          newIds.push((response as any).key || '');
         }
 
         const updatedList = [...files, ...newIds];
         // If no cover image yet, set the first new one as cover
-        const newCoverId = coverImageId || (updatedList.length > 0 ? updatedList[0] : '');
+          const newCoverId = (coverImageId || (updatedList.length > 0 ? updatedList[0] : '')) || '';
 
         await onUpdate(updatedList, newCoverId);
       } catch (error) {
@@ -99,7 +102,9 @@ const PropertyGalleryEditor: React.FC<PropertyGalleryEditorProps> = ({
 
     const newList = [...files];
     const [movedItem] = newList.splice(sourceIndex, 1);
-    newList.splice(targetIndex, 0, movedItem);
+    if (typeof movedItem !== 'undefined') {
+      newList.splice(targetIndex, 0, movedItem as string);
+    }
 
     // If "main image as first image" is strict rule, we might need to update coverID if index 0 changed
     // But usually user explicitly sets main. However, prompt says "main image as first image".
@@ -111,16 +116,8 @@ const PropertyGalleryEditor: React.FC<PropertyGalleryEditorProps> = ({
     // I will stick to: SetMain moves to top. Dragging reorders freely. If I drag X to top, X becomes main?
     // Let's keep it simple: Dragging updates list order. SetMain updates coverID AND moves to top.
 
-    // Check if the item at index 0 changed
-    const newCoverId = newList.length > 0 ? newList[0] : '';
-    // If the cover was dependent on position 0, update it.
-    // Ideally, we respect the coverImageId prop.
-    // If I drag a non-cover image to #1, should it become cover?
-    // I will adhere to: "Set Main" button sets it. "Drag" reorders.
-    // BUT "with the main image as first image". This implies consistent state.
-    // I will auto-update coverId to be files[0] after reorder.
-
-    await onUpdate(newList, newList[0]);
+    // update with the new ordering; ensure coverId is a string
+    await onUpdate(newList, newList[0] || '');
   };
 
   return (

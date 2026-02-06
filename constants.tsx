@@ -1,5 +1,6 @@
 
-import { Project, User, UserRole, ProjectStatus, Contract, ContractStatus, ContractTemplate } from './types';
+import type { Project, User, Contract, ContractTemplate } from './types';
+import { UserRole, ProjectStatus, ContractStatus } from './types';
 
 export const MOCK_USERS: User[] = [
   { id: 'u1', name: 'Alice Admin', email: 'alice@agency.com', role: UserRole.ADMIN, avatar: 'https://picsum.photos/seed/alice/100' },
@@ -31,7 +32,7 @@ export const MOCK_CONTRACTS: Contract[] = [
     signedBy: ['u3'],
     createdAt: '2024-05-24T10:00:00',
     signatureData: {
-        'u3': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=='
+        u3: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=='
     }
   }
 ];

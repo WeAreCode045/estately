@@ -1,15 +1,15 @@
 import {
-    Calendar,
-    CheckCircle, ChevronRight,
-    ClipboardList,
-    Clock,
-    Download,
-    Edit2,
-    FileText,
-    Home,
-    MapPin,
-    Sparkles,
-    Zap
+  Calendar,
+  CheckCircle, ChevronRight,
+  ClipboardList,
+  Clock,
+  Download,
+  Edit2,
+  FileText,
+  Home,
+  MapPin,
+  Sparkles,
+  Zap
 } from 'lucide-react';
 import React from 'react';
 import { projectService } from '../../services/appwrite';
@@ -52,20 +52,20 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
     // 2. First image from 'media' (new gallery system)
     if (project.media && project.media.length > 0) {
       const id = project.media[0];
-      if (!id.startsWith('http')) {
+      if (id && !id.startsWith('http')) {
         return projectService.getImagePreview(id);
       }
       return id;
     }
 
     // 3. First image from 'property.images' (legacy/fallback)
-    if (project.property?.images && project.property.images.length > 0) {
+     if (project.property?.images && project.property.images.length > 0) {
        const img = project.property.images[0];
-       if (!img.startsWith('http')) {
-          return projectService.getImagePreview(img);
+       if (img && !img.startsWith('http')) {
+         return projectService.getImagePreview(img);
        }
        return img;
-    }
+     }
 
     return null;
   };

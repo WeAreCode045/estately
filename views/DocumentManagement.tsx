@@ -9,9 +9,10 @@ import {
     Trash2,
     X
 } from 'lucide-react';
+/* eslint-env browser */
 import React, { useEffect, useState } from 'react';
 import { COLLECTIONS, DATABASE_ID, databases } from '../services/appwrite';
-import { UserDocumentDefinition } from '../types';
+import type { UserDocumentDefinition } from '../types';
 
 interface DocumentManagementProps {
   user: any;
@@ -229,8 +230,9 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ user: _user }) 
               <form onSubmit={handleSave} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">Display Title</label>
+                    <label htmlFor="doc-title" className="text-sm font-bold text-slate-700">Display Title</label>
                     <input
+                      id="doc-title"
                       type="text"
                       required
                       value={formData.title}
@@ -241,8 +243,9 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ user: _user }) 
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">Internal Key (ID)</label>
+                    <label htmlFor="doc-key" className="text-sm font-bold text-slate-700">Internal Key (ID)</label>
                     <input
+                      id="doc-key"
                       type="text"
                       required
                       disabled={!!editingDoc}
@@ -254,8 +257,9 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ user: _user }) 
                   </div>
 
                   <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-bold text-slate-700">Description</label>
+                    <label htmlFor="doc-description" className="text-sm font-bold text-slate-700">Description</label>
                     <textarea
+                      id="doc-description"
                       value={formData.description}
                       onChange={e => setFormData({...formData, description: e.target.value})}
                       placeholder="Instructions for the user..."
@@ -265,8 +269,9 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ user: _user }) 
                   </div>
 
                   <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-bold text-slate-700">Override Storage Filename</label>
+                    <label htmlFor="doc-overrideName" className="text-sm font-bold text-slate-700">Override Storage Filename</label>
                     <input
+                      id="doc-overrideName"
                       type="text"
                       value={formData.overrideDocumentName}
                       onChange={e => setFormData({...formData, overrideDocumentName: e.target.value})}
@@ -279,8 +284,9 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ user: _user }) 
                   </div>
 
                   <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-bold text-slate-700">Visibility</label>
+                    <label htmlFor="doc-visibility" className="text-sm font-bold text-slate-700">Visibility</label>
                     <select
+                      id="doc-visibility"
                       value={formData.visibility || 'public'}
                       onChange={e => setFormData({...formData, visibility: e.target.value as any})}
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
@@ -290,8 +296,8 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ user: _user }) 
                     </select>
                   </div>
 
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-bold text-slate-700">Auto-Assign To</label>
+                  <fieldset className="space-y-2 md:col-span-2">
+                    <legend className="text-sm font-bold text-slate-700">Auto-Assign To</legend>
                     <div className="flex gap-4">
                       {['SELLER', 'BUYER'].map(role => (
                         <label key={role} className="flex items-center gap-2 cursor-pointer bg-slate-50 px-4 py-3 rounded-2xl border border-slate-200 hover:border-blue-300 transition-all">
@@ -309,7 +315,7 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ user: _user }) 
                         </label>
                       ))}
                     </div>
-                  </div>
+                  </fieldset>
 
                   <div className="space-y-4 md:col-span-2">
                     <label className="flex items-center gap-3 cursor-pointer bg-slate-50 p-4 rounded-2xl border border-slate-200 hover:border-blue-300 transition-all">
@@ -339,8 +345,8 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ user: _user }) 
                     </label>
                   </div>
 
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-bold text-slate-700">Allowed File Extensions</label>
+                  <fieldset className="space-y-2 md:col-span-2">
+                    <legend className="text-sm font-bold text-slate-700">Allowed File Extensions</legend>
                     <div className="flex flex-wrap gap-3">
                       {['pdf', 'jpg', 'png', 'docx'].map(ext => (
                         <label key={ext} className="flex items-center gap-2 cursor-pointer bg-slate-50 px-4 py-2 rounded-xl border border-slate-200 hover:border-blue-300 transition-all">
@@ -358,7 +364,7 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ user: _user }) 
                         </label>
                       ))}
                     </div>
-                  </div>
+                  </fieldset>
                 </div>
 
                 <div className="flex gap-4 pt-6">

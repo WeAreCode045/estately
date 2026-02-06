@@ -1,6 +1,5 @@
 import { Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import React from 'react';
-import { createStyles } from '../themes';
 import type { Agency, PropertyData, ThemeConfig } from '../types';
 
 interface CoverPageProps {
@@ -10,7 +9,7 @@ interface CoverPageProps {
 }
 
 const CoverPage: React.FC<CoverPageProps> = ({ theme, property, agency }) => {
-  const styles = createStyles(theme);
+  // theme available via prop; styles helper not used here
 
   const coverStyles = StyleSheet.create({
     container: {
@@ -22,7 +21,6 @@ const CoverPage: React.FC<CoverPageProps> = ({ theme, property, agency }) => {
       position: 'absolute',
       minWidth: '100%',
       minHeight: '100%',
-      display: 'block',
       height: '100%',
       width: '100%',
       objectFit: 'cover',

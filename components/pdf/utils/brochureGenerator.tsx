@@ -1,7 +1,6 @@
 import { pdf } from '@react-pdf/renderer';
-import React from 'react';
 import { brochureService } from '../../../services/brochureService';
-import { Project, User } from '../../../types';
+import type { Project, User } from '../../../types';
 import BrochureDocument from '../BrochureDocument';
 
 export const generateBrochureBlob = async (project: Project, agencyId: string, agent?: User): Promise<Blob> => {
@@ -13,16 +12,14 @@ export const generateBrochureBlob = async (project: Project, agencyId: string, a
     const propertyData = brochureService.transformProjectToPropertyData(project, agent);
 
     // 3. Render PDF
-    console.log("Generating with PropertyData:", propertyData);
-
-    // Use React.createElement to avoid any JSX transformation issues in this specific utility file
-    const doc = React.createElement(BrochureDocument, {
-        settings: settings,
-        agency: agency,
-        property: propertyData
-    });
-
-    const blob = await pdf(doc).toBlob();
+    // We use the pdf() function from @react-pdf/renderer to generate the blob programmatically
+    const blob = await pdf(
+        <BrochureDocument
+            settings={settings}
+            agency={agency}
+            property={propertyData}
+        />
+    ).toBlob();
 
     return blob;
 

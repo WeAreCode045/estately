@@ -1,30 +1,30 @@
 import {
-    Bell,
-    BookOpen,
-    Building2,
-    Calendar,
-    CheckSquare,
-    ChevronDown,
-    ClipboardList,
-    FileSignature,
-    FileText,
-    Home,
-    LayoutDashboard,
-    Library,
-    LogOut,
-    Mail,
-    Search,
-    Settings as SettingsIcon,
-    ShieldCheck,
-    User as UserIcon,
-    Users as UsersIcon
+  Bell,
+  BookOpen,
+  Building2,
+  Calendar,
+  CheckSquare,
+  ChevronDown,
+  ClipboardList,
+  FileSignature,
+  FileText,
+  Home,
+  LayoutDashboard,
+  Library,
+  LogOut,
+  Mail,
+  Search,
+  Settings as SettingsIcon,
+  ShieldCheck,
+  User as UserIcon,
+  Users as UsersIcon
 } from 'lucide-react';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { HashRouter, Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { COLLECTIONS, DATABASE_ID, databases, projectService, Query } from './services/appwrite';
 import { contractTemplatesService } from './services/contractTemplatesService';
-import type { User as AppUser, Contract, ContractTemplate, Project } from './types';
+import type { User as AppUser, Contract, ContractStatus, ContractTemplate, Project, TaskTemplate } from './types';
 import { UserRole } from './types';
 import AcceptInvite from './views/AcceptInvite';
 import AgencyInfo from './views/AgencyInfo';
@@ -38,12 +38,28 @@ import FormsList from './views/FormsList';
 import Login from './views/Login';
 import Profile from './views/Profile';
 
-const ProjectDetail: React.FC<any> = (props) => {
-  const Component = React.lazy(async () => {
-    const mod = await import('./views/ProjectDetail');
-    const Comp = (mod as any).ProjectDetail ?? (mod as any).default;
-    return { default: Comp ?? (() => <div>ProjectDetail export not found</div>) };
-  });
+type ProjectDetailProps = {
+  projects: Project[];
+  setProjects: React.Dispatch<React.SetStateAction<Project[]>>;
+  contracts: Contract[];
+  setContracts: React.Dispatch<React.SetStateAction<Contract[]>>;
+  templates: ContractTemplate[];
+  user: AppUser | null;
+  allUsers: AppUser[];
+  onRefresh?: () => Promise<void>;
+};
+
+const ProjectDetail: React.FC<ProjectDetailProps> = (props) => {
+  const Component = React.lazy<React.ComponentType<ProjectDetailProps>>(() =>
+    import('./views/ProjectDetail').then((mod) => {
+      const typed = mod as {
+        ProjectDetail?: React.ComponentType<ProjectDetailProps>;
+        default?: React.ComponentType<ProjectDetailProps>;
+      };
+      const Comp = typed.ProjectDetail ?? typed.default ?? (() => <div>ProjectDetail export not found</div>);
+      return { default: Comp as React.ComponentType<ProjectDetailProps> };
+    })
+  );
 
   return (
     <React.Suspense fallback={<div />}>
@@ -113,8 +129,16 @@ const AppContent: React.FC<{
 }) => {
   const { user, profile, loading } = useAuth();
   const [authView, setAuthView] = useState<'login' | 'register'>('login');
-  const [taskTemplates, setTaskTemplates] = useState<any[]>([]);
-  const [docDefinitions, setDocDefinitions] = useState<any[]>([]);
+
+  type DocDefinition = {
+    id: string;
+    title: string;
+    description?: string;
+    role?: string;
+  };
+
+  const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>([]);
+  const [docDefinitions, setDocDefinitions] = useState<DocDefinition[]>([]);
 
   const effectiveUser = React.useMemo(() => {
     if (profile) {
@@ -138,13 +162,7 @@ const AppContent: React.FC<{
     return null;
   }, [profile, user]);
 
-  useEffect(() => {
-    if (user) {
-      fetchData();
-    }
-  }, [user, profile]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [profilesData, invitesData] = await Promise.all([
         databases.listDocuments(DATABASE_ID, COLLECTIONS.PROFILES),
@@ -229,7 +247,7 @@ const AppContent: React.FC<{
         title: d.title,
         description: d.description,
         category: d.category
-      })));
+      } as TaskTemplate)));
 
       setDocDefinitions(docsResponse.documents.map((d: any) => ({
         id: d.$id,
@@ -271,7 +289,13 @@ const AppContent: React.FC<{
     } catch (error) {
       globalThis.console?.error?.('Error fetching data:', error);
     }
-  };
+  }, [setAllUsers, setContracts, setTemplates, setTaskTemplates, setDocDefinitions, setProjects]);
+
+  useEffect(() => {
+    if (user) {
+      fetchData();
+    }
+  }, [fetchData, user, profile]);
 
   if (loading) {
     return (
@@ -443,12 +467,12 @@ const Header: React.FC<{ user: AppUser }> = ({ user }) => {
         setIsDropdownOpen(false);
       }
     };
-    if (typeof document !== 'undefined' && document?.addEventListener) {
-      document.addEventListener('mousedown', handleClickOutside);
+    if (typeof globalThis !== 'undefined' && (globalThis as any).document?.addEventListener) {
+      (globalThis as any).document.addEventListener('mousedown', handleClickOutside);
     }
     return () => {
-      if (typeof document !== 'undefined' && document?.removeEventListener) {
-        document.removeEventListener('mousedown', handleClickOutside);
+      if (typeof globalThis !== 'undefined' && (globalThis as any).document?.removeEventListener) {
+        (globalThis as any).document.removeEventListener('mousedown', handleClickOutside);
       }
     };
   }, []);

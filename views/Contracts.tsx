@@ -1,19 +1,20 @@
 
 import {
-  AlertCircle,
-  CheckCircle2,
-  Clock,
-  Download,
-  Edit2,
-  Eye,
-  FileText,
-  Library,
-  Plus,
-  Save,
-  Search,
-  Trash2,
-  X
+    AlertCircle,
+    CheckCircle2,
+    Clock,
+    Download,
+    Edit2,
+    Eye,
+    FileText,
+    Library,
+    Plus,
+    Save,
+    Search,
+    Trash2,
+    X
 } from 'lucide-react';
+/* eslint-env browser */
 import React, { useEffect, useState } from 'react';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
@@ -21,7 +22,8 @@ import { useSearchParams } from 'react-router-dom';
 import SignaturePad from '../components/SignaturePad';
 import { MOCK_USERS } from '../constants';
 import { contractTemplatesService } from '../services/contractTemplatesService';
-import { Contract, ContractStatus, ContractTemplate, Project, User, UserRole } from '../types';
+import type { Contract, ContractTemplate, Project, User} from '../types';
+import { ContractStatus, UserRole } from '../types';
 import { downloadContractPDF } from '../utils/pdfGenerator';
 
 interface ContractsProps {
@@ -466,9 +468,9 @@ const Contracts: React.FC<ContractsProps> = ({ user, projects, contracts, setCon
                         onChange={(content) => setEditingTemplate({ ...editingTemplate, content })}
                         modules={{
                           toolbar: [
-                            [{ 'header': [1, 2, false] }],
+                            [{ header: [1, 2, false] }],
                             ['bold', 'italic', 'underline', 'strike', 'blockquote'],
-                            [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
+                            [{ list: 'ordered' }, { list: 'bullet' }, { indent: '-1' }, { indent: '+1' }],
                             ['link', 'clean']
                           ],
                         }}

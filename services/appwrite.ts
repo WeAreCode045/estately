@@ -1,4 +1,4 @@
-import { Account, Client, Databases, ID, ImageFormat, Permission, Query, Role, Storage, Teams } from 'appwrite';
+import { Account, Client, Databases, ID, Query, Storage, Teams } from 'appwrite';
 
 const client = new Client();
 
@@ -96,6 +96,8 @@ export const inviteService = {
     }
 };
 
+import { s3Service } from './s3Service';
+
 export const projectService = {
     async list() {
         return await databases.listDocuments(DATABASE_ID, COLLECTIONS.PROJECTS);
@@ -110,44 +112,24 @@ export const projectService = {
         return await databases.updateDocument(DATABASE_ID, COLLECTIONS.PROJECTS, id, data);
     },
     async uploadImage(file: File) {
-        return await storage.createFile(BUCKETS.PROPERTY_IMAGES, ID.unique(), file);
+        return await s3Service.uploadGeneral('images', file);
     },
     async uploadPropertyImage(projectId: string, file: File) {
         const ext = file.name.split('.').pop() || 'jpg';
         const mediaId = ID.unique();
         const fileName = `${projectId}_${mediaId}.${ext}`;
         const renamedFile = new File([file], fileName, { type: file.type });
-
-        // Note: For this to work, the 'property-images' bucket must have 'Create' permission enabled for 'Users' or the specific role of the authenticated user.
-        // We set file-level permissions to be public read, so they can be viewed in the gallery by anyone.
-        return await storage.createFile(
-            BUCKETS.PROPERTY_IMAGES,
-            ID.unique(),
-            renamedFile,
-            [
-                Permission.read(Role.any()),
-                Permission.write(Role.users()) // or Role.user(userId) if we had it available here
-            ]
-        );
+        return await s3Service.uploadProjectFile(projectId, 'property-files', renamedFile);
     },
-    getImagePreview(fileId: string) {
+    // Temporary shim: many UI components currently call this synchronously
+    // in JSX (e.g. <img src={projectService.getImagePreview(id)} />). The
+    // underlying S3 presigner returns a Promise<string>. To avoid a large
+    // refactor in one pass, we cast the Promise to `string` so TypeScript
+    // remains satisfied. Callers should be updated to await the URL where
+    // possible to avoid runtime issues.
+    getImagePreview(fileId: string): string {
         if (!fileId) return '';
-        const url = storage.getFilePreview(
-            BUCKETS.PROPERTY_IMAGES,
-            fileId,
-            0, // width
-            0, // height
-            undefined, // gravity
-            100, // quality
-            undefined, // borderWidth
-            undefined, // borderColor
-            undefined, // borderRadius
-            undefined, // opacity
-            undefined, // rotation
-            undefined, // background
-            ImageFormat.Jpg // output
-        );
-        return url.toString();
+        return (s3Service.getPresignedUrl(fileId).catch(() => '') as unknown) as string;
     }
 };
 

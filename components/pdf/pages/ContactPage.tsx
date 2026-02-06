@@ -1,6 +1,5 @@
 import { Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import React from 'react';
-import { createStyles } from '../themes';
 import type { Agency, PropertyData, ThemeConfig } from '../types';
 
 interface ContactPageProps {
@@ -10,7 +9,7 @@ interface ContactPageProps {
 }
 
 const ContactPage: React.FC<ContactPageProps> = ({ theme, property, agency }) => {
-  const styles = createStyles(theme);
+    // styles not required for this custom layout; keep theme available via prop
 
   // Custom Split Layout style
   const splitStyles = StyleSheet.create({

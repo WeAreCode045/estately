@@ -1,3 +1,4 @@
+/* eslint-env browser */
 import { ChevronLeft, Eye, FileText, Loader2, Save, Settings2, Sparkles } from 'lucide-react';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -11,7 +12,8 @@ import ComponentLibrary from '../components/form-builder/ComponentLibrary';
 import { INITIAL_SCHEMA } from '../components/form-builder/constants';
 import PDFReaderModal from '../components/form-builder/PDFReaderModal';
 import PropertiesPanel from '../components/form-builder/PropertiesPanel';
-import { FieldType, FormField, FormSchema } from '../components/form-builder/types';
+import type { FormField, FormSchema } from '../components/form-builder/types';
+import { FieldType } from '../components/form-builder/types';
 
 const FormDefinitionEditor: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -25,6 +27,7 @@ const FormDefinitionEditor: React.FC = () => {
     description: '',
     schema: INITIAL_SCHEMA as FormSchema,
     defaultData: '{}',
+    visibility: 'public' as 'public' | 'private',
     needSignatureFromSeller: false,
     needSignatureFromBuyer: false,
     autoCreateTaskForAssignee: false,
@@ -56,7 +59,8 @@ const FormDefinitionEditor: React.FC = () => {
           description: def.description || '',
           schema: typeof def.schema === 'string' ? JSON.parse(def.schema) : (def.schema || INITIAL_SCHEMA),
           defaultData: JSON.stringify(def.defaultData, null, 2),
-          needSignatureFromSeller: def.needSignatureFromSeller || false,
+            visibility: (def as any).visibility || 'public',
+            needSignatureFromSeller: def.needSignatureFromSeller || false,
           needSignatureFromBuyer: def.needSignatureFromBuyer || false,
           autoCreateTaskForAssignee: def.autoCreateTaskForAssignee || false,
           autoAddToNewProjects: def.autoAddToNewProjects || false,
@@ -300,8 +304,9 @@ const FormDefinitionEditor: React.FC = () => {
       {/* Settings Bar */}
       <div className="bg-white border-b border-slate-200 px-4 py-2 flex items-center gap-4 overflow-x-auto no-scrollbar shrink-0">
         <div className="flex items-center gap-2 min-w-fit">
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Title</label>
+          <label htmlFor="form-title" className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Title</label>
           <input
+            id="form-title"
             type="text"
             className="px-2 py-1 bg-slate-50 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-blue-500 outline-none w-40"
             value={formData.title}
@@ -319,8 +324,9 @@ const FormDefinitionEditor: React.FC = () => {
         <div className="w-[1px] h-4 bg-slate-100" />
 
         <div className="flex items-center gap-2 min-w-fit">
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Changes</label>
+          <label htmlFor="form-allowChanges" className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Changes</label>
           <select
+            id="form-allowChanges"
             className="px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-1 focus:ring-blue-500 outline-none"
             value={formData.allowChanges}
             onChange={e => setFormData(f => ({ ...f, allowChanges: e.target.value as any }))}
@@ -343,8 +349,9 @@ const FormDefinitionEditor: React.FC = () => {
         <div className="w-[1px] h-4 bg-slate-100" />
 
         <div className="flex items-center gap-2 min-w-fit">
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Visibility</label>
+          <label htmlFor="form-visibility" className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Visibility</label>
           <select
+            id="form-visibility"
             className="px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-1 focus:ring-blue-500 outline-none"
             value={formData.visibility || 'public'}
             onChange={e => setFormData(f => ({ ...f, visibility: e.target.value as any }))}
@@ -356,8 +363,8 @@ const FormDefinitionEditor: React.FC = () => {
 
         <div className="w-[1px] h-4 bg-slate-100" />
 
-        <div className="flex items-center gap-2 min-w-fit">
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Assign</label>
+        <fieldset className="flex items-center gap-2 min-w-fit">
+          <legend className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Assign</legend>
           <div className="flex items-center gap-2">
             {['seller', 'buyer', 'admin'].map(role => (
               <label key={role} className="flex items-center gap-1 text-xs text-slate-500 cursor-pointer border px-1.5 py-0.5 rounded bg-slate-50/50 hover:bg-white hover:text-blue-600 transition-colors">
@@ -379,12 +386,12 @@ const FormDefinitionEditor: React.FC = () => {
               </label>
             ))}
           </div>
-        </div>
+        </fieldset>
 
         <div className="w-[1px] h-4 bg-slate-100" />
 
-        <div className="flex items-center gap-2 min-w-fit">
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Need Sign</label>
+        <fieldset className="flex items-center gap-2 min-w-fit">
+          <legend className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Need Sign</legend>
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 cursor-pointer">
               <input
@@ -405,7 +412,7 @@ const FormDefinitionEditor: React.FC = () => {
               Buyer
             </label>
           </div>
-        </div>
+        </fieldset>
 
         <div className="flex-1" />
 
