@@ -391,7 +391,7 @@ export const generatePropertyBrochure = async (project: Project, agency: Agency 
            try {
                const imgId = galleryImages[i];
              if (!imgId) continue;
-             const url = imgId.startsWith('http') ? imgId : projectService.getImagePreview(imgId);
+             const url = imgId.startsWith('http') ? imgId : await projectService.getImagePreview(imgId);
              const data = await getDataUrl(url);
 
                doc.addImage(data, 'JPEG', xOffset, cursorY, imgW, imgH, undefined, 'FAST');

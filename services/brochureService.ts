@@ -71,37 +71,37 @@ export const brochureService = {
   /**
    * Maps the application Project type to the PDF system's PropertyData type.
    */
-  transformProjectToPropertyData(project: Project, agent?: User): PropertyData {
+  async transformProjectToPropertyData(project: Project, agent?: User): Promise<PropertyData> {
     // Collect features from property attributes or description if needed
     // This is a mapping utility
 
     // Resolve cover image
     let coverImage = '';
     if (project.coverImageId) {
-        coverImage = projectService.getImagePreview(project.coverImageId);
+        coverImage = await projectService.getImagePreview(project.coverImageId);
     } else if (project.media && project.media.length > 0) {
         const first = project.media[0];
         if (first && first.startsWith('http')) {
           coverImage = first;
         } else if (first) {
-          coverImage = projectService.getImagePreview(first);
+          coverImage = await projectService.getImagePreview(first);
         }
     } else if (project.property.images && project.property.images.length > 0) {
          const first = project.property.images[0];
          if (first && first.startsWith('http')) {
            coverImage = first;
          } else if (first) {
-           coverImage = projectService.getImagePreview(first);
+           coverImage = await projectService.getImagePreview(first);
          }
     }
 
     // Resolve images
     // Prefer media (new system) over property.images (legacy)
     const rawImages = (project.media && project.media.length > 0) ? project.media : (project.property.images || []);
-    const images = rawImages.map(img => {
+    const images = await Promise.all(rawImages.map(async img => {
       if (!img) return '';
-      return img.startsWith('http') ? img : projectService.getImagePreview(img);
-    });
+      return img.startsWith('http') ? img : await projectService.getImagePreview(img);
+    }));
 
     return {
       id: project.id,

@@ -67,8 +67,6 @@
     "node_modules",
     "dist",
     "build",
-    ".amplify",
-    "amplify",
     "scripts/*.cjs"
   ]
 }

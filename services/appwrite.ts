@@ -122,17 +122,17 @@ export const projectService = {
         const mediaId = ID.unique();
         const fileName = `${projectId}_${mediaId}.${ext}`;
         const renamedFile = new File([file], fileName, { type: file.type });
-        return await s3Service.uploadProjectFile(projectId, 'property-files', renamedFile);
+        return await s3Service.uploadProjectFile(projectId, 'property-files/gallery', renamedFile);
     },
-    // Temporary shim: many UI components currently call this synchronously
-    // in JSX (e.g. <img src={projectService.getImagePreview(id)} />). The
-    // underlying S3 presigner returns a Promise<string>. To avoid a large
-    // refactor in one pass, we cast the Promise to `string` so TypeScript
-    // remains satisfied. Callers should be updated to await the URL where
-    // possible to avoid runtime issues.
-    getImagePreview(fileId: string): string {
+    // Updated to correctly reflect async nature of S3 presigned URLs.
+    async getImagePreview(fileId: string): Promise<string> {
         if (!fileId) return '';
-        return (s3Service.getPresignedUrl(fileId).catch(() => '') as unknown) as string;
+        try {
+            return await s3Service.getPresignedUrl(fileId);
+        } catch (e) {
+            console.error('Error getting presigned URL:', e);
+            return '';
+        }
     }
 };
 

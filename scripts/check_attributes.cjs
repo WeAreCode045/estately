@@ -4,14 +4,14 @@ const fs = require('fs');
 const path = require('path');
 
 // Load .env
-const envPath = path.resolve(__dirname, '.env');
+const envPath = path.resolve(__dirname, '../.env');
 if (fs.existsSync(envPath)) {
     dotenv.config({ path: envPath });
 }
 
 const config = {
     endpoint: process.env.VITE_APPWRITE_ENDPOINT || 'https://fra.cloud.appwrite.io/v1',
-    projectId: process.env.VITE_APPWRITE_PROJECT_ID || '69759f0f0003f89f3998',
+    projectId: process.env.VITE_APPWRITE_PROJECT_ID,
     apiKey: process.env.VITE_APPWRITE_API_KEY,
     databaseId: process.env.VITE_APPWRITE_DATABASE_ID || 'estately-main',
     collectionId: process.env.VITE_APPWRITE_COLLECTION_PROJECTS || 'projects'
@@ -22,7 +22,7 @@ if (!config.apiKey) {
     process.exit(1);
 }
 
-function request(method, path, data) {
+function request(method, path) {
     return new Promise((resolve, reject) => {
         const url = new URL(config.endpoint + path);
         const options = {
@@ -41,54 +41,37 @@ function request(method, path, data) {
             res.on('data', (chunk) => body += chunk);
             res.on('end', () => {
                 try {
-                    const json = JSON.parse(body);
-                    if (res.statusCode >= 400) {
-                        reject(json);
-                    } else {
-                        resolve(json);
-                    }
+                    resolve(JSON.parse(body));
                 } catch (e) {
-                    reject(e);
+                    resolve(body);
                 }
             });
         });
 
         req.on('error', (e) => reject(e));
-
-        if (data) {
-            req.write(JSON.stringify(data));
-        }
         req.end();
     });
 }
 
-async function createAttribute() {
-    console.log('Adding "media" attribute to projects collection...');
-
+async function run() {
+    console.log(`Listing attributes for collection ${config.collectionId}...`);
     try {
-        await request(
-            'POST',
-            `/databases/${config.databaseId}/collections/${config.collectionId}/attributes/string`,
-            {
-                key: 'media',
-                size: 255,
-                required: false,
-                array: true, // This is an array of strings (Permission IDs / File IDs)
-                xdefault: null
-            }
-        );
-        console.log('✅ Created "media" attribute (Array<String>)');
-    } catch (error) {
-        if (error.code === 409) {
-            console.log('⚠️ Attribute "media" already exists.');
+        const res = await request('GET', `/databases/${config.databaseId}/collections/${config.collectionId}/attributes`);
+        if (res.attributes) {
+            const media = res.attributes.find(a => a.key === 'media');
+            const cover = res.attributes.find(a => a.key === 'coverImageId');
+
+            console.log('--- MEDIA ATTRIBUTE ---');
+            console.log(media || 'NOT FOUND');
+
+            console.log('--- COVER ATTRIBUTE ---');
+            console.log(cover || 'NOT FOUND');
         } else {
-            console.error('❌ Failed to create "media" attribute:', error);
+            console.log('No attributes found or error:', res);
         }
+    } catch (e) {
+        console.error('Error:', e);
     }
 }
 
-createAttribute().then(() => {
-    console.log('Done.');
-}).catch(err => {
-    console.error('Script failed:', err);
-});
+run();

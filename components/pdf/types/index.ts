@@ -19,7 +19,7 @@ export interface ThemeConfig {
   };
 }
 
-export type PageType = 'cover' | 'description' | 'gallery' | 'features' | 'map' | 'contact';
+export type PageType = 'cover' | 'description' | 'gallery' | 'features' | 'map' | 'contact' | 'custom';
 
 export interface PageConfig {
   type: PageType;
@@ -27,12 +27,15 @@ export interface PageConfig {
   title?: string; // Optional override for page title
   columns?: number; // Specific for gallery
   options?: Record<string, any>;
+  htmlContent?: string; // For custom pages
+  blocks?: any[]; // Keep reference to builder blocks for editing
 }
 
 export interface BrochureSettings {
   templateId?: string; // e.g. 'classic', 'modern'
   theme: ThemeConfig;
   pages: PageConfig[];
+  builderBlocks?: any[]; // For saving the raw builder state
 }
 
 // Re-defining Agency here to strictly match the PDF needs,

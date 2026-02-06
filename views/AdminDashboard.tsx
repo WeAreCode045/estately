@@ -18,6 +18,7 @@ import AddressAutocomplete from '../components/AddressAutocomplete';
 import AdminAgendaWidget from '../components/AdminAgendaWidget';
 import AdminStatsGrid from '../components/AdminStatsGrid';
 import AdminTasksWidget from '../components/AdminTasksWidget';
+import AsyncImage from '../components/AsyncImage';
 import DocumentViewer from '../components/DocumentViewer';
 import FormRenderer from '../components/FormRenderer';
 import { COLLECTIONS, DATABASE_ID, databases, projectService, Query } from '../services/appwrite';
@@ -397,7 +398,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <div className="flex items-center gap-4 min-w-0">
                             <div className="w-16 h-12 rounded-xl overflow-hidden bg-slate-100 shrink-0">
                                 {project.coverImageId ? (
-                                    <img src={projectService.getImagePreview(project.coverImageId)} alt="" className="w-full h-full object-cover" />
+                                    <AsyncImage srcOrId={project.coverImageId} alt="" className="w-full h-full object-cover" />
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center text-slate-300">
                                         <Building2 size={24} />
@@ -600,7 +601,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({
                 {coverImage ? (
                   <img src={URL.createObjectURL(coverImage)} className="w-full h-full object-cover" alt="Preview" />
                 ) : project?.coverImageId ? (
-                  <img src={projectService.getImagePreview(project.coverImageId)} className="w-full h-full object-cover" alt="Current" />
+                  <AsyncImage srcOrId={project.coverImageId} className="w-full h-full object-cover" alt="Current" />
                 ) : (
                   <div className="flex flex-col items-center text-slate-400">
                     <ImageIcon size={32} className="mb-2 opacity-50 group-hover:text-blue-500 transition-transform" />

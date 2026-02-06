@@ -6,11 +6,6 @@ package-lock.json
 dist
 dist-ssr
 build
-.amplify
-
-# Generated files
-amplify_outputs*
-amplifyconfiguration*
 
 # Logs
 *.log

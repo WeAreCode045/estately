@@ -25,7 +25,7 @@ const APPWRITE_KEY = process.env.APPWRITE_KEY || process.env.VITE_APPWRITE_API_K
 const DATABASE_ID = process.env.APPWRITE_DATABASE_ID || process.env.VITE_APPWRITE_DATABASE_ID;
 
 const S3_REGION = process.env.S3_REGION || process.env.VITE_AWS_REGION || 'eu-central-1';
-const S3_BUCKET = process.env.S3_BUCKET || process.env.VITE_AWS_S3_BUCKET || 'code045-estately';
+const S3_BUCKET = process.env.S3_BUCKET || process.env.VITE_AWS_S3_BUCKET || 'estately-storage';
 
 if (!APPWRITE_ENDPOINT || !APPWRITE_PROJECT || !APPWRITE_KEY || !DATABASE_ID) {
   console.error('Missing Appwrite configuration in env. Aborting.');

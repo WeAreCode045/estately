@@ -12,8 +12,8 @@ import {
   Zap
 } from 'lucide-react';
 import React from 'react';
-import { projectService } from '../../services/appwrite';
 import type { Project } from '../../types';
+import AsyncImage from '../AsyncImage';
 
 interface ProjectHeaderProps {
   project: Project;
@@ -43,34 +43,26 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   onGenerateBrochure
 }) => {
 
-  const getCoverImageUrl = () => {
+  const getCoverImageSrcOrId = () => {
     // 1. Explicit cover image
     if (project.coverImageId) {
-      return projectService.getImagePreview(project.coverImageId);
+      return project.coverImageId;
     }
 
     // 2. First image from 'media' (new gallery system)
     if (project.media && project.media.length > 0) {
-      const id = project.media[0];
-      if (id && !id.startsWith('http')) {
-        return projectService.getImagePreview(id);
-      }
-      return id;
+      return project.media[0];
     }
 
     // 3. First image from 'property.images' (legacy/fallback)
      if (project.property?.images && project.property.images.length > 0) {
-       const img = project.property.images[0];
-       if (img && !img.startsWith('http')) {
-         return projectService.getImagePreview(img);
-       }
-       return img;
+       return project.property.images[0];
      }
 
     return null;
   };
 
-  const coverImage = getCoverImageUrl();
+  const coverImageSrcOrId = getCoverImageSrcOrId();
 
   return (
     <div className="relative mb-8 group">
@@ -83,9 +75,9 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
       <div className="relative z-10 p-8 md:p-10 text-white">
         <div className="flex flex-col xl:flex-row items-start justify-between gap-8 mb-6">
           <div className="flex-1 min-w-0 flex items-start gap-6">
-             {coverImage ? (
-                <img
-                  src={coverImage}
+             {coverImageSrcOrId ? (
+                <AsyncImage
+                  srcOrId={coverImageSrcOrId}
                   alt="Project"
                   className="w-24 h-24 rounded-2xl object-cover border-4 border-slate-700 shadow-lg"
                 />

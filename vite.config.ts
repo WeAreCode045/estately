@@ -96,7 +96,6 @@ export default defineConfig(({ mode }) => {
         'lucide-react',
         'jspdf',
       ],
-      exclude: ['@aws-amplify/backend', '@aws-amplify/backend-cli'],
     },
 
     // CSS Configuration

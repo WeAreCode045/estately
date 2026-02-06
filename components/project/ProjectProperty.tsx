@@ -1,9 +1,9 @@
 import { Bath, Bed, Calendar, Car, Check, ChevronLeft, ChevronRight, Clock, Edit2, FileText, Home, ImageIcon, Loader2, Map as MapIcon, MapPin, Maximize2, Sparkles, Square, X } from 'lucide-react';
 import React, { useState } from 'react';
-import { projectService } from '../../services/appwrite';
 import type { GroundingLink } from '../../services/geminiService';
 import type { Project } from '../../types';
 import { useSettings } from '../../utils/useSettings';
+import AsyncImage from '../AsyncImage';
 import { GalleryModal } from './index';
 
 interface ProjectPropertyProps {
@@ -301,8 +301,8 @@ const ProjectProperty: React.FC<ProjectPropertyProps> = ({
         {displayImages.length > 0 ? (
           <div className="relative group bg-slate-950 flex items-center justify-center p-4">
             <div className="relative w-full max-w-4xl aspect-[16/9] rounded-2xl overflow-hidden shadow-2xl">
-              <img
-                src={displayImages[currentImageIndex] ? projectService.getImagePreview(displayImages[currentImageIndex]) : ''}
+              <AsyncImage
+                srcOrId={displayImages[currentImageIndex]}
                 alt="Property"
                 className="w-full h-full object-cover"
               />
@@ -347,7 +347,7 @@ const ProjectProperty: React.FC<ProjectPropertyProps> = ({
                   currentImageIndex === idx ? 'border-blue-600 scale-105 shadow-md' : 'border-transparent opacity-60 hover:opacity-100'
                 }`}
               >
-                <img src={projectService.getImagePreview(img)} className="w-full h-full object-cover" />
+                <AsyncImage srcOrId={img} className="w-full h-full object-cover" />
               </button>
             ))}
           </div>

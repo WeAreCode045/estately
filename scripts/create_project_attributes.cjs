@@ -4,14 +4,14 @@ const fs = require('fs');
 const path = require('path');
 
 // Load .env
-const envPath = path.resolve(__dirname, '.env');
+const envPath = path.resolve(__dirname, '../.env');
 if (fs.existsSync(envPath)) {
     dotenv.config({ path: envPath });
 }
 
 const config = {
     endpoint: process.env.VITE_APPWRITE_ENDPOINT || 'https://fra.cloud.appwrite.io/v1',
-    projectId: process.env.VITE_APPWRITE_PROJECT_ID || '69759f0f0003f89f3998',
+    projectId: process.env.VITE_APPWRITE_PROJECT_ID,
     apiKey: process.env.VITE_APPWRITE_API_KEY,
     databaseId: process.env.VITE_APPWRITE_DATABASE_ID || 'estately-main',
     collectionId: process.env.VITE_APPWRITE_COLLECTION_PROJECTS || 'projects'
@@ -43,7 +43,12 @@ function request(method, path, data) {
                 try {
                     const json = JSON.parse(body);
                     if (res.statusCode >= 400) {
-                        reject(json);
+                        // If conflict (409), it's not a failure for us
+                        if (res.statusCode === 409) {
+                            resolve({ status: 409, message: 'Already exists' });
+                        } else {
+                            reject(json);
+                        }
                     } else {
                         resolve(json);
                     }
@@ -54,41 +59,35 @@ function request(method, path, data) {
         });
 
         req.on('error', (e) => reject(e));
-
-        if (data) {
-            req.write(JSON.stringify(data));
-        }
+        if (data) req.write(JSON.stringify(data));
         req.end();
     });
 }
 
-async function createAttribute() {
-    console.log('Adding "media" attribute to projects collection...');
+async function run() {
+    console.log(`Checking attributes for collection ${config.collectionId}...`);
 
     try {
-        await request(
-            'POST',
-            `/databases/${config.databaseId}/collections/${config.collectionId}/attributes/string`,
-            {
-                key: 'media',
-                size: 255,
-                required: false,
-                array: true, // This is an array of strings (Permission IDs / File IDs)
-                xdefault: null
-            }
-        );
-        console.log('✅ Created "media" attribute (Array<String>)');
-    } catch (error) {
-        if (error.code === 409) {
-            console.log('⚠️ Attribute "media" already exists.');
-        } else {
-            console.error('❌ Failed to create "media" attribute:', error);
-        }
+        console.log('Creating "coverImageId" (string)...');
+        const res1 = await request('POST', `/databases/${config.databaseId}/collections/${config.collectionId}/attributes/string`, {
+            key: 'coverImageId',
+            size: 255,
+            required: false
+        });
+        console.log('Result:', res1.message || 'Created');
+
+        console.log('Creating "media" (string array)...');
+        const res2 = await request('POST', `/databases/${config.databaseId}/collections/${config.collectionId}/attributes/string`, {
+            key: 'media',
+            size: 255,
+            required: false,
+            array: true
+        });
+        console.log('Result:', res2.message || 'Created');
+
+    } catch (e) {
+        console.error('Error:', e);
     }
 }
 
-createAttribute().then(() => {
-    console.log('Done.');
-}).catch(err => {
-    console.error('Script failed:', err);
-});
+run();
