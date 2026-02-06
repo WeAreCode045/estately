@@ -1,10 +1,10 @@
 import { pdf } from '@react-pdf/renderer';
 import { jsPDF } from 'jspdf';
-import { exportBlocksToHtml } from '../../brochure-builder/services/htmlExportService';
-import type { PageBlock } from '../../brochure-builder/types';
 import { brochureService } from '../../../services/brochureService';
 import { s3Service } from '../../../services/s3Service';
 import type { Project, User } from '../../../types';
+import { exportBlocksToHtml } from '../../brochure-builder/services/htmlExportService';
+import type { PageBlock } from '../../brochure-builder/types';
 import BrochureDocument from '../BrochureDocument';
 
 // Helper: Recursively replace dynamic fields with real data
@@ -131,12 +131,12 @@ const generateHtmlBrochure = async (project: Project, settings: any, agency: any
 
     for (const page of settings.pages) {
         if (!page.enabled) continue;
-        
+
         if (page.type === 'custom' && page.blocks) {
              const injectedBlocks = injectDataIntoBlocks(page.blocks, data);
              // We strip the HTML/BODY tags from exportBlocksToHtml to concatenate
              let pageHtml = exportBlocksToHtml(injectedBlocks);
-             
+
              // Simple extraction of body content (brittle but effective for our own generator)
              const bodyMatch = pageHtml.match(/<div class="page-container">([\s\S]*)<\/div>\s*<\/body>/);
              const content = bodyMatch ? bodyMatch[1] : pageHtml;
@@ -147,7 +147,7 @@ const generateHtmlBrochure = async (project: Project, settings: any, agency: any
             // Ideally we would trigger a render of a standard template here
         }
     }
-    
+
     fullHtml += '</body></html>';
 
     // 3. Render with jsPDF

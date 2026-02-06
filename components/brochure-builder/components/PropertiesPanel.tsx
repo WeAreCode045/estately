@@ -73,8 +73,8 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                        </div>
 
                        {/* Mini Preview Frame */}
-                       <div 
-                         className={`bg-white aspect-[3/4] rounded-sm overflow-hidden relative transition-all shadow-sm ${isEditable ? 'cursor-pointer group-hover:ring-2 ring-blue-500/30' : 'cursor-not-allowed border border-slate-600'}`} 
+                       <div
+                         className={`bg-white aspect-[3/4] rounded-sm overflow-hidden relative transition-all shadow-sm ${isEditable ? 'cursor-pointer group-hover:ring-2 ring-blue-500/30' : 'cursor-not-allowed border border-slate-600'}`}
                          onClick={() => isEditable && onLoadPage?.(idx)}
                        >
                            <iframe
