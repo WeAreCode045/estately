@@ -71,6 +71,14 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ allUsers }) => {
         const response = await databases.listDocuments(DATABASE_ID, COLLECTIONS.AGENCY);
         if (response.documents.length > 0) {
           const doc: any = response.documents[0];
+          // Ensure brochureSettings is always a string, defaulting if not present
+          let brochureSettingsStr = doc.brochureSettings;
+          if (!brochureSettingsStr) {
+            brochureSettingsStr = JSON.stringify(defaultBrochureSettings);
+          } else if (typeof brochureSettingsStr !== 'string') {
+            // If Appwrite returns it as an object, stringify it
+            brochureSettingsStr = JSON.stringify(brochureSettingsStr);
+          }
           setAgency({
             id: doc.$id,
             name: doc.name,
@@ -79,7 +87,7 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ allUsers }) => {
             bankAccount: doc.bankAccount,
             vatCode: doc.vatCode,
             agentIds: doc.agentIds || [],
-            brochureSettings: doc.brochureSettings
+            brochureSettings: brochureSettingsStr
           });
           setIsNew(false);
         } else {
