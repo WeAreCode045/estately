@@ -2,9 +2,12 @@ import { Account, Client, Databases, ID, Query, Storage, Teams } from 'appwrite'
 
 const client = new Client();
 
+const ENDPOINT = import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://appwrite.code045.nl/v1';
+const PROJECT_ID = import.meta.env.VITE_APPWRITE_PROJECT_ID || '69759f0f0003f89f3998';
+
 client
-    .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT)
-    .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
+    .setEndpoint(ENDPOINT)
+    .setProject(PROJECT_ID);
 
 export const account = new Account(client);
 export const databases = new Databases(client);
@@ -12,15 +15,15 @@ export const storage = new Storage(client);
 export const teams = new Teams(client);
 export { client, ID, Query };
 
-export const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
+export const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID || 'estately-main';
 
 export const COLLECTIONS = {
-    PROJECTS: import.meta.env.VITE_APPWRITE_COLLECTION_PROJECTS,
-    CONTRACTS: import.meta.env.VITE_APPWRITE_COLLECTION_CONTRACTS,
-    TEMPLATES: import.meta.env.VITE_APPWRITE_COLLECTION_TEMPLATES,
-    PROFILES: import.meta.env.VITE_APPWRITE_COLLECTION_PROFILES,
-    MESSAGES: import.meta.env.VITE_APPWRITE_COLLECTION_MESSAGES,
-    INVITES: import.meta.env.VITE_APPWRITE_COLLECTION_INVITES,
+    PROJECTS: import.meta.env.VITE_APPWRITE_COLLECTION_PROJECTS || 'projects',
+    CONTRACTS: import.meta.env.VITE_APPWRITE_COLLECTION_CONTRACTS || 'contracts',
+    TEMPLATES: import.meta.env.VITE_APPWRITE_COLLECTION_TEMPLATES || 'templates',
+    PROFILES: import.meta.env.VITE_APPWRITE_COLLECTION_PROFILES || 'profiles',
+    MESSAGES: import.meta.env.VITE_APPWRITE_COLLECTION_MESSAGES || 'messages',
+    INVITES: import.meta.env.VITE_APPWRITE_COLLECTION_INVITES || 'invites',
     SETTINGS: 'settings',
     REQUIRED_DOCUMENTS: 'required_documents',
     PROJECT_DOCUMENTS: 'project_documents',
