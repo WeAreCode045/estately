@@ -37,6 +37,8 @@ interface DocumentDefinition {
   title: string;
 }
 
+type ViewerDoc = { fileId?: string; name?: string; userDocumentDefinitionId?: string; uploadedAt?: string; projectId?: string; url?: string };
+
 interface ProfileProps {
   user: User;
   projects: Project[];
@@ -127,8 +129,6 @@ const Profile: React.FC<ProfileProps> = ({ user, projects, allUsers, taskTemplat
   if (!isOwnProfile && !isAdminOrAgent) {
     return <Navigate to="/profile" replace />;
   }
-
-  type ViewerDoc = { fileId?: string; name?: string; userDocumentDefinitionId?: string; uploadedAt?: string; projectId?: string };
 
   const handleOpenViewer = async (provided: ViewerDoc | null, title?: string) => {
     try {
