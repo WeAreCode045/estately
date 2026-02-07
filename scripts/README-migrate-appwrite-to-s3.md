@@ -30,7 +30,7 @@ APPWRITE_ENDPOINT="https://api.example.com" \
 APPWRITE_PROJECT="my-project" \
 APPWRITE_KEY="secret" \
 APPWRITE_DATABASE_ID="dbId" \
-S3_BUCKET="code045-estately" \
+S3_BUCKET="estately-storage" \
 node scripts/migrate-appwrite-to-s3.js <collectionId>
 ```
 

@@ -7,6 +7,13 @@ export default defineConfig(({ mode }) => {
   const isDev = mode === 'development';
 
   return {
+    // Global variable definitions
+    define: {
+      global: 'window',
+      'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+    },
+
     // Server Configuration
     server: {
       port: 3000,
@@ -36,11 +43,7 @@ export default defineConfig(({ mode }) => {
       }),
     ],
 
-    // Environment Variables
-    define: {
-      'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-    },
+    // Environment Variables - REMOVED (merged into define above)
 
     // Path Resolution
     resolve: {
@@ -94,9 +97,13 @@ export default defineConfig(({ mode }) => {
         'react-router-dom',
         'appwrite',
         'lucide-react',
+      exclude: [
+        'node-fetch',
+        'form-data',
+        'jsdom',
+      ],
         'jspdf',
       ],
-      exclude: ['@aws-amplify/backend', '@aws-amplify/backend-cli'],
     },
 
     // CSS Configuration

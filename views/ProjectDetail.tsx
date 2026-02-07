@@ -18,6 +18,8 @@ import { documentService } from '../services/documentService';
 import { formDefinitionsService } from '../services/formDefinitionsService';
 import type { GroundingLink } from '../services/geminiService';
 import { GeminiService } from '../services/geminiService';
+import type { ParsedPropertyData } from '../services/propertyService';
+import { getPropertyParsed } from '../services/propertyService';
 import { s3Service } from '../services/s3Service';
 import type { Contract, ContractTemplate, FormDefinition, FormSubmission, Project, ProjectTask, TaskTemplate, User, UserDocumentDefinition } from '../types';
 import { ContractStatus, UserRole } from '../types';
@@ -52,7 +54,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [signingContractId, setSigningContractId] = useState<string | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
-
+  const [propertyData, setPropertyData] = useState<ParsedPropertyData | null>(null);
+  const [isLoadingProperty, setIsLoadingProperty] = useState(false);
 
   const { googleApiKey, defaultAgentId } = useSettings();
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -434,11 +437,29 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
   useEffect(() => {
     if (!id) return;
     loadForms();
+    loadProperty();
     const unsubscribe = client.subscribe(`databases.${DATABASE_ID}.collections.${COLLECTIONS.MESSAGES}.documents`, () => {
       // Chat removed
     });
     return () => unsubscribe();
-  }, [id]);
+  }, [id, project]);
+
+  const loadProperty = async () => {
+    if (!project) return;
+    // Check if project uses new JSON-based property schema
+    const projectDoc = project as any;
+    if (projectDoc.property_id) {
+      setIsLoadingProperty(true);
+      try {
+        const parsed = await getPropertyParsed(projectDoc.property_id);
+        setPropertyData(parsed);
+      } catch (error) {
+        console.error('Error loading property:', error);
+      } finally {
+        setIsLoadingProperty(false);
+      }
+    }
+  };
 
   const loadForms = async () => {
     if (!id) return;
@@ -889,7 +910,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
   const handleGenerateBrochure = async () => {
     setIsGenerating(true);
     try {
-        const agRes = await databases.listDocuments(DATABASE_ID, COLLECTIONS.AGENCY);
+        const agRes = await databases.listDocuments(DATABASE_ID, COLLECTIONS.AGENCIES);
         // We only need the ID now, as the generator fetches the settings
         const agencyId = agRes.documents?.[0]?.$id ?? null;
 
@@ -927,6 +948,10 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
     }
   };
 
+  const handleViewBrochure = () => {
+    navigate(`/projects/${id}/brochure`);
+  };
+
   if (!project) return <div className="p-8 text-center">Project not found.</div>;
 
   const seller = allUsers.find(u => u.id === project.sellerId);
@@ -954,6 +979,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, setProjects, co
         setActiveTab={setActiveTab}
         setShowGeneralInfoModal={setShowGeneralInfoModal}
         onGenerateBrochure={handleGenerateBrochure}
+        onViewBrochure={handleViewBrochure}
       />
 
       {/* Breadcrumb and Editable Title Header - kept for navigation structure outside the unified header */}

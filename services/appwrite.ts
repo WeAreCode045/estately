@@ -2,8 +2,8 @@ import { Account, Client, Databases, ID, Query, Storage, Teams } from 'appwrite'
 
 const client = new Client();
 
-const ENDPOINT = import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://appwrite.code045.nl/v1';
-const PROJECT_ID = import.meta.env.VITE_APPWRITE_PROJECT_ID || '69759f0f0003f89f3998';
+const ENDPOINT = import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://fra.cloud.appwrite.io/v1';
+const PROJECT_ID = import.meta.env.VITE_APPWRITE_PROJECT_ID || '6985280e001b83954ee0';
 
 client
     .setEndpoint(ENDPOINT)
@@ -18,21 +18,29 @@ export { client, ID, Query };
 export const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID || 'estately-main';
 
 export const COLLECTIONS = {
-    PROJECTS: import.meta.env.VITE_APPWRITE_COLLECTION_PROJECTS || 'projects',
+    // New JSON-based schema (Relational Model)
+    AGENCIES: 'agencies',
+    PROFILES: 'profiles',
+    PROPERTIES: 'properties',
+    PROJECTS: 'projects',
+    TASKS: 'tasks',
+    DOCUMENTS: 'documents',
+    FORM_SUBMISSIONS: 'form_submissions',
+    SIGN_REQUESTS: 'sign_requests',
+    CONTRACT_TEMPLATES: 'contract_templates',
+
+    // Legacy collections (still in use)
     CONTRACTS: import.meta.env.VITE_APPWRITE_COLLECTION_CONTRACTS || 'contracts',
     TEMPLATES: import.meta.env.VITE_APPWRITE_COLLECTION_TEMPLATES || 'templates',
-    PROFILES: import.meta.env.VITE_APPWRITE_COLLECTION_PROFILES || 'profiles',
     MESSAGES: import.meta.env.VITE_APPWRITE_COLLECTION_MESSAGES || 'messages',
     INVITES: import.meta.env.VITE_APPWRITE_COLLECTION_INVITES || 'invites',
     SETTINGS: 'settings',
     REQUIRED_DOCUMENTS: 'required_documents',
     PROJECT_DOCUMENTS: 'project_documents',
-    TASKS: 'tasks',
     TASK_TEMPLATES: 'task_templates',
     FILE_TEMPLATES: 'file_templates',
     FORM_DEFINITIONS: 'form_definitions',
     PROJECT_FORMS: import.meta.env.VITE_APPWRITE_COLLECTION_PROJECT_FORMS || 'project_forms',
-    AGENCY: 'agency',
 };
 
 export const BUCKETS = {
@@ -122,17 +130,17 @@ export const projectService = {
         const mediaId = ID.unique();
         const fileName = `${projectId}_${mediaId}.${ext}`;
         const renamedFile = new File([file], fileName, { type: file.type });
-        return await s3Service.uploadProjectFile(projectId, 'property-files', renamedFile);
+        return await s3Service.uploadProjectFile(projectId, 'property-files/gallery', renamedFile);
     },
-    // Temporary shim: many UI components currently call this synchronously
-    // in JSX (e.g. <img src={projectService.getImagePreview(id)} />). The
-    // underlying S3 presigner returns a Promise<string>. To avoid a large
-    // refactor in one pass, we cast the Promise to `string` so TypeScript
-    // remains satisfied. Callers should be updated to await the URL where
-    // possible to avoid runtime issues.
-    getImagePreview(fileId: string): string {
+    // Updated to correctly reflect async nature of S3 presigned URLs.
+    async getImagePreview(fileId: string): Promise<string> {
         if (!fileId) return '';
-        return (s3Service.getPresignedUrl(fileId).catch(() => '') as unknown) as string;
+        try {
+            return await s3Service.getPresignedUrl(fileId);
+        } catch (e) {
+            console.error('Error getting presigned URL:', e);
+            return '';
+        }
     }
 };
 
@@ -342,7 +350,7 @@ export const contractService = {
         const assignees = current.assignees || [];
         const isAllSigned = assignees.length > 0 && assignees.every((id: string) => signedBy.includes(id));
 
-        const updateData: any = {
+        const updateData: Record<string, unknown> = {
             signedBy,
             signatureData: JSON.stringify(allSignatureData),
             status: isAllSigned ? 'SIGNED' : current.status
@@ -352,6 +360,10 @@ export const contractService = {
     }
 };
 
-// Re-export project forms service for central imports
+// Re-export services for central imports
 import projectFormsService from './projectFormsService';
 export { projectFormsService };
+
+// Re-export new relational model services
+export { taskService } from './taskService';
+export { documentRecordService } from './documentRecordService';

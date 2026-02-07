@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { projectFormsService } from '../services/appwrite';
 import { documentService } from '../services/documentService';
 import { formDefinitionsService } from '../services/formDefinitionsService';
-import type { FormDefinition, FormSubmission , Project, User} from '../types';
+import type { FormDefinition, FormSubmission, Project, User } from '../types';
 import { UserRole } from '../types';
 import { downloadFormPDF } from '../utils/pdfGenerator';
 import SignaturePad from './SignaturePad';
@@ -47,8 +47,8 @@ const FormRenderer: React.FC<Props> = ({ submission, onClose, onUpdate, readOnly
   const needsSellerSign = (meta?.needsSignatureFromSeller === true || meta?.needsSignatureFromSeller === 'true' || meta?.needSignatureFromSeller === true || meta?.needSignatureFromSeller === 'true');
   const needsBuyerSign = (meta?.needsSignatureFromBuyer === true || meta?.needsSignatureFromBuyer === 'true' || meta?.needSignatureFromBuyer === true || meta?.needSignatureFromBuyer === 'true');
 
-  const sellerUser = allUsers?.find(u => u.$id === project?.sellerId || (u as any).userId === project?.sellerId);
-  const buyerUser = allUsers?.find(u => u.$id === project?.buyerId || (u as any).userId === project?.buyerId);
+  const sellerUser = allUsers?.find(u => u.$id === project?.sellerIds || (u as any).userId === project?.sellerIds);
+  const buyerUser = allUsers?.find(u => u.$id === project?.buyerIds || (u as any).userId === project?.buyerIds);
   const sellerName = sellerUser?.name || 'Verkoper';
   const buyerName = buyerUser?.name || 'Koper';
 
@@ -312,7 +312,7 @@ const FormRenderer: React.FC<Props> = ({ submission, onClose, onUpdate, readOnly
     switch (field.type) {
       case 'header':
         return <h3 key={fieldName} className="text-lg font-bold text-slate-900 pt-4 first:pt-0 border-b border-slate-100 pb-2">{field.label}</h3>;
-      case 'section':
+      case 'section': {
         const childFields = field.fields || field.children || [];
         const renderedChildren = [];
 
@@ -358,6 +358,7 @@ const FormRenderer: React.FC<Props> = ({ submission, onClose, onUpdate, readOnly
             )}
           </div>
         );
+      }
       case 'textarea':
         return (
           <div key={fieldName} className="space-y-1">
@@ -496,7 +497,7 @@ const FormRenderer: React.FC<Props> = ({ submission, onClose, onUpdate, readOnly
                 }`}>
                   {submission.status}
                 </span>
-                <span className="text-[10px] text-slate-400 font-medium">{new Date(submission.createdAt).toLocaleDateString()}</span>
+                <span className="text-[10px] text-slate-400 font-medium">{new Date(submission.$createdAt).toLocaleDateString()}</span>
               </div>
             </div>
           </div>
@@ -607,7 +608,7 @@ const FormRenderer: React.FC<Props> = ({ submission, onClose, onUpdate, readOnly
                         <img src={signatures.seller} alt="Seller Signature" className="max-h-24 object-contain brightness-90 contrast-125 mix-blend-multiply" />
                         <div className="mt-4 w-full border-t border-slate-200 pt-2 text-center">
                           <p className="text-sm font-bold text-slate-900">{sellerName}</p>
-                          <p className="text-[10px] text-slate-400 font-medium">Getekend op {new Date(submission.updatedAt || submission.createdAt).toLocaleDateString()}</p>
+                          <p className="text-[10px] text-slate-400 font-medium">Getekend op {new Date(submission.$updatedAt || submission.$createdAt).toLocaleDateString()}</p>
                         </div>
                       </div>
                     </div>
@@ -619,7 +620,7 @@ const FormRenderer: React.FC<Props> = ({ submission, onClose, onUpdate, readOnly
                         <img src={signatures.buyer} alt="Buyer Signature" className="max-h-24 object-contain brightness-90 contrast-125 mix-blend-multiply" />
                         <div className="mt-4 w-full border-t border-slate-200 pt-2 text-center">
                           <p className="text-sm font-bold text-slate-900">{buyerName}</p>
-                          <p className="text-[10px] text-slate-400 font-medium">Getekend op {new Date(submission.updatedAt || submission.createdAt).toLocaleDateString()}</p>
+                          <p className="text-[10px] text-slate-400 font-medium">Getekend op {new Date(submission.$updatedAt || submission.$createdAt).toLocaleDateString()}</p>
                         </div>
                       </div>
                     </div>
@@ -630,17 +631,17 @@ const FormRenderer: React.FC<Props> = ({ submission, onClose, onUpdate, readOnly
           ) : (
             <div className="flex flex-col items-center justify-center py-20 text-center text-slate-500">
               <AlertCircle size={48} className="mb-4 text-slate-300" />
-              <p className="font-medium">No valid form schema found for "{submission.formKey}".</p>
-              <p className="text-xs text-slate-400 mt-2">Make sure a template with key "{submission.formKey}" exists and has a valid schema defined.</p>
+              <p className="font-medium">No valid form schema found for &quot;{submission.formKey}&quot;.</p>
+              <p className="text-xs text-slate-400 mt-2">Make sure a template with key &quot;{submission.formKey}&quot; exists and has a valid schema defined.</p>
 
               <div className="mt-8 p-4 bg-slate-900 border border-slate-800 rounded-2xl text-left w-full max-w-2xl overflow-auto shadow-2xl">
                 <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-2">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Debug Information</span>
-                  <span className="text-[10px] font-mono text-blue-400">{submission.id}</span>
+                  <span className="text-[10px] font-mono text-blue-400">{String(submission.id)}</span>
                 </div>
                 <div className="space-y-4 font-mono text-[11px]">
                   <div>
-                    <span className="text-slate-500 block mb-1">// Definition State</span>
+                    <span className="text-slate-500 block mb-1">{'// Definition State'}</span>
                     <pre className="text-emerald-400">{JSON.stringify({
                       hasDefinition: !!definition,
                       hasSchema: !!definition?.schema,
@@ -649,7 +650,7 @@ const FormRenderer: React.FC<Props> = ({ submission, onClose, onUpdate, readOnly
                     }, null, 2)}</pre>
                   </div>
                   <div>
-                    <span className="text-slate-500 block mb-1">// Full Definition Object</span>
+                    <span className="text-slate-500 block mb-1">{'// Full Definition Object'}</span>
                     <pre className="text-blue-300">{JSON.stringify(definition, (key, value) => {
                       if (key === 'schema' && typeof value === 'string') {
                         try { return JSON.parse(value); } catch(e) { return 'INVALID JSON: ' + value; }
@@ -666,7 +667,7 @@ const FormRenderer: React.FC<Props> = ({ submission, onClose, onUpdate, readOnly
             </div>
           )}
 
-          {submission.attachments && submission.attachments.length > 0 && (
+          {Array.isArray(submission.attachments) && submission.attachments.length > 0 && (
             <div className="pt-8 border-t border-slate-100">
               <h4 className="text-sm font-bold text-slate-900 mb-4">Attachments</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -696,7 +697,7 @@ const FormRenderer: React.FC<Props> = ({ submission, onClose, onUpdate, readOnly
         {!readOnly && (
           <div className="p-6 border-t border-slate-100 bg-slate-50 shrink-0 flex items-center justify-between gap-4">
              <p className="text-xs text-slate-500 italic max-w-xs">
-               Your changes are kept as draft until you click "Submit Final Form".
+               Your changes are kept as draft until you click &quot;Submit Final Form&quot;.
              </p>
              <div className="flex gap-3">
                <button onClick={onClose} className="px-6 py-2.5 text-sm font-bold text-slate-600 hover:bg-white rounded-xl transition-all">Cancel</button>

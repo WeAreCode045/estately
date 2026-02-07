@@ -3,6 +3,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { FormSchema } from "../components/form-builder/types";
 import type { ContractTemplate, Project, User } from "../types";
+import { getPropertyParsed } from './propertyService';
 
 export interface GroundingLink {
   title: string;
@@ -16,7 +17,7 @@ export interface LocationInsightsResponse {
 
 export class GeminiService {
   private get ai() {
-    const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || process.env.API_KEY;
+    const apiKey = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || process.env.API_KEY;
     return new GoogleGenAI({ apiKey });
   }
 
@@ -27,6 +28,32 @@ export class GeminiService {
     buyer?: User,
     template?: ContractTemplate
   ) {
+    // Load property data from new schema if available
+    let address = '';
+    let price = 0;
+    let description = '';
+
+    if (project.property_id) {
+      try {
+        const propertyData = await getPropertyParsed(project.property_id);
+        address = propertyData.formattedAddress;
+        price = project.price || 0; // Price is at project level
+        // Extract property description (filter type 'propertydesc')
+        const propDesc = propertyData.descriptions.find(d => d.type === 'propertydesc');
+        description = propDesc?.content || '';
+      } catch (error) {
+        console.error('Failed to load property data, falling back to legacy:', error);
+        address = project.property.address;
+        price = project.property.price || 0;
+        description = project.property.description || '';
+      }
+    } else {
+      // Legacy fallback
+      address = project.property.address;
+      price = project.property.price || 0;
+      description = project.property.description || '';
+    }
+
     const templateContext = template
       ? `Use the following structure and content as a base for the contract:\n\n${template.content}\n\n`
       : `Generate a professional Sales Purchase Agreement from scratch.`;
@@ -37,24 +64,24 @@ export class GeminiService {
 
       Project Data to integrate:
       - Title: ${project.title}
-      - Property Address: ${project.property.address}
-      - Sale Price: $${project.property.price.toLocaleString()}
-      - Description: ${project.property.description}
+      - Property Address: ${address}
+      - Sale Price: $${price.toLocaleString()}
+      - Description: ${description}
       - Handover Date: ${project.handover_date || 'To be determined'}
       - Contract Date: ${new Date().toLocaleDateString('en-GB')}
-      - Project Ref: ${project.referenceNumber || project.id.substring(0, 8).toUpperCase()}
+      - Project Ref: ${project.reference_nr || ((project as any).referenceNumber) || project.id.substring(0, 8).toUpperCase()}
 
       Seller Details:
       - Name: ${seller.name}
-      - Legal Name: ${seller.firstName || ''} ${seller.lastName || ''}
+      - Legal Name: ${(seller as any).firstName || ''} ${(seller as any).lastName || ''}
       - Email: ${seller.email}
-      - Address: ${seller.address || ''}
+      - Address: ${(seller as any).address || ''}
       - Phone: ${seller.phone || ''}
-      - ID Number: ${seller.idNumber || ''}
+      - ID Number: ${(seller as any).idNumber || ''}
 
       Buyer Details:
       ${buyer
-        ? `- Name: ${buyer.name}\n- Legal Name: ${buyer.firstName || ''} ${buyer.lastName || ''}\n- Email: ${buyer.email}\n- Address: ${buyer.address || ''}\n- Phone: ${buyer.phone || ''}\n- ID Number: ${buyer.idNumber || ''}`
+        ? `- Name: ${buyer.name}\n- Legal Name: ${(buyer as any).firstName || ''} ${(buyer as any).lastName || ''}\n- Email: ${buyer.email}\n- Address: ${(buyer as any).address || ''}\n- Phone: ${buyer.phone || ''}\n- ID Number: ${(buyer as any).idNumber || ''}`
         : 'To be determined'}
 
       IMPORTANT: If a base structure was provided, preserve its tone and mandatory sections but replace all placeholders (like [PROPERTY_ADDRESS], [PRICE], [SELLER_NAME], [seller.name], [current_date], etc.) with the real data provided above.
@@ -86,7 +113,7 @@ export class GeminiService {
       Project: ${project.title}
       Status: ${project.status}
       Tasks: ${JSON.stringify(project.tasks)}
-      Milestones: ${JSON.stringify(project.milestones)}
+      Milestones: ${JSON.stringify((project as any).milestones || [])}
 
       Return as a concise summary.
     `;

@@ -1,16 +1,16 @@
 import {
-    ArrowRight,
-    Bell,
-    Building2,
-    CheckCircle2,
-    ClipboardList,
-    Clock,
-    Edit2,
-    FileText,
-    Image as ImageIcon,
-    Plus,
-    TrendingUp,
-    X
+  ArrowRight,
+  Bell,
+  Building2,
+  CheckCircle2,
+  ClipboardList,
+  Clock,
+  Edit2,
+  FileText,
+  Image as ImageIcon,
+  Plus,
+  TrendingUp,
+  X
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -18,16 +18,34 @@ import AddressAutocomplete from '../components/AddressAutocomplete';
 import AdminAgendaWidget from '../components/AdminAgendaWidget';
 import AdminStatsGrid from '../components/AdminStatsGrid';
 import AdminTasksWidget from '../components/AdminTasksWidget';
+import AsyncImage from '../components/AsyncImage';
 import DocumentViewer from '../components/DocumentViewer';
 import FormRenderer from '../components/FormRenderer';
 import { COLLECTIONS, DATABASE_ID, databases, projectService, Query } from '../services/appwrite';
 import { contractTemplatesService } from '../services/contractTemplatesService';
 import { documentService } from '../services/documentService';
 import { projectFormsService } from '../services/projectFormsService';
+import { createProperty } from '../services/propertyService';
 import { s3Service } from '../services/s3Service';
-import type { FormSubmission, Project, TaskTemplate, User } from '../types';
+import type { Project, TaskTemplate, User } from '../types';
 import { ProjectStatus } from '../types';
 import { useSettings } from '../utils/useSettings';
+
+// Legacy interface for transformed form submissions
+interface LegacyFormSubmission {
+  id: string;
+  projectId: string;
+  formKey: string;
+  title: string;
+  data: any;
+  attachments: any[];
+  submittedByUserId: string;
+  assignedToUserId: string | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  meta?: any;
+}
 
 interface AdminDashboardProps {
   projects: Project[];
@@ -50,8 +68,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [projectAddress, setProjectAddress] = useState('');
   const [coverImage, setCoverImage] = useState<File | null>(null);
-  const [recentSubmissions, setRecentSubmissions] = useState<FormSubmission[]>([]);
-  const [selectedSubmission, setSelectedSubmission] = useState<FormSubmission | null>(null);
+  const [recentSubmissions, setRecentSubmissions] = useState<LegacyFormSubmission[]>([]);
+  const [selectedSubmission, setSelectedSubmission] = useState<LegacyFormSubmission | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<{ url: string, title: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -207,21 +225,60 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         coverImageId = (upload as any).key || '';
       }
 
+      // Parse address into components
+      const fullAddress = projectAddress || (formData.get('address') as string) || '';
+      const addressParts = fullAddress.split(',').map(s => s.trim());
+      const [streetPart = '', postalPart = '', cityPart = ''] = addressParts;
+      const [street = '', streetNumber = ''] = streetPart.split(/\s+(\d+)/).filter(Boolean);
+
+      // Create property document with JSON fields
+      const descriptions = [];
+      const descriptionText = (formData.get('description') as string) || '';
+      if (descriptionText) {
+        descriptions.push({ type: 'propertydesc', content: descriptionText });
+      }
+
+      const property = await createProperty({
+        descriptions,
+        location: {
+          street: street || fullAddress,
+          streetNumber: streetNumber || '',
+          postalCode: postalPart.replace(/\s+/g, ''),
+          city: cityPart || '',
+          country: 'Netherlands',
+          lat: 0,
+          lng: 0
+        },
+        size: {
+          lotSize: parseInt(formData.get('sqft') as string) || 0,
+          floorSize: parseInt(formData.get('livingArea') as string) || 0
+        },
+        media: coverImageId ? {
+          images: [coverImageId],
+          floorplans: [],
+          videoUrl: null,
+          virtualTourUrl: null
+        } : undefined,
+        rooms: {
+          bedrooms: parseInt(formData.get('bedrooms') as string) || 0,
+          bathrooms: parseInt(formData.get('bathrooms') as string) || 0,
+          garages: parseInt(formData.get('garages') as string) || 0,
+          buildYear: parseInt(formData.get('buildYear') as string) || null
+        },
+        specs: []
+      });
+
+      // Create project linked to property
       const data = {
         title: formData.get('title') as string,
-        address: projectAddress || (formData.get('address') as string) || '',
-        price: priceValue ? parseFloat(priceValue) : 0,
         status: ProjectStatus.ACTIVE,
-        managerId: user.id,
-        description: (formData.get('description') as string) || '',
-        coverImageId,
-        bedrooms: parseInt(formData.get('bedrooms') as string) || 0,
-        bathrooms: parseInt(formData.get('bathrooms') as string) || 0,
-        sqft: parseInt(formData.get('sqft') as string) || 0,
-        livingArea: parseInt(formData.get('livingArea') as string) || 0,
-        garages: parseInt(formData.get('garages') as string) || 0,
-        buildYear: parseInt(formData.get('buildYear') as string) || null,
-        handover_date: formData.get('handover_date') ? new Date(formData.get('handover_date') as string).toISOString() : null
+        price: priceValue ? parseFloat(priceValue) : 0,
+        handover_date: formData.get('handover_date') ? new Date(formData.get('handover_date') as string).toISOString() : null,
+        reference_nr: `REF-${Date.now()}`,
+        property_id: property.$id,
+        agent_id: user.id,
+        buyer_id: '',
+        seller_id: ''
       };
 
       const newProject = await projectService.create(data);
@@ -397,7 +454,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <div className="flex items-center gap-4 min-w-0">
                             <div className="w-16 h-12 rounded-xl overflow-hidden bg-slate-100 shrink-0">
                                 {project.coverImageId ? (
-                                    <img src={projectService.getImagePreview(project.coverImageId)} alt="" className="w-full h-full object-cover" />
+                                    <AsyncImage srcOrId={project.coverImageId} alt="" className="w-full h-full object-cover" />
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center text-slate-300">
                                         <Building2 size={24} />
@@ -417,7 +474,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     project.status === ProjectStatus.UNDER_CONTRACT ? 'bg-amber-50 text-amber-600' :
                                     'bg-emerald-50 text-emerald-600'
                                 }`}>
-                                    {project.status.replace('_', ' ')}
+                                    {(project.status || '').replace('_', ' ')}
                                 </span>
                             </div>
                             <Link
@@ -600,7 +657,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({
                 {coverImage ? (
                   <img src={URL.createObjectURL(coverImage)} className="w-full h-full object-cover" alt="Preview" />
                 ) : project?.coverImageId ? (
-                  <img src={projectService.getImagePreview(project.coverImageId)} className="w-full h-full object-cover" alt="Current" />
+                  <AsyncImage srcOrId={project.coverImageId} className="w-full h-full object-cover" alt="Current" />
                 ) : (
                   <div className="flex flex-col items-center text-slate-400">
                     <ImageIcon size={32} className="mb-2 opacity-50 group-hover:text-blue-500 transition-transform" />

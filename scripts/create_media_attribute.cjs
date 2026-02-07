@@ -1,12 +1,26 @@
 const https = require('https');
+const dotenv = require('dotenv');
+const fs = require('fs');
+const path = require('path');
+
+// Load .env
+const envPath = path.resolve(__dirname, '.env');
+if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+}
 
 const config = {
-    endpoint: 'https://appwrite.code045.nl/v1',
-    projectId: '69759f0f0003f89f3998',
-    apiKey: 'standard_9abc323d17d70e53684c1775d74ba29c4f2fba31bff4be1223a2d939dc6dcc2492e799c66bc536f984b3776505e588ef2a0975ac2f54b802d7e572e9162d7e5131cd06abbe5145333b15dcd63de08dd59f8b63b5cca50ce388255b3ce56bdd464844fcb07a465bbc3498621ffc179936aecd26642f481999f255d6529ed0be9b',
-    databaseId: 'estately-main',
-    collectionId: 'projects' // VITE_APPWRITE_COLLECTION_PROJECTS
+    endpoint: process.env.VITE_APPWRITE_ENDPOINT || 'https://fra.cloud.appwrite.io/v1',
+    projectId: process.env.VITE_APPWRITE_PROJECT_ID || '6985280e001b83954ee0',
+    apiKey: process.env.VITE_APPWRITE_API_KEY,
+    databaseId: process.env.VITE_APPWRITE_DATABASE_ID || 'estately-main',
+    collectionId: process.env.VITE_APPWRITE_COLLECTION_PROJECTS || 'projects'
 };
+
+if (!config.apiKey) {
+    console.error("Missing VITE_APPWRITE_API_KEY in .env");
+    process.exit(1);
+}
 
 function request(method, path, data) {
     return new Promise((resolve, reject) => {

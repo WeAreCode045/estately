@@ -12,8 +12,8 @@ import {
   Zap
 } from 'lucide-react';
 import React from 'react';
-import { projectService } from '../../services/appwrite';
 import type { Project } from '../../types';
+import AsyncImage from '../AsyncImage';
 
 interface ProjectHeaderProps {
   project: Project;
@@ -27,6 +27,7 @@ interface ProjectHeaderProps {
   setActiveTab: (tab: 'overview' | 'team' | 'documents' | 'property') => void;
   setShowGeneralInfoModal: (show: boolean) => void;
   onGenerateBrochure?: () => void;
+  onViewBrochure?: () => void;
 }
 
 const ProjectHeader: React.FC<ProjectHeaderProps> = ({
@@ -40,37 +41,30 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   setIsTaskLibraryOpen,
   setActiveTab,
   setShowGeneralInfoModal,
-  onGenerateBrochure
+  onGenerateBrochure,
+  onViewBrochure
 }) => {
 
-  const getCoverImageUrl = () => {
+  const getCoverImageSrcOrId = () => {
     // 1. Explicit cover image
     if (project.coverImageId) {
-      return projectService.getImagePreview(project.coverImageId);
+      return project.coverImageId;
     }
 
     // 2. First image from 'media' (new gallery system)
     if (project.media && project.media.length > 0) {
-      const id = project.media[0];
-      if (id && !id.startsWith('http')) {
-        return projectService.getImagePreview(id);
-      }
-      return id;
+      return project.media[0];
     }
 
     // 3. First image from 'property.images' (legacy/fallback)
      if (project.property?.images && project.property.images.length > 0) {
-       const img = project.property.images[0];
-       if (img && !img.startsWith('http')) {
-         return projectService.getImagePreview(img);
-       }
-       return img;
+       return project.property.images[0];
      }
 
     return null;
   };
 
-  const coverImage = getCoverImageUrl();
+  const coverImageSrcOrId = getCoverImageSrcOrId();
 
   return (
     <div className="relative mb-8 group">
@@ -83,9 +77,9 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
       <div className="relative z-10 p-8 md:p-10 text-white">
         <div className="flex flex-col xl:flex-row items-start justify-between gap-8 mb-6">
           <div className="flex-1 min-w-0 flex items-start gap-6">
-             {coverImage ? (
-                <img
-                  src={coverImage}
+             {coverImageSrcOrId ? (
+                <AsyncImage
+                  srcOrId={coverImageSrcOrId}
                   alt="Project"
                   className="w-24 h-24 rounded-2xl object-cover border-4 border-slate-700 shadow-lg"
                 />
@@ -98,7 +92,7 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
                 <div className="flex items-center gap-3 mb-2">
                   <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Project Summary</p>
                   <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-100/50">
-                    {project.status.replace('_', ' ')}
+                    {(project.status || '').replace('_', ' ')}
                   </span>
                 </div>
                 <h1 className="text-3xl font-black text-white leading-tight truncate mb-2">{project.title}</h1>
@@ -176,6 +170,20 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
                         <div className="text-[10px] text-slate-400 font-normal">Manage todos & timeline</div>
                       </div>
                    </button>
+                   {onViewBrochure && (
+                   <button
+                     onClick={() => { onViewBrochure(); setShowActionMenu(false); }}
+                     className="w-full px-5 py-3 text-left text-sm font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-3 transition-colors"
+                   >
+                      <div className="p-2 bg-pink-50 text-pink-600 rounded-xl group-hover:bg-pink-600 group-hover:text-white transition-all">
+                        <FileText size={18} />
+                      </div>
+                       <div>
+                        <div className="font-bold">View Brochure</div>
+                        <div className="text-[10px] text-slate-400 font-normal">Interactive property template</div>
+                      </div>
+                   </button>
+                   )}
                    {onGenerateBrochure && (
                    <button
                      onClick={() => { onGenerateBrochure(); setShowActionMenu(false); }}

@@ -2,6 +2,7 @@ import { CheckCircle2, Loader2, Star, Trash2, Upload } from 'lucide-react';
 /* eslint-env browser */
 import React, { useRef, useState } from 'react';
 import { projectService } from '../../services/appwrite';
+import AsyncImage from '../AsyncImage';
 
 interface PropertyGalleryEditorProps {
   projectId: string;
@@ -18,10 +19,32 @@ const PropertyGalleryEditor: React.FC<PropertyGalleryEditorProps> = ({
 }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Helper to ensure we have a valid list to work with
   const files = media || [];
+
+  const toggleSelection = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedImages(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkRemove = async () => {
+    if (selectedImages.length === 0) return;
+    if (!confirm(`Are you sure you want to remove ${selectedImages.length} images?`)) return;
+
+    const newList = files.filter(f => !selectedImages.includes(f));
+    // If we removed the cover image, set new cover to the first one available
+    let newCover = coverImageId;
+    if (coverImageId && selectedImages.includes(coverImageId)) {
+      newCover = newList.length > 0 ? newList[0] : '';
+    }
+    await onUpdate(newList, newCover!);
+    setSelectedImages([]);
+  };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -32,8 +55,10 @@ const PropertyGalleryEditor: React.FC<PropertyGalleryEditorProps> = ({
           const file = e.target.files[i];
           if (!file) continue;
           const response = await projectService.uploadPropertyImage(projectId, file);
-          // s3Service returns { key, url }
-          newIds.push((response as any).key || '');
+
+          if ((response as any).key) {
+             newIds.push((response as any).key);
+          }
         }
 
         const updatedList = [...files, ...newIds];
@@ -122,6 +147,29 @@ const PropertyGalleryEditor: React.FC<PropertyGalleryEditorProps> = ({
 
   return (
     <div className="space-y-6">
+      {selectedImages.length > 0 && (
+        <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-100 rounded-xl text-blue-700 animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center gap-2 font-medium">
+                <CheckCircle2 size={18} />
+                <span>{selectedImages.length} images selected</span>
+            </div>
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={() => setSelectedImages([])}
+                    className="p-2 hover:bg-blue-100 rounded-lg transition-colors text-sm font-medium"
+                >
+                    Cancel
+                </button>
+                <button
+                    onClick={handleBulkRemove}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium shadow-sm transition-all"
+                >
+                    <Trash2 size={16} /> Delete Selected
+                </button>
+            </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-center p-8 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer"
            onClick={() => fileInputRef.current?.click()}>
         <input
@@ -153,7 +201,9 @@ const PropertyGalleryEditor: React.FC<PropertyGalleryEditorProps> = ({
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {files.map((fileId, index) => {
-            const isMain = fileId === coverImageId || index === 0; // Fallback to index 0 if coverId unset
+            const isMain = fileId === coverImageId || index === 0;
+            const isSelected = selectedImages.includes(fileId);
+
             return (
               <div
                 key={fileId}
@@ -164,17 +214,32 @@ const PropertyGalleryEditor: React.FC<PropertyGalleryEditorProps> = ({
                 onDrop={(e) => handleDrop(e, index)}
                 className={`relative aspect-square rounded-xl overflow-hidden group border-2 transition-all cursor-move ${
                    dragOverIndex === index ? 'border-blue-500 scale-105 z-10' :
+                   isSelected ? 'border-blue-500 ring-4 ring-blue-500/20' :
                    isMain ? 'border-emerald-500 ring-4 ring-emerald-500/20' : 'border-slate-100'
                 }`}
               >
-                <img
-                  src={projectService.getImagePreview(fileId)}
+                <AsyncImage
+                  srcOrId={fileId}
                   className="w-full h-full object-cover"
                   alt=""
                 />
 
+                {/* Selection Checkbox */}
+                <button
+                    onClick={(e) => toggleSelection(fileId, e)}
+                    className={`absolute top-2 left-2 p-1.5 rounded-lg z-20 transition-all ${
+                        isSelected
+                            ? 'bg-blue-500 text-white shadow-md'
+                            : 'bg-black/30 text-white/70 hover:bg-black/50 hover:text-white opacity-0 group-hover:opacity-100'
+                    }`}
+                >
+                    {isSelected ? <CheckCircle2 size={16} fill="currentColor" className="text-white" /> : <div className="w-4 h-4 rounded-full border-2 border-current" />}
+                </button>
+
                 {/* Actions Overlay */}
-                <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-2">
+                <div className={`absolute inset-0 bg-black/40 backdrop-blur-[1px] transition-opacity flex flex-col items-center justify-center gap-2 p-2 ${
+                    isSelected ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'
+                }`}>
                     {!isMain && (
                         <button
                             onClick={() => handleSetMain(fileId)}
@@ -190,9 +255,6 @@ const PropertyGalleryEditor: React.FC<PropertyGalleryEditorProps> = ({
                     >
                         <Trash2 size={16} />
                     </button>
-                    <span className="absolute top-2 left-2 text-[10px] font-bold text-white bg-black/50 px-2 py-0.5 rounded">
-                        #{index + 1}
-                    </span>
                 </div>
 
                 {isMain && (

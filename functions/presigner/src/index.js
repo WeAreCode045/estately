@@ -9,7 +9,7 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
 
 const REGION = process.env.AWS_REGION || process.env.VITE_AWS_REGION || 'eu-central-1';
-const BUCKET = process.env.S3_BUCKET || process.env.VITE_AWS_S3_BUCKET || 'code045-estately';
+const BUCKET = process.env.S3_BUCKET || process.env.VITE_AWS_S3_BUCKET || 'estately-storage';
 
 const s3 = new S3Client({ region: REGION });
 

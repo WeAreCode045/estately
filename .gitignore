@@ -49,11 +49,6 @@ coverage
 *.sln
 *.sw?
 
-# Amplify
-.amplify
-amplify_outputs*
-amplifyconfiguration*
-
 # Misc
 .cache
 .temp

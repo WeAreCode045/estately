@@ -6,16 +6,16 @@ import BrochureDocument from '../BrochureDocument';
 export const generateBrochureBlob = async (project: Project, agencyId: string, agent?: User): Promise<Blob> => {
   try {
     // 1. Fetch Configuration
-    const { agency, settings } = await brochureService.getAgencyBrochureConfig(agencyId);
+    const { agency, settings, pages } = await brochureService.getAgencyBrochureConfig(agencyId);
 
     // 2. Transform Data
-    const propertyData = brochureService.transformProjectToPropertyData(project, agent);
+    const propertyData = await brochureService.transformProjectToPropertyData(project, agent);
 
-    // 3. Render PDF
-    // We use the pdf() function from @react-pdf/renderer to generate the blob programmatically
+    // 3. Render PDF using React-PDF with fixed layout
+    const tempSettings = { ...settings, pages };
     const blob = await pdf(
         <BrochureDocument
-            settings={settings}
+            settings={tempSettings}
             agency={agency}
             property={propertyData}
         />
@@ -28,3 +28,4 @@ export const generateBrochureBlob = async (project: Project, agencyId: string, a
     throw error;
   }
 };
+

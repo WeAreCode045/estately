@@ -1,0 +1,53 @@
+[
+  {
+    "description": "Prachtige moderne villa met uitzicht op de gracht. Recent gerenoveerd met hoogwaardige afwerking. Lichte woonkamer met openslaande deuren naar de tuin.",
+    "street": "Keizersgracht",
+    "streetNumber": "123",
+    "postalCode": "1015AB",
+    "city": "Amsterdam",
+    "country": "Netherlands",
+    "lotSize": 250,
+    "floorSize": 180,
+    "bedrooms": 4,
+    "bathrooms": 2,
+    "garages": 1,
+    "buildYear": 1920,
+    "specs": ["Tuin", "Balkon", "Garage", "Monumentaal", "Lift"],
+    "neighbourhood": "Rustige locatie aan de gracht, op loopafstand van de Dam",
+    "nearbyPlaces": ["Albert Heijn (200m)", "Dam Square (500m)", "Centraal Station (1km)"]
+  },
+  {
+    "description": "Ruim familiehuis in gewilde wijk. Grote tuin met berging. Perfect voor gezinnen. Dichtbij scholen en winkels.",
+    "street": "Vondelstraat",
+    "streetNumber": "45",
+    "postalCode": "1054GE",
+    "city": "Amsterdam",
+    "country": "Netherlands",
+    "lotSize": 300,
+    "floorSize": 150,
+    "bedrooms": 3,
+"bathrooms": 1,
+    "garages": 0,
+    "buildYear": 1985,
+    "specs": ["Tuin", "Berging", "Dubbel glas", "CV ketel"],
+    "neighbourhood": "Kindvriendelijke buurt met veel groen",
+    "nearbyPlaces": ["Vondelpark (300m)", "Albert Cuyp Markt (800m)", "Basisschool (150m)"]
+  },
+  {
+    "description": "Luxe penthouse met panoramisch uitzicht over de stad. Roof terrace en moderne keuken. Energielabel A.",
+    "street": "Zuidas",
+    "streetNumber": "1",
+    "postalCode": "1082MG",
+    "city": "Amsterdam",
+    "country": "Netherlands",
+    "lotSize": 0,
+    "floorSize": 200,
+    "bedrooms": 3,
+    "bathrooms": 2,
+    "garages": 2,
+    "buildYear": 2020,
+    "specs": ["Roof terrace", "Garage", "Lift", "Vloerverwarming", "Airconditioning"],
+    "neighbourhood": "Moderne business district met alle voorzieningen",
+    "nearbyPlaces": ["Station Zuid (200m)", "Gelderlandplein (500m)", "Fitness First (100m)"]
+  }
+]

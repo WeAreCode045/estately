@@ -3,7 +3,7 @@ import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const REGION = import.meta.env.VITE_AWS_REGION || 'eu-central-1';
-const BUCKET = import.meta.env.VITE_AWS_S3_BUCKET || 'code045-estately';
+const BUCKET = import.meta.env.VITE_AWS_S3_BUCKET || 'estately-storage';
 const PRESIGNER = import.meta.env.VITE_PRESIGNER_URL || '';
 
 const hasClientCredentials = Boolean(import.meta.env.VITE_AWS_ACCESS_KEY_ID && import.meta.env.VITE_AWS_SECRET_ACCESS_KEY);
@@ -12,13 +12,13 @@ const s3 = hasClientCredentials
   ? new S3Client({
       region: REGION,
       credentials: {
-        accessKeyId: import.meta.env.VITE_AWS_ACCESS_KEY_ID,
-        secretAccessKey: import.meta.env.VITE_AWS_SECRET_ACCESS_KEY
+        accessKeyId: import.meta.env.VITE_AWS_ACCESS_KEY_ID!,
+        secretAccessKey: import.meta.env.VITE_AWS_SECRET_ACCESS_KEY!
       }
     })
   : undefined as unknown as S3Client;
 
-function buildProjectKey(projectId: string, folder: 'property-files' | 'user-files', filename: string) {
+function buildProjectKey(projectId: string, folder: string, filename: string) {
   return `project/${projectId}/${folder}/${filename}`;
 }
 
@@ -30,7 +30,7 @@ function buildAgencyKey(agencyId: string, path: string) {
   return `agency/${agencyId}/${path}`;
 }
 
-async function callPresigner(path: string, body: any) {
+async function callPresigner(path: string, body: Record<string, unknown>) {
   const url = PRESIGNER.replace(/\/$/, '') + path;
   const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!res.ok) throw new Error(`Presigner error: ${res.statusText}`);
@@ -38,7 +38,7 @@ async function callPresigner(path: string, body: any) {
 }
 
 export const s3Service = {
-  async uploadProjectFile(projectId: string, folder: 'property-files' | 'user-files', file: File) {
+  async uploadProjectFile(projectId: string, folder: string, file: File) {
     const key = buildProjectKey(projectId, folder, file.name);
 
     if (PRESIGNER) {
