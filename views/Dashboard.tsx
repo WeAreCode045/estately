@@ -25,8 +25,21 @@ const Dashboard: React.FC<DashboardProps> = ({
   taskTemplates,
   onRefresh
 }) => {
+  // Debug: Log user role for troubleshooting
+  React.useEffect(() => {
+    console.log('Dashboard User Role:', user.role, 'Type:', typeof user.role);
+    console.log('UserRole.ADMIN:', UserRole.ADMIN);
+    console.log('Match:', user.role === UserRole.ADMIN);
+  }, [user.role]);
+
   // Check if user has admin/agent privileges
-  const isAdminOrAgent = user.role === UserRole.ADMIN || user.role === UserRole.AGENT;
+  // Handle both enum values and string values (case-insensitive)
+  const userRoleStr = typeof user.role === 'string' ? user.role.toLowerCase() : '';
+  const isAdminOrAgent =
+    user.role === UserRole.ADMIN ||
+    user.role === UserRole.AGENT ||
+    userRoleStr === 'admin' ||
+    userRoleStr === 'agent';
 
   if (isAdminOrAgent) {
     return (

@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { projectService } from '../services/appwrite';
+import { getPropertyParsed } from '../services/propertyService';
 import { s3Service } from '../services/s3Service';
 import type { Agency, Contract, FormDefinition, FormSubmission, Project, User } from '../types';
 
@@ -21,6 +22,20 @@ const getDataUrl = (url: string): Promise<string> => {
 };
 
 export const downloadContractPDF = async (contract: Contract, project: Project, allUsers: User[]) => {
+  // Load property data from new schema if available
+  let address = 'Address not available';
+  if (project.property_id) {
+    try {
+      const propertyData = await getPropertyParsed(project.property_id);
+      address = propertyData.formattedAddress;
+    } catch (error) {
+      console.error('Failed to load property data, using legacy:', error);
+      address = project.property.address || 'Address not available';
+    }
+  } else {
+    address = project.property.address || 'Address not available';
+  }
+
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;
@@ -46,7 +61,7 @@ export const downloadContractPDF = async (contract: Contract, project: Project, 
   doc.setFontSize(10);
   doc.text(`Project: ${project.title}`, margin, cursorY);
   cursorY += 5;
-  doc.text(`Address: ${project.property.address}`, margin, cursorY);
+  doc.text(`Address: ${address}`, margin, cursorY);
   cursorY += 5;
   doc.text(`Date: ${new Date().toLocaleDateString()}`, margin, cursorY);
   cursorY += 15;
@@ -112,6 +127,20 @@ export const downloadContractPDF = async (contract: Contract, project: Project, 
 };
 
 export const downloadFormPDF = async (submission: FormSubmission, definition: FormDefinition, allUsers: User[], project: Project) => {
+  // Load property data from new schema if available
+  let address = 'Address not available';
+  if (project.property_id) {
+    try {
+      const propertyData = await getPropertyParsed(project.property_id);
+      address = propertyData.formattedAddress;
+    } catch (error) {
+      console.error('Failed to load property data, using legacy:', error);
+      address = project.property.address || 'Address not available';
+    }
+  } else {
+    address = project.property.address || 'Address not available';
+  }
+
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -145,7 +174,7 @@ export const downloadFormPDF = async (submission: FormSubmission, definition: Fo
   doc.setFontSize(10);
   doc.text(`Project: ${project.title}`, margin, cursorY);
   cursorY += 5;
-  doc.text(`Address: ${project.property.address}`, margin, cursorY);
+  doc.text(`Address: ${address}`, margin, cursorY);
   cursorY += 5;
   doc.text(`Submission Date: ${new Date(submission.createdAt).toLocaleDateString()}`, margin, cursorY);
   cursorY += 15;
@@ -276,6 +305,52 @@ export const downloadFormPDF = async (submission: FormSubmission, definition: Fo
 };
 
 export const generatePropertyBrochure = async (project: Project, agency: Agency | null, agent: User | null) => {
+  // Load property data from new schema if available
+  let address = 'Address not available';
+  let price = 0;
+  let description = '';
+  let bedrooms = 0;
+  let bathrooms = 0;
+  let sqft = 0;
+  let buildYear: number | null = null;
+  let propertyImages: string[] = [];
+
+  if (project.property_id) {
+    try {
+      const propertyData = await getPropertyParsed(project.property_id);
+      address = propertyData.formattedAddress;
+      price = project.price || 0; // Price is at project level
+      // Extract property description (filter type 'propertydesc')
+      const propDesc = propertyData.descriptions.find(d => d.type === 'propertydesc');
+      description = propDesc?.content || '';
+      bedrooms = propertyData.roomsData.bedrooms || 0;
+      bathrooms = propertyData.roomsData.bathrooms || 0;
+      sqft = propertyData.sizeData.floorSize || propertyData.sizeData.lotSize || 0;
+      buildYear = propertyData.specsData.find(s => s.match(/\d{4}/))?.match(/\d{4}/)?.[0] ? parseInt(propertyData.specsData.find(s => s.match(/\d{4}/))!.match(/\d{4}/)![0]) : null;
+      propertyImages = propertyData.mediaData.images || [];
+    } catch (error) {
+      console.error('Failed to load property data, using legacy:', error);
+      address = project.property.address || 'Address not available';
+      price = project.property.price || 0;
+      description = project.property.description || '';
+      bedrooms = project.property.bedrooms || 0;
+      bathrooms = project.property.bathrooms || 0;
+      sqft = project.property.sqft || 0;
+      buildYear = project.property.buildYear || null;
+      propertyImages = project.property.images || [];
+    }
+  } else {
+    // Legacy fallback
+    address = project.property.address || 'Address not available';
+    price = project.property.price || 0;
+    description = project.property.description || '';
+    bedrooms = project.property.bedrooms || 0;
+    bathrooms = project.property.bathrooms || 0;
+    sqft = project.property.sqft || 0;
+    buildYear = project.property.buildYear || null;
+    propertyImages = project.property.images || [];
+  }
+
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -336,22 +411,22 @@ export const generatePropertyBrochure = async (project: Project, agency: Agency 
   doc.setFontSize(14);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(100);
-  doc.text(project.property.address, pageWidth / 2, 220, { align: 'center' });
+  doc.text(address, pageWidth / 2, 220, { align: 'center' });
 
   doc.setFontSize(26);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(primaryColor);
-  doc.text(`€${(project.property.price || 0).toLocaleString()}`, pageWidth / 2, 240, { align: 'center' });
+  doc.text(`€${price.toLocaleString()}`, pageWidth / 2, 240, { align: 'center' });
 
   // Specs
   doc.setFontSize(12);
   doc.setTextColor(80);
   doc.setFont('helvetica', 'normal');
   const specs = [
-      `${project.property.bedrooms || 0} Beds`,
-      `${project.property.bathrooms || 0} Baths`,
-      `${project.property.sqft || 0} SqFt`,
-      project.property.buildYear ? `Built ${project.property.buildYear}` : ''
+      `${bedrooms} Beds`,
+      `${bathrooms} Baths`,
+      `${sqft} SqFt`,
+      buildYear ? `Built ${buildYear}` : ''
   ].filter(Boolean).join('  |  ');
   doc.text(specs, pageWidth / 2, 255, { align: 'center' });
 
@@ -367,14 +442,14 @@ export const generatePropertyBrochure = async (project: Project, agency: Agency 
   doc.setTextColor(60);
   doc.setFont('helvetica', 'normal');
   // Clean text a bit
-  const cleanDesc = (project.property.description || "No description available.").replace(/<[^>]*>?/gm, '');
-  const descText = doc.splitTextToSize(cleanDesc, pageWidth - (margin * 2));
+  const cleanDesc = description.replace(/<[^>]*>?/gm, '');
+  const descText = doc.splitTextToSize(cleanDesc || "No description available.", pageWidth - (margin * 2));
   doc.text(descText, margin, 45);
 
   let cursorY = 45 + (descText.length * 6) + 20;
 
   // Gallery
-  const media = project.media && project.media.length > 0 ? project.media : (project.property.images || []);
+  const media = project.media && project.media.length > 0 ? project.media : propertyImages;
   if (media.length > 0) {
        doc.setFontSize(18);
        doc.setTextColor(0);

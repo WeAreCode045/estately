@@ -16,8 +16,8 @@
  * Usage: node migrate-appwrite-to-s3.js <collectionId>
  */
 
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
-const fetch = globalThis.fetch || require('node-fetch');
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import fetch from 'node-fetch';
 
 const APPWRITE_ENDPOINT = process.env.APPWRITE_ENDPOINT || process.env.VITE_APPWRITE_ENDPOINT;
 const APPWRITE_PROJECT = process.env.APPWRITE_PROJECT || process.env.VITE_APPWRITE_PROJECT;

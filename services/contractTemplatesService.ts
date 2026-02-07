@@ -98,7 +98,7 @@ export const contractTemplatesService = {
 
       const [profiles, agencyRes, allProjects] = await Promise.all([
         databases.listDocuments(DATABASE_ID, COLLECTIONS.PROFILES),
-        databases.listDocuments(DATABASE_ID, COLLECTIONS.AGENCY),
+        databases.listDocuments(DATABASE_ID, COLLECTIONS.AGENCIES),
         databases.listDocuments(DATABASE_ID, COLLECTIONS.PROJECTS)
       ]);
 
@@ -241,7 +241,7 @@ export const contractTemplatesService = {
       // Fetch all necessary data for replacements
       const [profiles, agencyRes] = await Promise.all([
         databases.listDocuments(DATABASE_ID, COLLECTIONS.PROFILES),
-        databases.listDocuments(DATABASE_ID, COLLECTIONS.AGENCY)
+        databases.listDocuments(DATABASE_ID, COLLECTIONS.AGENCIES)
       ]);
 
       const seller = profiles.documents.find(p => p.userId === projectData.sellerId);

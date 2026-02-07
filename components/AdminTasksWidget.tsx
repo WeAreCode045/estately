@@ -10,7 +10,10 @@ interface AdminTasksWidgetProps {
 }
 
 const AdminTasksWidget: React.FC<AdminTasksWidgetProps> = ({ user, projects, taskTemplates }) => {
-  const assignedTasks = user.assignedTasks || [];
+  const assignedTasks: (Project['tasks'][number] & { dueDate?: string })[] =
+    Array.isArray(user.assignedTasks)
+      ? (user.assignedTasks.filter((t): t is Project['tasks'][number] & { dueDate?: string } => t != null) ?? [])
+      : [];
 
   return (
     <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">

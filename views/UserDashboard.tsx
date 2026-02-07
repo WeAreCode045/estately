@@ -972,7 +972,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
                                         {contract.title}
                                         {contract.status === ContractStatus.SIGNED && <Lock size={14} className="text-amber-500"/>}
                                     </h4>
-                                    <p className="text-sm text-slate-500 line-clamp-1">{contract.content.replace(/<[^>]*>/g, ' ').substring(0, 80)}...</p>
+                                    <p className="text-sm text-slate-500 line-clamp-1">{(contract.content || '').replace(/<[^>]*>/g, ' ').substring(0, 80)}...</p>
                                  </div>
                               </div>
 
@@ -1034,7 +1034,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
                                          : 'text-amber-600'
                                      }`}
                                    >
-                                     {contract.status.replace('_', ' ')}
+                                     {(contract.status || '').replace('_', ' ')}
                                    </span>
                                  )}
 
@@ -1551,7 +1551,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
                 <div className="flex flex-wrap items-center gap-4 text-sm text-slate-400">
                    <div className="flex items-center gap-1.5">
                       <span className="px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold uppercase tracking-wider text-slate-300">
-                        {userProject.status.replace('_', ' ')}
+                        {(userProject.status || '').replace('_', ' ')}
                       </span>
                    </div>
                    <span className="flex items-center gap-1.5" title="Creation Date"><CalendarDays size={14}/> {userProject.createdAt ? new Date(userProject.createdAt).toLocaleDateString() : 'N/A'}</span>

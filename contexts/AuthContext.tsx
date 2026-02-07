@@ -83,7 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                     // Check for pending invitations
                     const invites = await inviteService.getByEmail(currentUser.email);
-                    let role = all.total === 0 ? 'ADMIN' : 'BUYER';
+                    let role = all.total === 0 ? 'admin' : 'buyer';
                     let projectId = '';
 
                     if (invites.total > 0 && invites.documents[0]) {
@@ -96,7 +96,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                         // Link user to project if project exists
                         if (projectId) {
-                            const field = role === 'SELLER' ? 'sellerId' : 'buyerId';
+                            const field = role === 'seller' || role === 'SELLER' ? 'sellerId' : 'buyerId';
                             await projectService.update(projectId, { [field]: id });
                         }
                     }

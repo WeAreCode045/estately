@@ -49,7 +49,7 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
       // Check if user already exists in allUsers
       const existingUser = allUsers.find(u => u.email.toLowerCase() === newUserInfo.email.toLowerCase());
 
-      if (existingUser && existingUser.status !== 'PENDING_INVITE') {
+      if (existingUser && (existingUser as any).status !== 'PENDING_INVITE') {
         // Just link to project directly
         if (newUserInfo.projectId) {
           const field = newUserInfo.role === UserRole.SELLER ? 'sellerId' : 'buyerId';
@@ -119,7 +119,7 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
     if (!window.confirm(`Are you sure you want to remove ${userToDelete.name}?`)) return;
 
     try {
-      if (userToDelete.status === 'PENDING_INVITE') {
+      if ((userToDelete as any).status === 'PENDING_INVITE') {
         // For pending invites, the 'id' is the document ID in the invites collection
         await inviteService.delete(userToDelete.id);
       } else {
@@ -234,7 +234,7 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
                     </select>
                   </td>
                   <td className="px-6 py-5">
-                    {u.status === 'PENDING_INVITE' ? (
+                    {(u as any).status === 'PENDING_INVITE' ? (
                       <div className="flex items-center gap-1.5 text-amber-500 text-xs font-bold">
                         <Clock size={14} /> Pending Invite
                       </div>
@@ -254,7 +254,7 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
                   <td className="px-6 py-5 text-right">
                     <div className="flex items-center justify-end gap-2">
                       {/* Admin impersonation: Login as this user */}
-                      {user.role === UserRole.ADMIN && u.status !== 'PENDING_INVITE' && (
+                      {user.role === UserRole.ADMIN && (u as any).status !== 'PENDING_INVITE' && (
                         <button
                           onClick={async () => {
                             if (!window.confirm(`Sign in as ${u.name}? You will remain able to return to your admin account via the avatar menu.`)) return;
@@ -275,7 +275,7 @@ const UsersManagement: React.FC<UsersManagementProps> = ({ user, allUsers, setAl
                           <UsersIcon size={18} />
                         </button>
                       )}
-                      {u.status === 'PENDING_INVITE' && (
+                      {(u as any).status === 'PENDING_INVITE' && (
                         <button
                           onClick={() => handleResendInvite(u)}
                           className="p-2 hover:bg-amber-50 rounded-lg text-slate-400 hover:text-amber-600 transition-colors"

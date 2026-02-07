@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Property Detail - Veloura Residences</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f9fafb; color: #1a1a1a; }
+        .print-page { page-break-after: always; }
+        .icon-box { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 10px; background-color: #f3f4f6; color: #374151; }
+        .property-tag { background-color: #f3f4f6; padding: 0.5rem 1rem; border-radius: 12px; font-size: 0.875rem; font-weight: 500; display: flex; align-items: center; gap: 0.5rem; }
+    </style>
+</head>
+<body>
+
+    <div id="property-details-container" class="max-w-[1200px] mx-auto p-4 md:p-8 space-y-12">
+
+        <section class="print-page space-y-8">
+            <div class="flex flex-col md:flex-row gap-4 h-[500px]">
+                <div class="w-full md:w-2/3 h-full">
+                    <img src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200" alt="Main" class="w-full h-full object-cover rounded-3xl">
+                </div>
+                <div class="hidden md:flex flex-col w-1/3 gap-4">
+                    <img src="https://images.unsplash.com/photo-1600607687940-4e200310e75f?auto=format&fit=crop&w=600" alt="Side 1" class="h-1/2 object-cover rounded-3xl">
+                    <div class="relative h-1/2">
+                        <img src="https://images.unsplash.com/photo-1600566753376-12c8ab7fb75b?auto=format&fit=crop&w=600" alt="Side 2" class="w-full h-full object-cover rounded-3xl brightness-50">
+                        <span class="absolute inset-0 flex items-center justify-center text-white text-2xl font-bold">+ 7 foto's</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-2 space-y-8">
+                    <div class="flex justify-between items-start border-b pb-6">
+                        <div>
+                            <h1 class="text-4xl font-extrabold tracking-tight uppercase">Veloura Residences</h1>
+                            <div class="flex items-center gap-2 mt-2 text-gray-500">
+                                <i data-lucide="map-pin" class="w-4 h-4"></i>
+                                <span class="text-sm">Miami, Florida, Celina Delware 2098</span>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-3xl font-bold text-gray-900">$4.050</p>
+                            <p class="text-xs text-gray-400 uppercase tracking-widest font-semibold">USD / Maand</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-y-8 gap-x-4 pt-4">
+                        <div class="flex items-center gap-4">
+                            <div class="icon-box"><i data-lucide="bed" class="w-5 h-5"></i></div>
+                            <div><p class="text-[10px] text-gray-400 uppercase font-bold">Slaapkamers</p><p class="font-bold">2</p></div>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <div class="icon-box"><i data-lucide="bath" class="w-5 h-5"></i></div>
+                            <div><p class="text-[10px] text-gray-400 uppercase font-bold">Badkamers</p><p class="font-bold">3</p></div>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <div class="icon-box"><i data-lucide="maximize" class="w-5 h-5"></i></div>
+                            <div><p class="text-[10px] text-gray-400 uppercase font-bold">Woonopp.</p><p class="font-bold">120 m²</p></div>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <div class="icon-box"><i data-lucide="layout" class="w-5 h-5"></i></div>
+                            <div><p class="text-[10px] text-gray-400 uppercase font-bold">Perceel</p><p class="font-bold">250 m²</p></div>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <div class="icon-box"><i data-lucide="calendar" class="w-5 h-5"></i></div>
+                            <div><p class="text-[10px] text-gray-400 uppercase font-bold">Bouwjaar</p><p class="font-bold">2024</p></div>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <div class="icon-box"><i data-lucide="car" class="w-5 h-5"></i></div>
+                            <div><p class="text-[10px] text-gray-400 uppercase font-bold">Garages</p><p class="font-bold">2</p></div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-6 border-t pt-8">
+                        <div>
+                            <h3 class="font-bold text-xl mb-3">Beschrijving</h3>
+                            <p class="text-gray-600 leading-relaxed text-sm">
+                                Deze moderne residentie biedt een ongeëvenaarde combinatie van luxe en comfort. De woning is hoogwaardig afgewerkt en voorzien van alle moderne gemakken zoals een Nefit CV en een uitgebreid alarmsysteem. De open indeling zorgt voor veel natuurlijk lichtinval en een ruimtelijk gevoel in de gehele woning.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+                        <h3 class="font-bold text-lg flex items-center gap-2 uppercase tracking-widest text-gray-400 text-xs">
+                            <i data-lucide="list-checks" class="text-blue-600 w-4 h-4"></i> Eigenschappen
+                        </h3>
+                        <div class="flex flex-wrap gap-3">
+                            <span class="property-tag"><i data-lucide="layers" class="w-4 h-4"></i> Dubbele beglazing</span>
+                            <span class="property-tag"><i data-lucide="panel-top" class="w-4 h-4"></i> Rolluiken</span>
+                            <span class="property-tag"><i data-lucide="thermometer" class="w-4 h-4"></i> Nefit CV installatie</span>
+                            <span class="property-tag"><i data-lucide="shield-check" class="w-4 h-4"></i> Alarminstallatie</span>
+                            <span class="property-tag"><i data-lucide="sun" class="w-4 h-4 text-orange-500"></i> Zonnepanelen</span>
+                            <span class="property-tag"><i data-lucide="bath" class="w-4 h-4"></i> Ligbad</span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-6 border-t pt-8">
+                        <h3 class="font-bold text-xl mb-3">Galerij</h3>
+                        <div class="grid grid-cols-3 gap-4">
+                            <img src="https://images.unsplash.com/photo-1600566753190-17f0bcd2a6c4?auto=format&fit=crop&w=400&h=300" class="w-full h-32 object-cover rounded-2xl shadow-sm" alt="Gallery 1">
+                            <img src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=400&h=300" class="w-full h-32 object-cover rounded-2xl shadow-sm" alt="Gallery 2">
+                            <img src="https://images.unsplash.com/photo-1600573472591-ee6b68d14c68?auto=format&fit=crop&w=400&h=300" class="w-full h-32 object-cover rounded-2xl shadow-sm" alt="Gallery 3">
+
+                            <img src="https://images.unsplash.com/photo-1600566752355-35792bedcfea?auto=format&fit=crop&w=400&h=300" class="w-full h-32 object-cover rounded-2xl shadow-sm" alt="Gallery 4">
+                            <img src="https://images.unsplash.com/photo-1600607687644-c7171b42498f?auto=format&fit=crop&w=400&h=300" class="w-full h-32 object-cover rounded-2xl shadow-sm" alt="Gallery 5">
+                            <img src="https://images.unsplash.com/photo-1600585154526-990dced4db0d?auto=format&fit=crop&w=400&h=300" class="w-full h-32 object-cover rounded-2xl shadow-sm" alt="Gallery 6">
+
+                            <img src="https://images.unsplash.com/photo-1600121848594-d8644e57abab?auto=format&fit=crop&w=400&h=300" class="w-full h-32 object-cover rounded-2xl shadow-sm" alt="Gallery 7">
+                            <img src="https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=400&h=300" class="w-full h-32 object-cover rounded-2xl shadow-sm" alt="Gallery 8">
+                            <img src="https://images.unsplash.com/photo-1600566753086-00f18fb6f3ea?auto=format&fit=crop&w=400&h=300" class="w-full h-32 object-cover rounded-2xl shadow-sm" alt="Gallery 9">
+
+                            <img src="https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?auto=format&fit=crop&w=400&h=300" class="w-full h-32 object-cover rounded-2xl shadow-sm" alt="Gallery 10">
+                            <img src="https://images.unsplash.com/photo-1600210491892-03d54c0aaf87?auto=format&fit=crop&w=400&h=300" class="w-full h-32 object-cover rounded-2xl shadow-sm" alt="Gallery 11">
+                            <img src="https://images.unsplash.com/photo-1600585154363-67eb9e2e2099?auto=format&fit=crop&w=400&h=300" class="w-full h-32 object-cover rounded-2xl shadow-sm" alt="Gallery 12">
+                        </div>
+                    </div>
+
+                    <div class="space-y-8 border-t pt-8">
+                        <div class="p-6 bg-blue-50/50 rounded-2xl border border-blue-100">
+                            <h3 class="font-bold text-lg mb-2 flex items-center gap-2 text-blue-900">
+                                <i data-lucide="info" class="w-5 h-5"></i> De Omgeving
+                            </h3>
+                            <p class="text-gray-700 leading-relaxed text-sm">
+                                Gelegen in een rustige, kindvriendelijke woonwijk met veel groenvoorzieningen. Op loopafstand vindt u diverse parken en sportfaciliteiten. De buurt kenmerkt zich door een uitstekende bereikbaarheid; binnen enkele minuten bent u op de belangrijkste uitvalswegen of bij het openbaar vervoer. Voor uw dagelijkse boodschappen kunt u terecht bij het nabijgelegen winkelcentrum, dat een breed scala aan speciaalzaken biedt.
+                            </p>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div class="w-full h-[300px] rounded-3xl overflow-hidden border-4 border-white shadow-lg bg-gray-100">
+                                <iframe
+                                    width="100%"
+                                    height="100%"
+                                    frameborder="0"
+                                    style="border:0"
+                                    src="https://www.google.com/maps/embed/v1/place?key=YOUR_API_KEY&q=Miami,Florida"
+                                    allowfullscreen>
+                                </iframe>
+                            </div>
+                            <div class="space-y-4">
+                                <h4 class="font-bold text-sm uppercase tracking-widest text-gray-400">Voorzieningen</h4>
+                                <div class="space-y-3">
+                                    <div class="flex items-center justify-between p-4 bg-white rounded-2xl border border-gray-50 shadow-sm text-sm">
+                                        <div class="flex items-center gap-3"><i data-lucide="school" class="w-4 h-4 text-blue-500"></i> High School</div>
+                                        <span class="text-gray-400">1.2 km</span>
+                                    </div>
+                                    <div class="flex items-center justify-between p-4 bg-white rounded-2xl border border-gray-50 shadow-sm text-sm">
+                                        <div class="flex items-center gap-3"><i data-lucide="shopping-cart" class="w-4 h-4 text-green-500"></i> Supermarkt</div>
+                                        <span class="text-gray-400">0.8 km</span>
+                                    </div>
+                                    <div class="flex items-center justify-between p-4 bg-white rounded-2xl border border-gray-50 shadow-sm text-sm">
+                                        <div class="flex items-center gap-3"><i data-lucide="bus" class="w-4 h-4 text-red-500"></i> Busstation</div>
+                                        <span class="text-gray-400">0.4 km</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-6">
+                    <div class="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+                        <div class="flex flex-col items-center text-center">
+                            <img src="https://i.pravatar.cc/150?u=alex" class="w-20 h-20 rounded-full mb-4 border-4 border-white shadow-lg" alt="Agent">
+                            <h4 class="font-bold text-lg">Alex Ripon</h4>
+                            <p class="text-xs text-gray-400 mb-6">Uw Makelaar</p>
+                        </div>
+
+                        <div class="space-y-4 mb-8 text-sm">
+                            <div class="flex items-center gap-3"><i data-lucide="phone" class="w-4 h-4 text-gray-400"></i> +22 245 5597</div>
+                            <div class="flex items-center gap-3"><i data-lucide="mail" class="w-4 h-4 text-gray-400"></i> alex@realnest.com</div>
+                        </div>
+                        <button class="w-full bg-black text-white py-4 rounded-2xl font-bold hover:bg-gray-800 shadow-lg shadow-gray-200">Contact Opnemen</button>
+                    </div>
+
+                    <div class="bg-gray-900 p-6 rounded-3xl text-white">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-black font-black text-xl">R</div>
+                            <div>
+                                <h4 class="font-bold">Realnest Agency</h4>
+                                <p class="text-[10px] uppercase tracking-widest text-gray-400">Premium Service</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

@@ -27,6 +27,7 @@ interface ProjectHeaderProps {
   setActiveTab: (tab: 'overview' | 'team' | 'documents' | 'property') => void;
   setShowGeneralInfoModal: (show: boolean) => void;
   onGenerateBrochure?: () => void;
+  onViewBrochure?: () => void;
 }
 
 const ProjectHeader: React.FC<ProjectHeaderProps> = ({
@@ -40,7 +41,8 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   setIsTaskLibraryOpen,
   setActiveTab,
   setShowGeneralInfoModal,
-  onGenerateBrochure
+  onGenerateBrochure,
+  onViewBrochure
 }) => {
 
   const getCoverImageSrcOrId = () => {
@@ -90,7 +92,7 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
                 <div className="flex items-center gap-3 mb-2">
                   <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Project Summary</p>
                   <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-100/50">
-                    {project.status.replace('_', ' ')}
+                    {(project.status || '').replace('_', ' ')}
                   </span>
                 </div>
                 <h1 className="text-3xl font-black text-white leading-tight truncate mb-2">{project.title}</h1>
@@ -168,6 +170,20 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
                         <div className="text-[10px] text-slate-400 font-normal">Manage todos & timeline</div>
                       </div>
                    </button>
+                   {onViewBrochure && (
+                   <button
+                     onClick={() => { onViewBrochure(); setShowActionMenu(false); }}
+                     className="w-full px-5 py-3 text-left text-sm font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-3 transition-colors"
+                   >
+                      <div className="p-2 bg-pink-50 text-pink-600 rounded-xl group-hover:bg-pink-600 group-hover:text-white transition-all">
+                        <FileText size={18} />
+                      </div>
+                       <div>
+                        <div className="font-bold">View Brochure</div>
+                        <div className="text-[10px] text-slate-400 font-normal">Interactive property template</div>
+                      </div>
+                   </button>
+                   )}
                    {onGenerateBrochure && (
                    <button
                      onClick={() => { onGenerateBrochure(); setShowActionMenu(false); }}

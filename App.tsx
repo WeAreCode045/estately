@@ -1,5 +1,6 @@
 import {
   Bell,
+  Blocks,
   BookOpen,
   Building2,
   Calendar,
@@ -19,15 +20,17 @@ import {
   User as UserIcon,
   Users as UsersIcon
 } from 'lucide-react';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import * as React from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { HashRouter, Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { COLLECTIONS, DATABASE_ID, databases, projectService, Query } from './services/appwrite';
 import { contractTemplatesService } from './services/contractTemplatesService';
-import type { User as AppUser, Contract, ContractStatus, ContractTemplate, Project, TaskTemplate } from './types';
-import { UserRole } from './types';
+import type { User as AppUser, Contract, ContractTemplate, Project, TaskTemplate } from './types';
+import { ContractStatus, ProjectStatus, UserRole } from './types';
 import AcceptInvite from './views/AcceptInvite';
 import AgencyInfo from './views/AgencyInfo';
+import BlockBuilder from './views/BlockBuilder';
 import Contracts from './views/Contracts';
 import Dashboard from './views/Dashboard';
 import DocumentManagement from './views/DocumentManagement';
@@ -37,6 +40,8 @@ import FormEditorView from './views/FormEditor';
 import FormsList from './views/FormsList';
 import Login from './views/Login';
 import Profile from './views/Profile';
+import PropertyBrochure from './views/PropertyBrochure';
+import TemplateRendererExample from './views/TemplateRendererExample';
 
 type ProjectDetailProps = {
   projects: Project[];
@@ -142,23 +147,25 @@ const AppContent: React.FC<{
 
   const effectiveUser = React.useMemo(() => {
     if (profile) {
-      return {
+      const user = {
         ...profile,
         id: profile.userId,
         avatar: profile.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.email}`,
         assignedTasks: profile.assignedTasks ? (typeof profile.assignedTasks === 'string' ? JSON.parse(profile.assignedTasks) : profile.assignedTasks) : [],
         userDocuments: profile.userDocuments ? (typeof profile.userDocuments === 'string' ? JSON.parse(profile.userDocuments) : profile.userDocuments) : []
       } as AppUser;
-    }
-    if (user) {
-      return {
-        id: user.$id,
-        name: user.name,
+
+      // Debug logging
+      console.log('Profile loaded:', {
         email: user.email,
-        role: UserRole.BUYER,
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.email}`
-      } as AppUser;
+        role: user.role,
+        roleType: typeof user.role,
+        profileRole: profile.role
+      });
+
+      return user;
     }
+    // If no profile yet, don't render authenticated views
     return null;
   }, [profile, user]);
 
@@ -170,6 +177,7 @@ const AppContent: React.FC<{
       ]);
 
       const userMap = new Map();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       profilesData.documents.forEach((doc: any) => {
         if (!userMap.has(doc.userId)) {
           userMap.set(doc.userId, {
@@ -199,7 +207,16 @@ const AppContent: React.FC<{
         }
       });
 
-      invitesData.documents.forEach((doc: any) => {
+      interface InviteDoc {
+        $id: string;
+        userId?: string;
+        name?: string;
+        email: string;
+        role?: UserRole;
+        projectId?: string;
+      }
+
+      invitesData.documents.forEach((doc: InviteDoc) => {
         if (!userMap.has(doc.email)) {
           userMap.set(doc.email, {
             id: doc.$id,
@@ -256,36 +273,99 @@ const AppContent: React.FC<{
         role: d.role
       })));
 
-      setProjects(projectsData.documents.map((doc: any) => ({
-        id: doc.$id,
-        title: doc.title,
-        property: {
-          address: doc.address,
-          price: doc.price,
-          description: doc.description,
-          bedrooms: doc.bedrooms,
-          bathrooms: doc.bathrooms,
-          sqft: doc.sqft,
-          buildYear: doc.buildYear,
-          livingArea: doc.livingArea,
-          garages: doc.garages,
-          images: doc.media || [],
-        },
-        media: doc.media || [],
-        sellerId: doc.sellerId,
-        buyerId: doc.buyerId,
-        managerId: doc.managerId,
-        status: doc.status,
-        coverImageId: doc.coverImageId,
-        handover_date: doc.handover_date,
-        referenceNumber: doc.referenceNumber,
-        createdAt: doc.$createdAt,
-        tasks: doc.tasks ? (typeof doc.tasks === 'string' ? JSON.parse(doc.tasks) : doc.tasks) : [],
-        milestones: doc.milestones ? (typeof doc.milestones === 'string' ? JSON.parse(doc.milestones) : doc.milestones) : [],
-        agenda: doc.agenda ? (typeof doc.agenda === 'string' ? JSON.parse(doc.agenda) : doc.agenda) : [],
-        contractIds: doc.contractIds || [],
-        messages: doc.messages ? (typeof doc.messages === 'string' ? JSON.parse(doc.messages) : doc.messages) : [],
-      })));
+      setProjects(projectsData.documents.map((doc: unknown) => {
+        const d = doc as {
+          $id: string;
+          title: string;
+          status?: string;
+          price?: number;
+          handover_date?: string;
+          reference_nr?: string;
+          property_id?: string;
+          agent_id?: string;
+          buyer_id?: string;
+          seller_id?: string;
+          $createdAt?: string;
+          $permissions?: string[];
+          // Legacy fields (for backward compatibility)
+          address?: string;
+          description?: string;
+          bedrooms?: number;
+          bathrooms?: number;
+          sqft?: number;
+          buildYear?: number;
+          livingArea?: number;
+          garages?: number;
+          media?: string[];
+          sellerId?: string;
+          buyerId?: string;
+          managerId?: string;
+          coverImageId?: string;
+          referenceNumber?: string;
+          tasks?: string | any[];
+          milestones?: string | any[];
+          agenda?: string | any[];
+          contractIds?: string[];
+          messages?: string | any[];
+        };
+
+        // For backward compatibility: create legacy property object from old or new structure
+        const legacyProperty = {
+          address: d.address || 'Address not available',
+          price: d.price || 0,
+          description: d.description || '',
+          bedrooms: d.bedrooms || 0,
+          bathrooms: d.bathrooms || 0,
+          sqft: d.sqft || 0,
+          buildYear: d.buildYear || null,
+          livingArea: d.livingArea || 0,
+          garages: d.garages || 0,
+          images: d.media || [],
+        };
+
+        const mapContractStatusToProjectStatus = (status: ContractStatus | string | undefined): ProjectStatus | undefined => {
+          // Map contract statuses to project statuses according to your business logic
+          switch (status) {
+            case ContractStatus.DRAFT: return ProjectStatus.PENDING;
+            case ContractStatus.PENDING_SIGNATURE: return ProjectStatus.PENDING;
+            case ContractStatus.SIGNED: return ProjectStatus.UNDER_CONTRACT;
+            case ContractStatus.EXECUTED: return ProjectStatus.SOLD;
+            case ContractStatus.CANCELLED: return ProjectStatus.ARCHIVED;
+            default: return undefined;
+          }
+        };
+
+        return {
+          id: d.$id,
+          $databaseId: DATABASE_ID,
+          $collectionId: COLLECTIONS.PROJECTS,
+          title: d.title,
+          status: mapContractStatusToProjectStatus(d.status),
+          price: d.price || 0,
+          handover_date: d.handover_date,
+          reference_nr: d.reference_nr || d.referenceNumber,
+          property_id: d.property_id || d.$id, // Use property_id if available, fallback to project id
+          agent_id: d.agent_id || d.managerId || '',
+          buyer_id: d.buyer_id,
+          seller_id: d.seller_id,
+          $permissions: d.$permissions || [],
+          created_by: d.seller_id || d.sellerId || '',
+          // Legacy compatibility fields
+          property: legacyProperty,
+          media: d.media || [],
+          sellerId: d.sellerId || d.seller_id,
+          buyerId: d.buyerId || d.buyer_id,
+          managerId: d.managerId || d.agent_id,
+          coverImageId: d.coverImageId,
+          referenceNumber: d.reference_nr || d.referenceNumber,
+          createdAt: d.$createdAt,
+          tasks: d.tasks ? (typeof d.tasks === 'string' ? JSON.parse(d.tasks) : d.tasks) : [],
+          milestones: d.milestones ? (typeof d.milestones === 'string' ? JSON.parse(d.milestones) : d.milestones) : [],
+          agenda: d.agenda ? (typeof d.agenda === 'string' ? JSON.parse(d.agenda) : d.agenda) : [],
+          contractIds: d.contractIds || [],
+          messages: d.messages ? (typeof d.messages === 'string' ? JSON.parse(d.messages) : d.messages) : [],
+        } as Project;
+      }));
     } catch (error) {
       globalThis.console?.error?.('Error fetching data:', error);
     }
@@ -298,6 +378,15 @@ const AppContent: React.FC<{
   }, [fetchData, user, profile]);
 
   if (loading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900"></div>
+      </div>
+    );
+  }
+
+  // If user is authenticated but profile hasn't loaded yet, show loading
+  if (user && !effectiveUser) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-slate-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900"></div>
@@ -329,11 +418,14 @@ const AppContent: React.FC<{
         <Route index element={<Dashboard projects={projects} user={effectiveUser as AppUser} allUsers={allUsers} taskTemplates={taskTemplates} />} />
         <Route path="projects" element={<Dashboard projects={projects} user={effectiveUser as AppUser} allUsers={allUsers} />} />
         <Route path="projects/:id" element={<ProjectDetail projects={projects} setProjects={setProjects} contracts={contracts} setContracts={setContracts} templates={templates} user={effectiveUser as AppUser} allUsers={allUsers} onRefresh={fetchData} />} />
+        <Route path="projects/:projectId/brochure" element={<PropertyBrochure />} />
         <Route path="contracts" element={<Contracts user={effectiveUser as AppUser} projects={projects} contracts={contracts} setContracts={setContracts} templates={templates} setTemplates={setTemplates} />} />
         <Route path="documents" element={<Documents user={effectiveUser as AppUser} projects={projects} onRefresh={fetchData} />} />
         <Route path="admin/documents" element={<DocumentManagement user={effectiveUser as AppUser} />} />
         <Route path="admin/tasks" element={<TaskLibrary user={effectiveUser as AppUser} onRefresh={fetchData} />} />
         <Route path="admin/forms" element={<FormsList />} />
+        <Route path="admin/block-builder" element={<BlockBuilder />} />
+        <Route path="admin/renderer-test" element={<TemplateRendererExample />} />
         <Route path="admin/forms/edit/:id" element={<FormEditorView />} />
         <Route path="admin/forms/templates/edit/:id" element={<FormDefinitionEditor />} />
         <Route path="users" element={<UsersManagement user={effectiveUser as AppUser} allUsers={allUsers} setAllUsers={setAllUsers} projects={projects} />} />
@@ -370,7 +462,9 @@ interface MenuNavItem {
 
 const Sidebar: React.FC<{ user: AppUser }> = ({ user }) => {
   const location = useLocation();
-  const isAdmin = user.role === UserRole.ADMIN;
+  // Handle both enum values and string values for role comparison
+  const userRoleStr = typeof user.role === 'string' ? user.role.toLowerCase() : '';
+  const isAdmin = user.role === UserRole.ADMIN || userRoleStr === 'admin';
   const { logout } = useAuth();
 
   const primaryMenu: MenuNavItem[] = [
@@ -388,6 +482,7 @@ const Sidebar: React.FC<{ user: AppUser }> = ({ user }) => {
     { to: '/admin/tasks', icon: <Library size={20} />, label: 'Task Library' },
     { to: '/admin/documents', icon: <ShieldCheck size={20} />, label: 'Doc Requirements' },
     { to: '/admin/forms', icon: <ClipboardList size={20} />, label: 'Project Forms' },
+    { to: '/admin/block-builder', icon: <Blocks size={20} />, label: 'Block Builder' },
     { to: '/contracts?tab=templates', icon: <FileSignature size={20} />, label: 'Contract Templates' },
     { to: '/users', icon: <UsersIcon size={20} />, label: 'User Directory' },
     { to: '/settings', icon: <SettingsIcon size={20} />, label: 'System Settings' },
