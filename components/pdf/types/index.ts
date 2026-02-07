@@ -34,8 +34,12 @@ export interface PageConfig {
 export interface BrochureSettings {
   templateId?: string; // e.g. 'classic', 'modern'
   theme: ThemeConfig;
+  builderBlocks?: any[]; // For the drag-and-drop canvas state
+}
+
+export interface BrochureData {
+  settings: BrochureSettings;
   pages: PageConfig[];
-  builderBlocks?: any[]; // For saving the raw builder state
 }
 
 // Re-defining Agency here to strictly match the PDF needs,

@@ -1,25 +1,34 @@
 /* eslint-env browser */
 import {
-    Building2,
-    CreditCard,
-    Hash,
-    Image as ImageIcon,
-    Loader2,
-    MapPin,
-    Save,
-    Users
+  Building2,
+  CreditCard,
+  Hash,
+  Image as ImageIcon,
+  Loader2,
+  MapPin,
+  Save,
+  Users
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 
-import BrochureBuilder from '../components/brochure-builder/BrochureBuilder';
-import { exportBlocksToHtml } from '../components/brochure-builder/services/htmlExportService';
-import { PageBlock } from '../components/brochure-builder/types';
 import { defaultTheme } from '../components/pdf/themes';
-import type { BrochureSettings, PageConfig } from '../components/pdf/types';
+import type { BrochureData, PageConfig } from '../components/pdf/types';
 import { COLLECTIONS, DATABASE_ID, ID, databases } from '../services/appwrite';
 import { s3Service } from '../services/s3Service';
 import type { Agency, Project, User } from '../types';
 import { UserRole } from '../types';
+
+// Local state interface for agency form data
+interface AgencyFormData {
+  id: string;
+  name: string;
+  logo: string;
+  address: string;
+  bankAccount: string;
+  vatCode: string;
+  agentIds: string[];
+  brochure: string;
+}
 
 interface AgencyInfoProps {
   user: User;
@@ -27,7 +36,7 @@ interface AgencyInfoProps {
 }
 
 const AgencyInfo: React.FC<AgencyInfoProps> = ({ allUsers }) => {
-  const [agency, setAgency] = useState<Agency | null>(null);
+  const [agency, setAgency] = useState<AgencyFormData | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
 
@@ -91,9 +100,11 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ allUsers }) => {
       loadPreviewData();
   }, [selectedProjectId, projects, agency, agencyLogoUrl]);
 
-  // Still needed for fallback or default brochure settings structure if needed by other components
-  const defaultBrochureSettings: BrochureSettings = {
-    theme: defaultTheme,
+  // Default brochure data structure
+  const defaultBrochureData: BrochureData = {
+    settings: {
+      theme: defaultTheme
+    },
     pages: [
       { type: 'cover', enabled: true },
       { type: 'description', enabled: true },
@@ -107,18 +118,18 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ allUsers }) => {
   useEffect(() => {
     const fetchAgency = async () => {
       try {
-        const response = await databases.listDocuments(DATABASE_ID, COLLECTIONS.AGENCY);
+        const response = await databases.listDocuments(DATABASE_ID, COLLECTIONS.AGENCIES);
         if (response.documents.length > 0) {
-          const doc: any = response.documents[0];
+          const doc = response.documents[0] as Agency;
           setAgency({
             id: doc.$id,
-            name: doc.name,
-            logo: doc.logo,
-            address: doc.address,
-            bankAccount: doc.bankAccount,
-            vatCode: doc.vatCode,
+            name: doc.name || '',
+            logo: doc.logo || '',
+            address: doc.address || '',
+            bankAccount: doc.bankAccount || '',
+            vatCode: doc.vatCode || '',
             agentIds: doc.agentIds || [],
-            brochureSettings: doc.brochureSettings
+            brochure: doc.brochure || JSON.stringify(defaultBrochureData)
           });
           setIsNew(false);
         } else {
@@ -130,7 +141,7 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ allUsers }) => {
             bankAccount: '',
             vatCode: '',
             agentIds: [],
-            brochureSettings: JSON.stringify(defaultBrochureSettings)
+            brochure: JSON.stringify(defaultBrochureData)
           });
           setIsNew(true);
         }
@@ -185,18 +196,18 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ allUsers }) => {
         bankAccount: agency.bankAccount,
         vatCode: agency.vatCode,
         agentIds: agency.agentIds,
-        brochureSettings: agency.brochureSettings
+        brochure: agency.brochure
       };
 
       if (isNew) {
-        const res = await databases.createDocument(DATABASE_ID, COLLECTIONS.AGENCY, ID.unique(), data);
+        const res = await databases.createDocument(DATABASE_ID, COLLECTIONS.AGENCIES, ID.unique(), data);
         setAgency({ ...agency, id: res.$id });
         setIsNew(false);
       } else {
-        await databases.updateDocument(DATABASE_ID, COLLECTIONS.AGENCY, agency.id, data);
+        await databases.updateDocument(DATABASE_ID, COLLECTIONS.AGENCIES, agency.id, data);
       }
       alert('Agency information saved successfully!');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error saving agency info:', error);
       alert('Failed to save agency information.');
     } finally {
@@ -235,11 +246,11 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ allUsers }) => {
   };
 
   const getInitialBlocks = (): PageBlock[] | undefined => {
-    if (!agency?.brochureSettings) return undefined;
+    if (!agency?.brochure) return undefined;
     try {
-        const parsed = JSON.parse(agency.brochureSettings);
+        const parsed = JSON.parse(agency.brochure);
         if (Array.isArray(parsed)) return parsed;
-        if (parsed.builderBlocks) return parsed.builderBlocks;
+        if (parsed.settings?.builderBlocks) return parsed.settings.builderBlocks;
         return undefined;
     } catch {
         return undefined;
@@ -248,19 +259,22 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ allUsers }) => {
 
   const handleBuilderSave = (blocks: PageBlock[]) => {
       if (!agency) return;
-      let settings: BrochureSettings;
+      let brochureData: BrochureData;
       try {
-          const parsed = JSON.parse(agency.brochureSettings || '{}');
-          // If legacy array, upgrade to object
+          const parsed = JSON.parse(agency.brochure || '{}');
+          // If legacy format, migrate
           if (Array.isArray(parsed)) {
-              settings = { ...defaultBrochureSettings, builderBlocks: blocks };
+              brochureData = { ...defaultBrochureData, settings: { ...defaultBrochureData.settings, builderBlocks: blocks } };
           } else {
-              settings = { ...defaultBrochureSettings, ...parsed, builderBlocks: blocks };
+              brochureData = {
+                  settings: { ...defaultBrochureData.settings, ...parsed.settings, builderBlocks: blocks },
+                  pages: parsed.pages || defaultBrochureData.pages
+              };
           }
       } catch {
-          settings = { ...defaultBrochureSettings, builderBlocks: blocks };
+          brochureData = { ...defaultBrochureData, settings: { ...defaultBrochureData.settings, builderBlocks: blocks } };
       }
-      setAgency({ ...agency, brochureSettings: JSON.stringify(settings) });
+      setAgency({ ...agency, brochure: JSON.stringify(brochureData) });
       alert('Brochure template saved to local state. Click "Save Changes" to persist.');
   };
 
@@ -271,17 +285,21 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ allUsers }) => {
 
       const html = exportBlocksToHtml(blocks);
 
-      let settings: BrochureSettings;
+      // Parse current brochure data
+      let brochureData: BrochureData;
       try {
-          const parsed = JSON.parse(agency.brochureSettings || '{}');
+          const parsed = JSON.parse(agency.brochure || '{}');
           if (Array.isArray(parsed)) {
-              settings = { ...defaultBrochureSettings, builderBlocks: parsed };
+              brochureData = { ...defaultBrochureData };
           } else {
-              settings = { ...defaultBrochureSettings, ...parsed };
+              brochureData = {
+                  settings: parsed.settings || defaultBrochureData.settings,
+                  pages: parsed.pages || []
+              };
           }
       } catch (e) {
-          console.error("Failed to parse brochure settings", e);
-          settings = { ...defaultBrochureSettings };
+          console.error("Failed to parse brochure data", e);
+          brochureData = { ...defaultBrochureData };
       }
 
       // Add custom page
@@ -290,23 +308,21 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ allUsers }) => {
           enabled: true,
           title: name,
           htmlContent: html,
-          blocks: blocks,
+          blocks,
           options: {}
       };
 
-      // Ensure we have a fresh array to avoid reference mutation of defaults
-      const currentPages = settings.pages ? [...settings.pages] : [];
-      currentPages.push(newPage);
-      settings.pages = currentPages;
+      // Add to pages array
+      brochureData.pages.push(newPage);
 
-      setAgency({ ...agency, brochureSettings: JSON.stringify(settings) });
-      alert(`Page "${name}" added to brochure settings.`);
+      setAgency({ ...agency, brochure: JSON.stringify(brochureData) });
+      alert(`Page "${name}" added. Click "Save Changes" to persist.`);
   };
 
   const getSavedPages = (): PageConfig[] => {
-    if (!agency?.brochureSettings) return [];
+    if (!agency?.brochure) return [];
     try {
-        const parsed = JSON.parse(agency.brochureSettings);
+        const parsed = JSON.parse(agency.brochure);
         return parsed.pages || [];
     } catch {
         return [];
@@ -317,17 +333,20 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ allUsers }) => {
       if (!agency) return;
       if (!confirm('Are you sure you want to delete this page?')) return;
 
-      let settings: BrochureSettings;
+      let brochureData: BrochureData;
       try {
-          const parsed = JSON.parse(agency.brochureSettings || '{}');
-          settings = { ...defaultBrochureSettings, ...parsed };
+          const parsed = JSON.parse(agency.brochure || '{}');
+          brochureData = {
+              settings: parsed.settings || defaultBrochureData.settings,
+              pages: parsed.pages || []
+          };
       } catch {
           return;
       }
 
-      if (settings.pages) {
-          settings.pages.splice(index, 1);
-          setAgency({ ...agency, brochureSettings: JSON.stringify(settings) });
+      if (brochureData.pages && brochureData.pages.length > index) {
+          brochureData.pages.splice(index, 1);
+          setAgency({ ...agency, brochure: JSON.stringify(brochureData) });
       }
   };
 

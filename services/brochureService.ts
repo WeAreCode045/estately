@@ -37,7 +37,10 @@ export const brochureService = {
                  colors: { ...defaultTheme.colors, ...(parsed.theme?.colors || {}) },
                  fonts: { ...defaultTheme.fonts, ...(parsed.theme?.fonts || {}) }
              },
-             pages: (parsed.pages as PageConfig[]) || defaultPages
+             pages: (parsed.pages && Array.isArray(parsed.pages) && parsed.pages.length > 0) 
+                ? parsed.pages 
+                : defaultPages,
+             builderBlocks: parsed.builderBlocks || []
           };
 
           if (!settings.pages || settings.pages.length === 0) {
