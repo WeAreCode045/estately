@@ -48,13 +48,13 @@ export default defineConfig(({ mode }) => {
     // Path Resolution
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
-        '@components': path.resolve(__dirname, './components'),
-        '@views': path.resolve(__dirname, './views'),
-        '@services': path.resolve(__dirname, './services'),
-        '@contexts': path.resolve(__dirname, './contexts'),
-        '@utils': path.resolve(__dirname, './utils'),
-        '@types': path.resolve(__dirname, './types.ts'),
+        '@': path.resolve(__dirname, './src'),
+        '@components': path.resolve(__dirname, './src/components'),
+        '@views': path.resolve(__dirname, './src/views'),
+        '@services': path.resolve(__dirname, './src/api'),
+        '@contexts': path.resolve(__dirname, './src/contexts'),
+        '@utils': path.resolve(__dirname, './src/utils'),
+        '@types': path.resolve(__dirname, './src/types.ts'),
       },
     },
 
@@ -97,12 +97,12 @@ export default defineConfig(({ mode }) => {
         'react-router-dom',
         'appwrite',
         'lucide-react',
+        'jspdf',
+      ],
       exclude: [
         'node-fetch',
         'form-data',
         'jsdom',
-      ],
-        'jspdf',
       ],
     },
 

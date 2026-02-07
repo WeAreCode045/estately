@@ -44,23 +44,23 @@
     // Path Mapping
     "baseUrl": ".",
     "paths": {
-      "@/*": [".*"],
-      "@components/*": ["./components/*"],
-      "@views/*": ["./views/*"],
-      "@services/*": ["./services/*"],
-      "@contexts/*": ["./contexts/*"],
-      "@utils/*": ["./utils/*"],
-      "@types": ["./types.ts"]
+      "@/*": ["./src/*"],
+      "@components/*": ["./src/components/*"],
+      "@views/*": ["./src/views/*"],
+      "@services/*": ["./src/api/*"],
+      "@contexts/*": ["./src/contexts/*"],
+      "@utils/*": ["./src/utils/*"],
+      "@types": ["./src/types.ts"]
     },
 
     // Types
     "types": ["vite/client", "node"]
   },
   "include": [
-    "**/*.ts",
-    "**/*.tsx",
-    "**/*.js",
-    "**/*.jsx",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.js",
+    "src/**/*.jsx",
     "vite.config.ts"
   ],
   "exclude": [
