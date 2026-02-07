@@ -2,8 +2,8 @@
 import { ChevronLeft, Eye, FileText, Loader2, Save, Settings2, Sparkles } from 'lucide-react';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { formDefinitionsService } from '../services/formDefinitionsService';
-import projectFormsService from '../services/projectFormsService';
+import { formDefinitionsService } from '../api/formDefinitionsService';
+import projectFormsService from '../api/projectFormsService';
 import type { FormDefinition } from '../types';
 
 import AIGeneratorModal from '../components/form-builder/AIGeneratorModal';

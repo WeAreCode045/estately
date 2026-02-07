@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 /* eslint-env browser */
 import React, { useEffect, useState } from 'react';
-import { COLLECTIONS, DATABASE_ID, databases } from '../services/appwrite';
+import { COLLECTIONS, DATABASE_ID, databases } from '../api/appwrite';
 import type { UserDocumentDefinition } from '../types';
 
 interface DocumentManagementProps {

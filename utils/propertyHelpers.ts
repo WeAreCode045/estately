@@ -20,6 +20,7 @@ export interface PropertySize {
 
 export interface PropertyMedia {
   images: string[];
+  cover?: string;
   floorplans?: string[];
   videoUrl?: string;
   virtualTourUrl?: string;

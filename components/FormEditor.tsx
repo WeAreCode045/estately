@@ -1,6 +1,6 @@
 import { X } from 'lucide-react';
 import React, { useState } from 'react';
-import { projectFormsService } from '../services/appwrite';
+import { projectFormsService } from '../api/appwrite';
 import type { CreateSubmissionParams, FormSubmission } from '../types';
 
 interface Props {

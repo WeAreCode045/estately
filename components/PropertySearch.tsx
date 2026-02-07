@@ -1,8 +1,8 @@
 import { Building, MapPin, Search, SlidersHorizontal, X } from 'lucide-react';
 import React, { useState } from 'react';
-import { Query } from '../services/appwrite';
-import type { ParsedPropertyData } from '../services/propertyService';
-import { listProperties } from '../services/propertyService';
+import { Query } from '../api/appwrite';
+import type { ParsedPropertyData } from '../api/propertyService';
+import { listProperties } from '../api/propertyService';
 
 import { parseDescription } from '../utils/propertyHelpers';
 

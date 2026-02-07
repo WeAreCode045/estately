@@ -1,7 +1,7 @@
 import { ChevronLeft, Loader2, Save } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { projectFormsService, projectService } from '../services/appwrite';
+import { projectFormsService, projectService } from '../api/appwrite';
 import type { CreateSubmissionParams } from '../types';
 
 const FormEditor: React.FC = () => {

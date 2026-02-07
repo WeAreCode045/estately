@@ -190,14 +190,19 @@ export interface ParsedProperty extends Omit<Property, 'description' | 'location
 
 export interface Project extends AppwriteDocument {
   title: string;
-  status: ProjectStatus;
   price: number;
+  sellerId: string;
+  managerId: string;
+  status: ProjectStatus;
+  buyerId?: string;
   handover_date?: string;
-  reference_nr?: string;
-  property_id: string; // Relationship to Property (1:1)
-  agent_id: string;    // Relationship to Profile
-  buyer_id?: string;   // Relationship to Profile
-  seller_id?: string;  // Relationship to Profile
+  property_id?: string;
+
+  // Computed aliases for compatibility
+  propertyId?: string;    // Alias for property_id
+  agentId?: string;       // Alias for managerId
+  handoverDate?: string;  // Alias for handover_date
+  id?: string;           // Alias for $id
 }
 
 /**
@@ -206,24 +211,29 @@ export interface Project extends AppwriteDocument {
 export enum TaskStatus {
   TODO = 'todo',
   IN_PROGRESS = 'in_progress',
-  COMPLETED = 'completed'
+  COMPLETED = 'completed',
+  CANCELLED = 'cancelled'
 }
 
 export enum TaskType {
   USER_ACTION = 'user_action',
-  PROJECT_MILESTONE = 'project_milestone'
+  PROJECT_MILESTONE = 'project_milestone',
+  DOCUMENT_UPLOAD = 'document_upload',
+  FORM_SUBMISSION = 'form_submission',
+  GENERAL = 'general',
+  SIGNATURE_REQUIRED = 'signature_required'
 }
 
 export interface Task extends AppwriteDocument {
   title: string;
   description?: string;
-  task_type: TaskType;
+  taskType: TaskType;
   status: TaskStatus;
-  project_id: string;       // Relationship to Project
-  assignee_id?: string;     // Relationship to Profile (Optional: empty = Agent-managed)
-  due_date?: string;
-  required_doc_type?: string;
-  sign_request_id?: string; // Relationship to SignRequest
+  projectId: string;       // Relationship to Project
+  assigneeId?: string;     // Relationship to Profile (Optional: empty = Agent-managed)
+  dueDate?: string;
+  requiredDocType?: string;
+  signRequestId?: string; // Relationship to SignRequest
   category?: string;
 }
 
@@ -234,10 +244,10 @@ export interface DocumentRecord extends AppwriteDocument {
   title: string;
   type: string;
   source: 'upload' | 'generated';
-  file_id: string;
-  verification_status: 'pending' | 'approved' | 'rejected';
-  project_id: string;       // Relationship to Project
-  owner_id: string;         // Relationship to Profile
+  fileId: string;
+  verificationStatus: 'pending' | 'approved' | 'rejected';
+  projectId: string;       // Relationship to Project
+  ownerId: string;         // Relationship to Profile
   uploaded_at?: string;
 }
 
@@ -245,19 +255,19 @@ export type FormStatus = 'draft' | 'submitted' | 'assigned' | 'completed' | 'clo
 
 export interface FormSubmission extends AppwriteDocument {
   title: string;
-  form_key: string;
-  form_data: string;        // JSON string
+  formKey: string;
+  formData: string;        // JSON string
   status: FormStatus;
-  project_id: string;       // Relationship to Project
-  submitter_id: string;     // Relationship to Profile
-  assignee_id?: string;     // Relationship to Profile
+  projectId: string;       // Relationship to Project
+  submitterId: string;     // Relationship to Profile
+  assigneeId?: string;     // Relationship to Profile
   attachments?: string;     // JSON string: string[]
   meta?: string;            // JSON string: metadata
 }
 
 // FormSubmission with parsed JSON fields
-export interface ParsedFormSubmission extends Omit<FormSubmission, 'form_data' | 'attachments' | 'meta'> {
-  form_data: Record<string, unknown>;
+export interface ParsedFormSubmission extends Omit<FormSubmission, 'formData' | 'attachments' | 'meta'> {
+  formData: Record<string, unknown>;
   attachments?: string[];
   meta?: Record<string, unknown>;
 }
@@ -273,19 +283,19 @@ export enum SignRequestStatus {
 }
 
 export interface SignRequest extends AppwriteDocument {
-  parent_id: string;         // ID of form_submission or document
-  parent_type: 'form' | 'document';
+  parentId: string;         // ID of form_submission or document
+  parentType: 'form' | 'document';
   status: SignRequestStatus;
-  required_signers: string;  // JSON Array of Profile IDs
-  signature_data: string;    // JSON Object: { [profileId]: signatureBase64 }
-  project_id: string;        // Relationship to Project
-  expires_at?: string;
+  requiredSigners: string;  // JSON Array of Profile IDs
+  signatureData: string;    // JSON Object: { [profileId]: signatureBase64 }
+  projectId: string;        // Relationship to Project
+  expiresAt?: string;
 }
 
 // SignRequest with parsed JSON fields
-export interface ParsedSignRequest extends Omit<SignRequest, 'required_signers' | 'signature_data'> {
-  required_signers: string[];
-  signature_data: Record<string, string>;
+export interface ParsedSignRequest extends Omit<SignRequest, 'requiredSigners' | 'signatureData'> {
+  requiredSigners: string[];
+  signatureData: Record<string, string>;
 }
 
 /**
@@ -379,7 +389,7 @@ export interface LegacyProject {
   coverImageId?: string;
   images?: string[];
   reference_nr?: string;
-  property_id: string; // NEW: Link to properties collection (made required to fix error)
+  propertyId: string; // NEW: Link to properties collection (made required to fix error)
   agent_id?: string;     // NEW: Agent reference
   buyer_id?: string;     // NEW: Buyer reference
   seller_id?: string;    // NEW: Seller reference
@@ -409,7 +419,7 @@ export interface ProjectTask extends AppwriteDocument {
   documentLink?: string;
   notifyAssignee?: boolean;
   notifyAgentOnComplete?: boolean;
-  task_type: TaskType; // NEW: distinguishes user actions from project milestones
+  taskType: TaskType; // NEW: distinguishes user actions from project milestones
 }
 
 export interface BrochureSettings {
@@ -501,22 +511,22 @@ export interface Contract {
  * 9. Form & Submission Helper Types
  */
 export interface CreateSubmissionParams {
-  project_id: string;
-  form_key: string;
+  projectId: string;
+  formKey: string;
   title?: string;
-  form_data: Record<string, unknown> | string;
+  formData: Record<string, unknown> | string;
   attachments?: string[];
-  assignee_id?: string | null;
+  assigneeId?: string | null;
   status?: FormStatus;
-  submitter_id: string;
+  submitterId: string;
   meta?: Record<string, unknown> | string;
 }
 
 export interface FormSubmissionPatch {
   title?: string;
-  form_data?: Record<string, unknown> | string;
+  formData?: Record<string, unknown> | string;
   attachments?: string[];
-  assignee_id?: string | null;
+  assigneeId?: string | null;
   status?: FormStatus;
   meta?: Record<string, unknown> | string;
 }

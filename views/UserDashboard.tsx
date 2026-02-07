@@ -1,59 +1,61 @@
 import {
-  Bell,
-  Building2,
-  CalendarDays,
-  CheckCircle,
-  CheckCircle2,
-  ClipboardList,
-  Clock,
-  Download,
-  Eye,
-  FileSignature,
-  FileText,
-  FormInput,
-  Globe,
-  History,
-  Home,
-  Lock,
-  Mail,
-  MessageSquare,
-  Phone,
-  RefreshCcw,
-  Shield,
-  Trash2,
-  User as UserIcon,
-  X
+    Bell,
+    Building2,
+    CalendarDays,
+    CheckCircle,
+    CheckCircle2,
+    ClipboardList,
+    Clock,
+    Download,
+    Eye,
+    FileSignature,
+    FileText,
+    FormInput,
+    Globe,
+    History,
+    Home,
+    Lock,
+    Mail,
+    MessageSquare,
+    Phone,
+    RefreshCcw,
+    Shield,
+    Trash2,
+    User as UserIcon,
+    X
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { COLLECTIONS, DATABASE_ID, contractService, databases, projectFormsService, projectService, taskService } from '../api/appwrite';
+import { documentService } from '../api/documentService';
+import { formDefinitionsService } from '../api/formDefinitionsService';
+import type { GroundingLink } from '../api/geminiService';
+import { GeminiService } from '../api/geminiService';
 import AdminAgendaWidget from '../components/AdminAgendaWidget';
 import AsyncImage from '../components/AsyncImage';
 import DocumentViewer from '../components/DocumentViewer';
 import FormRenderer from '../components/FormRenderer';
-import { ProjectProperty } from '../components/project';
 import SignaturePad from '../components/SignaturePad';
-import { COLLECTIONS, DATABASE_ID, contractService, databases, profileService, projectFormsService, projectService } from '../services/appwrite';
-import { documentService } from '../services/documentService';
-import { formDefinitionsService } from '../services/formDefinitionsService';
-import type { GroundingLink } from '../services/geminiService';
-import { GeminiService } from '../services/geminiService';
+import { ProjectProperty } from '../features/projects/components';
 import type {
-  AssignedTask,
-  Contract,
-  FormDefinition,
-  FormSubmission,
-  FormSubmissionPatch,
-  Message,
-  Project,
-  ProjectMilestone,
-  ProjectTask,
-  TaskTemplate,
-  UploadedDocument,
-  User,
-  UserDocumentDefinition
+    Contract,
+    FormDefinition,
+    FormSubmission,
+    FormSubmissionPatch,
+    Project,
+    ProjectTask,
+    TaskTemplate,
+    User,
+    UserDocumentDefinition
 } from '../types';
-import { ContractStatus, UserRole } from '../types';
+import { ContractStatus, TaskStatus, UserRole } from '../types';
 import { downloadContractPDF, downloadFormPDF } from '../utils/pdfGenerator';
+
+// Legacy types for backward compatibility (to be migrated)
+type AssignedTask = { taskId: string; title: string; projectId?: string; status?: string };
+type Message = { id: string; content: string; sender: string };
+type ProjectMilestone = { id: string; title: string; dueDate?: string };
+type UploadedDocument = { id: string; title: string; fileId: string; userDocumentDefinitionId?: string };
 
 type UserDocumentDefinitionWithId = UserDocumentDefinition & { $id?: string };
 
@@ -567,13 +569,11 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
   };
 
   const handleToggleTask = async (taskId: string, currentStatus: boolean) => {
-    const newStatus = currentStatus ? 'PENDING' : 'COMPLETED';
-    const profileId = user.id || user.$id;
-    if (!profileId) return;
+    const newStatus = currentStatus ? TaskStatus.TODO : TaskStatus.COMPLETED;
 
     try {
       setLoading(true);
-      await profileService.updateTaskStatus(profileId, taskId, newStatus);
+      await taskService.updateStatus(taskId, newStatus);
       if (onRefresh) onRefresh();
     } catch (err) {
       globalThis.console?.error('Failed to update task status:', err);

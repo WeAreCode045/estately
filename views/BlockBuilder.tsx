@@ -4,8 +4,8 @@ import '@grapesjs/studio-sdk/dist/style.css';
 import type { Editor } from 'grapesjs';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { COLLECTIONS, DATABASE_ID, databases, Query } from '../services/appwrite';
-import { s3Service } from '../services/s3Service';
+import { COLLECTIONS, DATABASE_ID, databases, Query } from '../api/appwrite';
+import { s3Service } from '../api/s3Service';
 
 interface AppwriteDataSources {
   globalData?: {

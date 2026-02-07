@@ -21,7 +21,7 @@ import 'react-quill-new/dist/quill.snow.css';
 import { useSearchParams } from 'react-router-dom';
 import SignaturePad from '../components/SignaturePad';
 import { MOCK_USERS } from '../constants';
-import { contractTemplatesService } from '../services/contractTemplatesService';
+import { contractTemplatesService } from '../api/contractTemplatesService';
 import type { Contract, ContractTemplate, Project, User} from '../types';
 import { ContractStatus, UserRole } from '../types';
 import { downloadContractPDF } from '../utils/pdfGenerator';

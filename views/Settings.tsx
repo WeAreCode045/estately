@@ -1,8 +1,9 @@
-import { Bell, Globe, Key, Loader2, Save, Shield, User as UserIcon } from 'lucide-react';
+import { Bell, Database, Globe, Key, Loader2, Save, Shield, User as UserIcon } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
-import { configService, profileService } from '../services/appwrite';
-import type { User} from '../types';
+import { configService, profileService } from '../api/appwrite';
+import type { User } from '../types';
 import { UserRole } from '../types';
+import { migrateAllProjects, migrateProjectProperty } from '../utils/migratePropertyData';
 
 interface SettingsProps {
   user: User;
@@ -18,6 +19,8 @@ const Settings: React.FC<SettingsProps> = ({ user: _user }) => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [agents, setAgents] = useState<any[]>([]);
+  const [migrating, setMigrating] = useState(false);
+  const [migrationResult, setMigrationResult] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSettings();
@@ -79,6 +82,49 @@ const Settings: React.FC<SettingsProps> = ({ user: _user }) => {
     }
   };
 
+  const handleMigrateFirstProject = async () => {
+    setMigrating(true);
+    setMigrationResult(null);
+    try {
+      const result = await migrateProjectProperty();
+      if (result?.alreadyMigrated) {
+        setMigrationResult('✓ Project already has property data migrated.');
+      } else if (result?.needsAttributeCreation) {
+        setMigrationResult('⚠️ Property created but needs attribute setup. Check console for instructions.');
+      } else {
+        setMigrationResult(`✓ Migration successful! Property ID: ${result?.property.$id}`);
+      }
+    } catch (err: any) {
+      const errorMsg = err.message || 'Unknown error';
+      if (errorMsg.includes('Unknown attribute') || errorMsg.includes('property_id')) {
+        setMigrationResult('❌ property_id attribute missing. Check console for setup instructions.');
+      } else {
+        setMigrationResult(`✗ Migration failed: ${errorMsg}`);
+      }
+    } finally {
+      setMigrating(false);
+    }
+  };
+
+  const handleMigrateAllProjects = async () => {
+    if (!confirm('Are you sure you want to migrate all projects? This will create property records for all projects without a property_id.')) {
+      return;
+    }
+
+    setMigrating(true);
+    setMigrationResult(null);
+    try {
+      const results = await migrateAllProjects();
+      const successful = results.filter((r: any) => r.success).length;
+      const failed = results.filter((r: any) => !r.success).length;
+      setMigrationResult(`✓ Migration completed! Successful: ${successful}, Failed: ${failed}`);
+    } catch (err: any) {
+      setMigrationResult(`✗ Migration failed: ${err.message}`);
+    } finally {
+      setMigrating(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh]">
@@ -105,6 +151,9 @@ const Settings: React.FC<SettingsProps> = ({ user: _user }) => {
           </button>
           <button className="w-full flex items-center gap-3 px-4 py-3 text-slate-500 font-medium hover:bg-slate-50 rounded-xl transition-colors">
             <Bell size={20} /> Notifications
+          </button>
+          <button className="w-full flex items-center gap-3 px-4 py-3 text-slate-500 font-medium hover:bg-slate-50 rounded-xl transition-colors">
+            <Database size={20} /> Data Migration
           </button>
         </div>
 
@@ -234,6 +283,74 @@ const Settings: React.FC<SettingsProps> = ({ user: _user }) => {
                 </button>
               </div>
             </form>
+          </div>
+
+          {/* Data Migration Section */}
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex items-center gap-3">
+              <div className="p-2 bg-purple-50 text-purple-600 rounded-lg">
+                <Database size={20} />
+              </div>
+              <h3 className="font-bold text-slate-900">Data Migration Utilities</h3>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                <p className="text-sm text-amber-800 font-medium mb-1">⚠️ Admin Only</p>
+                <p className="text-sm text-amber-700">
+                  These utilities help migrate property data from legacy project records to the new property collection structure.
+                  Use with caution and check the browser console for detailed logs.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-bold text-slate-900">Migrate First Project</h4>
+                    <p className="text-sm text-slate-500">Test migration with the first project in the database</p>
+                  </div>
+                  <button
+                    onClick={handleMigrateFirstProject}
+                    disabled={migrating}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-bold hover:bg-purple-700 transition-all shadow-sm disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {migrating ? <Loader2 className="animate-spin" size={16} /> : null}
+                    {migrating ? 'Migrating...' : 'Migrate'}
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                  <div>
+                    <h4 className="font-bold text-slate-900">Migrate All Projects</h4>
+                    <p className="text-sm text-slate-500">Migrate all projects without property_id (bulk operation)</p>
+                  </div>
+                  <button
+                    onClick={handleMigrateAllProjects}
+                    disabled={migrating}
+                    className="px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-all shadow-sm disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {migrating ? <Loader2 className="animate-spin" size={16} /> : null}
+                    {migrating ? 'Migrating...' : 'Migrate All'}
+                  </button>
+                </div>
+              </div>
+
+              {migrationResult && (
+                <div className={`p-4 rounded-xl text-sm font-medium ${
+                  migrationResult.startsWith('✓')
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-red-50 text-red-700 border border-red-200'
+                }`}>
+                  {migrationResult}
+                </div>
+              )}
+
+              <div className="pt-3 border-t border-slate-100">
+                <p className="text-xs text-slate-400">
+                  💡 Check the browser console (F12) for detailed migration logs and progress information.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>

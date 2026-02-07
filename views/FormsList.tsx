@@ -4,8 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import FormListItem from '../components/FormListItem';
 import FormRenderer from '../components/FormRenderer';
 import { useAuth } from '../contexts/AuthContext';
-import { profileService, projectFormsService, projectService } from '../services/appwrite';
-import { formDefinitionsService } from '../services/formDefinitionsService';
+import { profileService, projectFormsService, projectService } from '../api/appwrite';
+import { formDefinitionsService } from '../api/formDefinitionsService';
 import type { FormDefinition, FormSubmission } from '../types';
 import { UserRole } from '../types';
 

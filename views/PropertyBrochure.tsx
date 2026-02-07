@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import PropertyTemplate from '../components/PropertyTemplate';
 import { useAuth } from '../contexts/AuthContext';
-import { COLLECTIONS, DATABASE_ID, databases, Query } from '../services/appwrite';
-import type { ParsedPropertyData } from '../services/propertyService';
-import { getPropertyParsed } from '../services/propertyService';
+import { COLLECTIONS, DATABASE_ID, databases, Query } from '../api/appwrite';
+import type { ParsedPropertyData } from '../api/propertyService';
+import { getPropertyParsed } from '../api/propertyService';
 
 export default function PropertyBrochure() {
   const { projectId } = useParams<{ projectId: string }>();

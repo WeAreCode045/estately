@@ -13,7 +13,7 @@ import {
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { inviteService, profileService, projectService } from '../services/appwrite';
+import { inviteService, profileService, projectService } from '../api/appwrite';
 import type { Project, User } from '../types';
 import { UserRole } from '../types';
 

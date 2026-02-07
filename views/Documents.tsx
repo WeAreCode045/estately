@@ -1,20 +1,20 @@
 import {
-    Download,
-    Eye,
-    FileText,
-    Filter,
-    Inbox,
-    Loader2,
-    Search,
-    Trash2,
-    Upload,
-    X
+  Download,
+  Eye,
+  FileText,
+  Filter,
+  Inbox,
+  Loader2,
+  Search,
+  Trash2,
+  Upload,
+  X
 } from 'lucide-react';
 /* eslint-env browser */
 import React, { useRef, useState } from 'react';
+import { taskService } from '../api/appwrite';
+import { documentService } from '../api/documentService';
 import DocumentViewer from '../components/DocumentViewer';
-import { profileService } from '../services/appwrite';
-import { documentService } from '../services/documentService';
 import type { Project, UploadedDocument, User } from '../types';
 
 interface DocumentsViewProps {
@@ -124,17 +124,22 @@ const Documents: React.FC<DocumentsViewProps> = ({ user, projects, onRefresh }) 
       setLoading(true);
       await documentService.deleteDocument(doc.fileId);
 
-      // Rollback task status if linked to a definition
-      if (doc.userDocumentDefinitionId && doc.userDocumentDefinitionId !== 'general') {
-        const profileDoc = await profileService.getByUserId(user.id);
-        if (profileDoc) {
-          const matchTitle = `Upload Document: ${doc.documentType || ''}`;
-          const tasks = profileDoc.assignedTasks || [];
-          const taskToReset = tasks.find((t: any) => t.title === matchTitle && t.projectId === (doc.projectId || '') && t.status === 'COMPLETED');
+      // Rollback task status if linked to a definition - RELATIONAL MODEL
+      if (doc.userDocumentDefinitionId && doc.userDocumentDefinitionId !== 'general' && doc.projectId) {
+        // Find completed document_upload task for this project
+        const tasks = await taskService.listByProject(doc.projectId, {
+          taskType: 'document_upload',
+          status: 'completed'
+        });
 
-          if (taskToReset) {
-            await profileService.updateTaskStatus(profileDoc.$id, taskToReset.taskId, 'PENDING');
-          }
+        const matchTitle = `Upload Document: ${doc.documentType || ''}`;
+        const taskToReset = tasks.find((t: any) =>
+          t.title === matchTitle ||
+          t.required_doc_type === doc.userDocumentDefinitionId
+        );
+
+        if (taskToReset) {
+          await taskService.updateStatus(taskToReset.$id, 'todo');
         }
       }
 

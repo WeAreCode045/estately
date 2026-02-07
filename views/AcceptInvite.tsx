@@ -1,7 +1,7 @@
 import { AlertCircle, CheckCircle2, Home, Loader2, Lock } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { account } from '../services/appwrite';
+import { account } from '../api/appwrite';
 
 const AcceptInvite: React.FC = () => {
     const [searchParams] = useSearchParams();

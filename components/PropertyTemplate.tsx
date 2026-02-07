@@ -1,7 +1,7 @@
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { useEffect, useRef, useState } from 'react';
-import { s3Service } from '../services/s3Service';
+import { s3Service } from '../api/s3Service';
 import { env } from '../utils/env';
 
 interface PropertyTemplateProps {

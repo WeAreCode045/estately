@@ -1,8 +1,8 @@
 import { Copy, Eye, FileDown } from 'lucide-react';
 import { useState } from 'react';
-import { COLLECTIONS, DATABASE_ID, databases } from '../services/appwrite';
-import { s3Service } from '../services/s3Service';
-import { prepareAppwriteDataForRendering, renderAppwriteContentBrowser } from '../services/templateRendererBrowser';
+import { COLLECTIONS, DATABASE_ID, databases } from '../api/appwrite';
+import { s3Service } from '../api/s3Service';
+import { prepareAppwriteDataForRendering, renderAppwriteContentBrowser } from '../api/templateRendererBrowser';
 
 /**
  * Example component showing how to use the template renderer

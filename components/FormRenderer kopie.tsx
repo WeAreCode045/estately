@@ -1,9 +1,9 @@
 import { AlertCircle, CheckCircle2, Download, Loader2, Save, Signature as SignatureIcon, X } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { projectFormsService } from '../services/appwrite';
-import { documentService } from '../services/documentService';
-import { formDefinitionsService } from '../services/formDefinitionsService';
+import { projectFormsService } from '../api/appwrite';
+import { documentService } from '../api/documentService';
+import { formDefinitionsService } from '../api/formDefinitionsService';
 import type { FormDefinition, FormSubmission, Project, User } from '../types';
 import { UserRole } from '../types';
 import { downloadFormPDF } from '../utils/pdfGenerator';

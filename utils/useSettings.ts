@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { configService } from '../services/appwrite';
+import { useEffect, useState } from 'react';
+import { configService } from '../api/appwrite';
 
 export const useSettings = () => {
   const [googleApiKey, setGoogleApiKey] = useState<string | null>(null);

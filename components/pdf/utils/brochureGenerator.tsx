@@ -1,5 +1,5 @@
 import { pdf } from '@react-pdf/renderer';
-import { brochureService } from '../../../services/brochureService';
+import { brochureService } from '../../../api/brochureService';
 import type { Project, User } from '../../../types';
 import BrochureDocument from '../BrochureDocument';
 

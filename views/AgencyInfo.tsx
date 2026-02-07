@@ -1,20 +1,21 @@
 /* eslint-env browser */
 import {
-  Building2,
-  CreditCard,
-  Hash,
-  Image as ImageIcon,
-  Loader2,
-  MapPin,
-  Save,
-  Users
+    Building2,
+    CreditCard,
+    Hash,
+    Image as ImageIcon,
+    Loader2,
+    MapPin,
+    Save,
+    Users
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 
+import { COLLECTIONS, DATABASE_ID, ID, databases } from '../api/appwrite';
+import { getProperty } from '../api/propertyService';
+import { s3Service } from '../api/s3Service';
 import { defaultTheme } from '../components/pdf/themes';
 import type { BrochureData, PageConfig } from '../components/pdf/types';
-import { COLLECTIONS, DATABASE_ID, ID, databases } from '../services/appwrite';
-import { s3Service } from '../services/s3Service';
 import type { Agency, Project, User } from '../types';
 import { UserRole } from '../types';
 
@@ -60,28 +61,47 @@ const AgencyInfo: React.FC<AgencyInfoProps> = ({ allUsers }) => {
         if (!proj) return;
 
         let coverUrl = '';
-        if (proj.coverImageId) {
-            try { coverUrl = await s3Service.getPresignedUrl(proj.coverImageId); } catch (e) { console.error(e); }
-        }
-
         let mediaUrls: string[] = [];
-        if (proj.media) {
+        let propertyAddress = '';
+        let bedrooms = 0;
+
+        // Fetch property data
+        if (proj.propertyId) {
             try {
-                mediaUrls = await Promise.all(proj.media.map(m => s3Service.getPresignedUrl(m)));
-            } catch (e) {
-                console.error(e);
-            }
+                const property = await getProperty(proj.propertyId);
+                const mediaData = typeof property.media === 'string' ? JSON.parse(property.media) : property.media;
+                const locationData = typeof property.location === 'string' ? JSON.parse(property.location) : property.location;
+                const roomsData = typeof property.rooms === 'string' ? JSON.parse(property.rooms) : property.rooms;
+
+                // Get cover image
+                if (mediaData.cover) {
+                    try { coverUrl = await s3Service.getPresignedUrl(mediaData.cover); } catch (e) { console.error(e); }
+                }
+
+                // Get all images
+                if (mediaData.images && mediaData.images.length > 0) {
+                    try {
+                        mediaUrls = await Promise.all(mediaData.images.map((m: string) => s3Service.getPresignedUrl(m)));
+                    } catch (e) { console.error(e); }
+                }
+
+                // Get property details
+                if (locationData) {
+                    propertyAddress = [locationData.street, locationData.streetNumber, locationData.city].filter(Boolean).join(' ');
+                }
+                bedrooms = roomsData?.bedrooms || 0;
+            } catch (e) { console.error('Failed to load property data:', e); }
         }
 
         // Construct flattened data object for liquid/handlebars style interpolation
         setPreviewData({
             project: {
                 name: proj.title,
-                description: proj.property?.description || 'Professional property description would go here...',
-                address: proj.property?.address,
-                price: proj.property?.price,
-                livingArea: proj.property?.livingArea ? `${proj.property.livingArea} m²` : '',
-                bedrooms: proj.property?.bedrooms,
+                description: 'Professional property description would go here...',
+                address: propertyAddress,
+                price: proj.price,
+                livingArea: '',
+                bedrooms,
                 coverImage: coverUrl,
                 images: mediaUrls
             },

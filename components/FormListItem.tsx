@@ -1,7 +1,7 @@
 import { CheckCircle2, Clock, Eye, Home, Signature as SignIcon, Trash2, User as UserIcon } from 'lucide-react';
 /* eslint-env browser */
 import React, { useState } from 'react';
-import { projectFormsService } from '../services/appwrite';
+import { projectFormsService } from '../api/appwrite';
 import type { FormSubmission, User } from '../types';
 import { UserRole } from '../types';
 import SignaturePad from './SignaturePad';

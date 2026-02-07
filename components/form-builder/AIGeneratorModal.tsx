@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Wand2, X, Sparkles, Loader2 } from 'lucide-react';
-import { GeminiService } from '../../services/geminiService';
+import { GeminiService } from '../../api/geminiService';
 import type { FormSchema } from './types';
 
 interface AIGeneratorModalProps {

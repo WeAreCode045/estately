@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf';
-import { projectService } from '../services/appwrite';
-import { getPropertyParsed } from '../services/propertyService';
-import { s3Service } from '../services/s3Service';
+import { projectService } from '../api/appwrite';
+import { getPropertyParsed } from '../api/propertyService';
+import { s3Service } from '../api/s3Service';
 import type { Agency, Contract, FormDefinition, FormSubmission, Project, User } from '../types';
 
 const getDataUrl = (url: string): Promise<string> => {

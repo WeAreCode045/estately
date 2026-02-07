@@ -1,6 +1,6 @@
 import { AlertCircle, FileCheck, FileText, Loader2, UploadCloud, X } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
-import { GeminiService } from '../../services/geminiService';
+import { GeminiService } from '../../api/geminiService';
 import type { FormSchema } from './types';
 
 interface PDFReaderModalProps {

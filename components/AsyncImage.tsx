@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { projectService } from '../services/appwrite';
+import { projectService } from '../api/appwrite';
 
 interface AsyncImageProps {
   srcOrId?: string | null;

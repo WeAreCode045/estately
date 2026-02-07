@@ -1,7 +1,7 @@
 import type { Models } from 'appwrite';
 import { ID } from 'appwrite';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { account, inviteService, profileService, projectService } from '../services/appwrite';
+import { account, inviteService, profileService, projectService } from '../api/appwrite';
 
 interface AuthContextType {
     user: Models.User<Models.Preferences> | null;

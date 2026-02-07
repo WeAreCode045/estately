@@ -18,11 +18,11 @@ const client = new sdk.Client();
 const databases = new sdk.Databases(client);
 
 client
-  .setEndpoint(process.env.VITE_APPWRITE_ENDPOINT || 'http://localhost/v1')
+  .setEndpoint(process.env.VITE_APPWRITE_ENDPOINT || 'https:/fra.cloud.appwrite.io/v1')
   .setProject(process.env.VITE_APPWRITE_PROJECT_ID || process.env.VITE_APPWRITE_PROJECT || '')
   .setKey(process.env.APPWRITE_API_KEY || process.env.VITE_APPWRITE_API_KEY || '');
 
-const DATABASE_ID = process.env.VITE_APPWRITE_DATABASE_ID || 'estately-db';
+const DATABASE_ID = process.env.VITE_APPWRITE_DATABASE_ID || 'estately-main';
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -34,7 +34,7 @@ async function main() {
 
   try {
     // Step 1: Check current schema
-    console.log'\n📋 Checking current schema...');
+    console.log('\n📋 Checking current schema...');
     const collection = await databases.getCollection(DATABASE_ID, 'profiles');
     const roleAttr = collection.attributes.find(attr => attr.key === 'role');
 

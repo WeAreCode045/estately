@@ -97,12 +97,12 @@ export default defineConfig(({ mode }) => {
         'react-router-dom',
         'appwrite',
         'lucide-react',
+        'jspdf',
+      ],
       exclude: [
         'node-fetch',
         'form-data',
         'jsdom',
-      ],
-        'jspdf',
       ],
     },
 
